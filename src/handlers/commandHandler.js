@@ -139,26 +139,28 @@ class CommandHandler {
         if (!command.permissions || command.permissions.length === 0) return true;
         
         const senderJid = sender || user.jid;
-        const userPhone = senderJid
-            .replace(/@s\.whatsapp\.net/g, '')
-            .replace(/@c\.us/g, '')
-            .replace(/@lid/g, '')
-            .split(':')[0]
-            .split('@')[0]
-            .trim();
         
-        logger.debug(`Permission check - Command: ${command.name}, Sender JID: ${senderJid}, Extracted Phone: ${userPhone}`);
-        
-        const isOwner = config.ownerNumbers.some(ownerNum => {
-            const ownerPhone = ownerNum
+        const extractPhone = (jid) => {
+            return jid
                 .replace(/@s\.whatsapp\.net/g, '')
                 .replace(/@c\.us/g, '')
                 .replace(/@lid/g, '')
+                .replace(/:\d+/g, '')
                 .split(':')[0]
                 .split('@')[0]
                 .trim();
-            logger.debug(`Comparing user ${userPhone} with owner ${ownerPhone}`);
-            return userPhone === ownerPhone;
+        };
+        
+        const userPhone = extractPhone(senderJid);
+        const userJidPhone = extractPhone(user.jid);
+        
+        logger.debug(`Permission check - Command: ${command.name}, Sender JID: ${senderJid}, User JID: ${user.jid}, Extracted Phone: ${userPhone}, User DB Phone: ${userJidPhone}`);
+        
+        const isOwner = config.ownerNumbers.some(ownerNum => {
+            const ownerPhone = extractPhone(ownerNum);
+            const matches = userPhone === ownerPhone || userJidPhone === ownerPhone;
+            logger.debug(`Comparing user ${userPhone}/${userJidPhone} with owner ${ownerPhone}: ${matches}`);
+            return matches;
         });
         
         logger.debug(`Is owner: ${isOwner}, Required permissions: ${command.permissions.join(', ')}`);
