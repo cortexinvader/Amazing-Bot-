@@ -278,31 +278,50 @@ class CommandHandler {
             if (isGroup) {
                 const groupMetadata = await sock.groupMetadata(from);
                 
+                logger.debug(`Group participants count: ${groupMetadata.participants.length}`);
+                
                 if (sender.endsWith('@lid')) {
-                    const participant = groupMetadata.participants.find(p => {
-                        return p.id === sender || 
-                               p.lid === sender || 
-                               (p.devices && p.devices.includes(sender));
-                    });
+                    logger.debug(`Processing LID sender: ${sender}`);
                     
-                    if (participant && participant.id) {
-                        actualSender = participant.id;
-                        logger.debug(`Resolved device ID ${sender} to actual JID ${actualSender}`);
-                    } else {
-                        logger.warn(`Could not resolve device ID ${sender} to actual JID, checking all participants`);
-                        const match = groupMetadata.participants.find(p => {
-                            const deviceNum = sender.split('@')[0];
-                            const participantNum = p.id.split('@')[0];
-                            return participantNum.endsWith(deviceNum) || deviceNum.includes(participantNum);
-                        });
-                        if (match) {
-                            actualSender = match.id;
-                            logger.debug(`Fuzzy matched device ID ${sender} to ${actualSender}`);
+                    for (const participant of groupMetadata.participants) {
+                        logger.debug(`Checking participant: id=${participant.id}, lid=${participant.lid}`);
+                        
+                        if (participant.lid === sender || participant.id === sender) {
+                            if (participant.id && !participant.id.endsWith('@lid')) {
+                                actualSender = participant.id;
+                                logger.debug(`Resolved LID ${sender} to actual JID ${actualSender}`);
+                                break;
+                            }
+                        }
+                    }
+                    
+                    if (actualSender.endsWith('@lid')) {
+                        logger.debug(`LID still not resolved, checking against owner numbers`);
+                        for (const ownerNum of config.ownerNumbers) {
+                            const ownerPhone = ownerNum.split('@')[0];
+                            logger.debug(`Checking against owner: ${ownerPhone}`);
+                            
+                            for (const participant of groupMetadata.participants) {
+                                if (participant.id && participant.id.includes(ownerPhone)) {
+                                    logger.debug(`Found participant with owner phone: ${participant.id}, checking if LID matches`);
+                                    if (participant.lid === sender) {
+                                        actualSender = participant.id;
+                                        logger.info(`✅ Matched LID ${sender} to owner ${ownerPhone} via participant.id ${actualSender}`);
+                                        break;
+                                    }
+                                }
+                            }
+                            if (!actualSender.endsWith('@lid')) break;
                         }
                     }
                 }
                 
-                const senderParticipant = groupMetadata.participants.find(p => p.id === actualSender || p.id === sender);
+                const senderParticipant = groupMetadata.participants.find(p => 
+                    p.id === actualSender || 
+                    p.id === sender || 
+                    p.lid === sender ||
+                    p.lid === actualSender
+                );
                 const botParticipant = groupMetadata.participants.find(p => p.id === sock.user.id);
                 
                 isGroupAdmin = senderParticipant?.admin === 'admin' || senderParticipant?.admin === 'superadmin';
