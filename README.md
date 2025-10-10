@@ -2,6 +2,8 @@
 
 # 🧠 Amazing Bot 🧠
 
+<img src="./attached_assets/stock_images/modern_technology_bo_69a427db.jpg" alt="Amazing Bot Banner" width="100%" style="border-radius: 10px; margin: 20px 0;">
+
 ### *The Ultimate WhatsApp Automation Experience*
 
 [![Node.js](https://img.shields.io/badge/Node.js-20+-green.svg?style=for-the-badge&logo=node.js)](https://nodejs.org/)
@@ -10,7 +12,7 @@
 [![Stars](https://img.shields.io/github/stars/NexusCoders-cyber/Amazing-Bot-?style=for-the-badge&logo=github)](https://github.com/NexusCoders-cyber/Amazing-Bot-)
 [![Forks](https://img.shields.io/github/forks/NexusCoders-cyber/Amazing-Bot-?style=for-the-badge&logo=github)](https://github.com/NexusCoders-cyber/Amazing-Bot-)
 
-*A powerful, feature-rich WhatsApp bot built with modern technologies. Featuring AI integration, media processing, economy system, and comprehensive admin tools.*
+*A powerful, feature-rich WhatsApp bot built with modern technologies. Featuring AI integration, beautiful canvas graphics, economy system, and comprehensive admin tools.*
 
 [🚀 Quick Deploy](#-quick-deploy) • [📚 Features](#-features) • [🔧 Installation](#-installation) • [📖 Commands](#-command-guide) • [🌐 API](#-api-reference)
 
@@ -18,18 +20,19 @@
 
 </div>
 
-## 🌟 What's New
+## 🌟 What's New in Latest Update
 
 <table>
 <tr>
 <td width="50%">
 
-### ✨ Latest Updates
-- ✅ **Universal Database Support** - Works with or without MongoDB on any platform
-- ✅ **Zero Timeout Errors** - Instant fallback when database unavailable
-- ✅ **Cross-Platform Ready** - Optimized for Koyeb, Heroku, Railway, Render, Replit
-- ✅ **Smart Session Management** - Multiple session format support
-- ✅ **121+ Commands** - Fully loaded and tested
+### ✨ Latest Enhancements
+- ✅ **Canvas-Based Group Events** - Beautiful welcome/goodbye cards
+- ✅ **Smart Admin Commands** - Enhanced permission handling
+- ✅ **Anti-Link Protection** - Comprehensive link detection & actions
+- ✅ **Auto-Reaction System** - 20+ smart reactions
+- ✅ **Leveling System** - XP progression with visual rewards
+- ✅ **Security Hardened** - Database credential sanitization
 
 </td>
 <td width="50%">
@@ -41,12 +44,17 @@
 - 💾 **Optional Database** - Works without it!
 - 🌐 **10+ Languages Supported**
 - 📊 **Real-time Analytics**
+- 🎨 **Canvas Graphics** - Professional visuals
 
 </td>
 </tr>
 </table>
 
 ---
+
+<div align="center">
+<img src="./attached_assets/stock_images/whatsapp_messaging_c_4b3b734a.jpg" alt="WhatsApp Bot Features" width="100%" style="border-radius: 10px; margin: 20px 0;">
+</div>
 
 ## 🚀 Quick Deploy
 
@@ -383,6 +391,10 @@ MONGODB_URL=mongodb://localhost:27017/ilombot
 
 ---
 
+<div align="center">
+<img src="./attached_assets/stock_images/digital_features_das_94b4fbc4.jpg" alt="Bot Features Dashboard" width="100%" style="border-radius: 10px; margin: 20px 0;">
+</div>
+
 ## ✨ Features
 
 <div align="center">
@@ -401,7 +413,7 @@ MONGODB_URL=mongodb://localhost:27017/ilombot
 | 🌐 **Info** | News, Search, Dictionary, Time | 10+ |
 | 👤 **Owner** | System Control, Backup, Execute Code | 9+ |
 
-**Total: 121+ Commands** loaded and tested!
+**Total: 142+ Commands** loaded and tested!
 
 </div>
 
@@ -417,6 +429,7 @@ MONGODB_URL=mongodb://localhost:27017/ilombot
 - Input validation
 - Session encryption
 - JWT authentication
+- Credential sanitization
 
 </td>
 <td width="33%">
@@ -427,6 +440,7 @@ MONGODB_URL=mongodb://localhost:27017/ilombot
 - Database pooling
 - Async processing
 - Memory optimization
+- Queue management
 
 </td>
 <td width="33%">
@@ -437,6 +451,7 @@ MONGODB_URL=mongodb://localhost:27017/ilombot
 - Auto-scaling ready
 - Zero-downtime updates
 - Health monitoring
+- Multi-platform deploy
 
 </td>
 </tr>
@@ -447,11 +462,13 @@ MONGODB_URL=mongodb://localhost:27017/ilombot
 - **🔄 Auto-Recovery** - Reconnects automatically after errors
 - **📊 Real-time Stats** - Live performance monitoring
 - **🌍 Multi-Language** - 10+ languages with auto-detection
-- **🎨 Customizable** - Themes, commands, and responses
+- **🎨 Canvas Graphics** - Professional welcome/goodbye/level-up cards
 - **💾 Smart Storage** - Works with or without database
 - **🔔 Notifications** - Owner alerts for important events
 - **📈 Analytics** - Usage tracking and insights
 - **🛡️ Anti-Spam** - Smart spam detection and prevention
+- **⚡ Auto-Reaction** - Context-aware message reactions
+- **🎯 Leveling System** - XP-based progression with rewards
 
 ---
 
@@ -507,17 +524,18 @@ The bot now features a **stylish, user-personalized help menu** with:
 .kick @user          # Remove member from group
 .ban @user           # Ban user permanently
 .unban @user         # Remove ban
-.promote @user       # Promote to admin
-.demote @user        # Remove admin rights
+.promote @user       # Promote to admin (with canvas card)
+.demote @user        # Remove admin rights (with canvas card)
 .mute @user [time]   # Mute user temporarily
 .unmute @user        # Unmute user
 .warn @user          # Issue warning
 .unwarn @user        # Remove warning
 .tagall [message]    # Mention all members
 .hidetag [message]   # Hidden mention all
-.setdesc <text>      # Change description
-.setname <text>      # Change group name
+.setdesc <text>      # Change description (with notification)
+.setname <text>      # Change group name (with notification)
 .groupinfo           # Get group details
+.antilink on/off     # Enable/disable link protection
 ```
 
 </details>
@@ -700,6 +718,48 @@ The bot now features a **stylish, user-personalized help menu** with:
 
 ---
 
+## 🎨 Canvas-Based Group Events
+
+The bot features **professional visual notifications** using canvas graphics:
+
+### Welcome Messages
+- Beautiful gradient backgrounds with user avatars
+- Personalized greeting with username
+- Member count display
+- Custom group name integration
+
+### Goodbye Messages
+- Stylish farewell cards with user info
+- Differentiation between leave and kick
+- Admin attribution for kicks
+- Updated member count
+
+### Promotion/Demotion
+- Celebration-themed promotion cards
+- Professional demotion notifications
+- Admin attribution
+- Visual role indicators
+
+### Group Updates
+- Name change notifications with old vs new comparison
+- Description update cards
+- Visual before/after displays
+- Admin attribution
+
+### Level-Up System
+- XP-based progression tracking
+- Beautiful level-up cards with achievements
+- Configurable XP multipliers
+- Reward system integration
+
+### Auto-Reactions
+- 20+ context-aware emoji reactions
+- Keyword-based triggers
+- Smart sentiment analysis
+- Customizable reaction sets
+
+---
+
 ## 🌐 API Reference
 
 ### Base URL
@@ -803,203 +863,106 @@ MONGODB_URL=mongodb://localhost:27017/ilombot
 </details>
 
 <details>
-<summary><b>❌ Deployment Failed - Missing Lockfile</b></summary>
+<summary><b>❌ Canvas/Graphics Not Working</b></summary>
 
-**Problem:** `Couldn't determine Node.js package manager. Package manager lockfile not found.`
+**Problem:** Canvas images not generating for group events
 
 **✅ Solution:**
-This is fixed! The `package-lock.json` is now included in the repository.
-
-**IMPORTANT FOR GITHUB USERS:**
-The `package-lock.json` file exists locally but may not be in your GitHub repository. To fix deployment on Koyeb/Railway/Render:
-
+Ensure canvas dependencies are installed:
 ```bash
-# 1. Ensure package-lock.json exists locally
-npm install
+# For Linux/Ubuntu
+sudo apt-get install build-essential libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev
 
-# 2. Commit and push to GitHub
-git add package-lock.json
-git commit -m "Add package-lock.json for deployment"
-git push origin main
+# For macOS
+brew install pkg-config cairo pango libpng jpeg giflib librsvg
 
-# 3. Redeploy on your platform
-# The deployment should now succeed
-```
-
-**Why this happens:**
-- Build platforms need `package-lock.json` to install exact dependency versions
-- Without it, npm cannot determine which package manager was used
-- This file must be in your GitHub repository, not just locally
-
-</details>
-
-<details>
-<summary><b>❌ Session Invalid Error</b></summary>
-
-**Solution 1: Clear and restart**
-```bash
-rm -rf cache/auth_info_baileys
-npm start
-# Scan new QR code
-```
-
-**Solution 2: Check SESSION_ID format**
-- Must be valid JSON or Base64 string
-- Check for proper Ilom~ prefix if using Base64
-
-**Solution 3: Regenerate**
-- Delete SESSION_ID from .env
-- Restart bot
-- Scan QR code
-- Copy new SESSION_ID from logs
-
-</details>
-
-<details>
-<summary><b>❌ Commands Not Loading</b></summary>
-
-**Check command file structure:**
-```javascript
-// Correct format (ES Module)
-export default {
-    name: 'command',
-    aliases: ['alias'],
-    category: 'general',
-    // ... rest of command
-};
-```
-
-**Verify:**
-```bash
-# Check for syntax errors
-node -c src/commands/general/commandname.js
-
-# Check logs
-tail -f logs/bot.log | grep ERROR
+# Reinstall node-canvas
+npm install canvas --build-from-source
 ```
 
 </details>
 
 <details>
-<summary><b>❌ Bot Not Responding</b></summary>
+<summary><b>❌ Commands Not Working</b></summary>
 
-**Checklist:**
-- [ ] Is the bot online? Check logs/dashboard
-- [ ] Is WhatsApp connected? Look for "✅ WhatsApp connection established"
-- [ ] Is prefix correct? Default is `.`
-- [ ] Are you banned? Contact bot owner
-- [ ] Is group banned? Use `.groupinfo` to check
+**Problem:** Bot doesn't respond to commands
 
-**Debug:**
-```bash
-# Check process
-ps aux | grep node
-
-# Check logs
-tail -100 logs/bot.log
-
-# Test ping
-# Send: .ping in WhatsApp
-```
+**✅ Solution:**
+1. Check prefix is correct in `.env` file
+2. Verify bot is running: `npm start`
+3. Check logs for errors: `tail -f logs/bot.log`
+4. Ensure you have permission to use the command
+5. Test with basic command: `.ping`
 
 </details>
+
+---
+
+## 📚 Documentation
+
+- [📖 Command Template Guide](./COMMAND_TEMPLATE.md) - Create custom commands
+- [🎨 Canvas Utils Documentation](./docs/canvas-utils.md) - Graphics API
+- [🔌 Plugin Development](./docs/plugins.md) - Build plugins
+- [🌐 API Reference](./docs/api-reference.md) - Complete API docs
+- [🚀 Deployment Guide](./docs/deployment.md) - Production setup
 
 ---
 
 ## 🤝 Contributing
 
-We welcome contributions! Here's how:
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
-1. **Fork** the repository
-2. **Create** a feature branch (`git checkout -b feature/AmazingFeature`)
-3. **Commit** changes (`git commit -m 'Add AmazingFeature'`)
-4. **Push** to branch (`git push origin feature/AmazingFeature`)
-5. **Open** a Pull Request
-
-### Development Setup
-
-```bash
-# Clone your fork
-git clone https://github.com/YOUR_USERNAME/Amazing-Bot-.git
-
-# Install dependencies
-npm install
-
-# Create dev environment
-cp .env.example .env.development
-
-# Run in dev mode
-npm run dev
-```
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
 ---
 
 ## 📄 License
 
-This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License - see [LICENSE](LICENSE) file for details.
 
-```
-MIT License - Copyright (c) 2025 Ilom
+---
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software...
-```
+## 💬 Support
+
+Need help? Join our community:
+
+<div align="center">
+
+[![WhatsApp Group](https://img.shields.io/badge/WhatsApp-Group-25D366?style=for-the-badge&logo=whatsapp)](https://chat.whatsapp.com/your-group-link)
+[![Telegram](https://img.shields.io/badge/Telegram-Channel-26A5E4?style=for-the-badge&logo=telegram)](https://t.me/your-channel)
+[![Discord](https://img.shields.io/badge/Discord-Server-5865F2?style=for-the-badge&logo=discord)](https://discord.gg/your-server)
+[![GitHub Issues](https://img.shields.io/badge/GitHub-Issues-181717?style=for-the-badge&logo=github)](https://github.com/NexusCoders-cyber/Amazing-Bot-/issues)
+
+</div>
+
+---
+
+## 👨‍💻 Author
+
+**Ilom** - *Lead Developer*
+
+- GitHub: [@NexusCoders-cyber](https://github.com/NexusCoders-cyber)
+- WhatsApp: [Contact](https://wa.me/your-number)
 
 ---
 
 ## 🙏 Acknowledgments
 
-<div align="center">
-
-Built with ❤️ by [Ilom](https://github.com/NexusCoders-cyber)
-
-### Powered By
-
-[![Baileys](https://img.shields.io/badge/Baileys-WhatsApp_API-25D366?style=flat-square&logo=whatsapp)](https://github.com/WhiskeySockets/Baileys)
-[![OpenAI](https://img.shields.io/badge/OpenAI-GPT-412991?style=flat-square&logo=openai)](https://openai.com)
-[![MongoDB](https://img.shields.io/badge/MongoDB-Database-47A248?style=flat-square&logo=mongodb)](https://www.mongodb.com)
-[![Node.js](https://img.shields.io/badge/Node.js-Runtime-339933?style=flat-square&logo=node.js)](https://nodejs.org)
-
-### Special Thanks
-
-- [@WhiskeySockets](https://github.com/WhiskeySockets) for Baileys library
-- OpenAI & Google for AI APIs
-- All contributors and users
-
-</div>
-
----
-
-## 📞 Support
-
-<div align="center">
-
-Need help? Reach out!
-
-[![GitHub Issues](https://img.shields.io/badge/GitHub-Issues-181717?style=for-the-badge&logo=github)](https://github.com/NexusCoders-cyber/Amazing-Bot-/issues)
-[![WhatsApp](https://img.shields.io/badge/WhatsApp-Support-25D366?style=for-the-badge&logo=whatsapp)](https://wa.me/your_number)
-[![Telegram](https://img.shields.io/badge/Telegram-Channel-26A5E4?style=for-the-badge&logo=telegram)](https://t.me/your_channel)
-[![Discord](https://img.shields.io/badge/Discord-Community-5865F2?style=for-the-badge&logo=discord)](https://discord.gg/your_server)
-
-### 📧 Contact
-
-- **Email:** support@ilom.tech
-- **Website:** [ilom.tech](https://ilom.tech)
-- **GitHub:** [@NexusCoders-cyber](https://github.com/NexusCoders-cyber)
-
-</div>
+- [Baileys](https://github.com/WhiskeySockets/Baileys) - WhatsApp Web API
+- [OpenAI](https://openai.com) - AI Integration
+- [Google Gemini](https://ai.google.dev) - AI Services
+- All contributors and supporters
 
 ---
 
 <div align="center">
 
-### ⭐ Star this repo if you found it helpful!
+### ⭐ Star this repository if you find it helpful!
 
-Made with 💙 by the **NexusCoders** team
-
-**[⬆ Back to Top](#-amazing-bot-)**
+**Made with ❤️ by Ilom & NexusCoders**
 
 </div>

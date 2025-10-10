@@ -1,15 +1,16 @@
-# 🎯 ILOM BOT - Command Creation Guide
+# 📝 Command Template Guide
 
-## 📋 Table of Contents
-- [Basic Command Structure](#basic-command-structure)
-- [Command Properties](#command-properties)
-- [Advanced Features](#advanced-features)
-- [Examples](#examples)
-- [Best Practices](#best-practices)
+<div align="center">
+
+*Complete guide for creating custom commands in Amazing WhatsApp Bot*
+
+[Basic Structure](#-basic-command-structure) • [Properties](#-command-properties) • [Advanced Features](#-advanced-features) • [Examples](#-complete-examples) • [Best Practices](#-best-practices)
+
+</div>
 
 ---
 
-## 🚀 Basic Command Structure
+## 🎯 Basic Command Structure
 
 Every command must follow this structure:
 
@@ -19,8 +20,8 @@ export default {
     aliases: ['alias1', 'alias2'],
     category: 'general',
     description: 'Brief description of what this command does',
-    usage: 'commandname [arguments]',
-    example: 'commandname hello world',
+    usage: '.commandname [arguments]',
+    example: '.commandname hello world',
     cooldown: 3,
     permissions: ['user'],
     args: false,
@@ -30,6 +31,9 @@ export default {
     premium: false,
     hidden: false,
     ownerOnly: false,
+    adminOnly: false,
+    groupOnly: false,
+    botAdminRequired: false,
     supportsReply: false,
     supportsChat: false,
     supportsReact: false,
@@ -63,8 +67,8 @@ export default {
 | `description` | String | `''` | Brief explanation of command functionality |
 | `usage` | String | `name` | How to use the command |
 | `example` | String | `name` | Example usage |
-| `cooldown` | Number | `0` | Seconds before user can use command again |
-| `permissions` | Array | `['user']` | Required permissions (user, admin, owner, premium, group, private, botAdmin) |
+| `cooldown` | Number | `3` | Seconds before user can use command again |
+| `permissions` | Array | `['user']` | Required permissions |
 | `args` | Boolean | `false` | Whether command requires arguments |
 | `minArgs` | Number | `0` | Minimum number of arguments required |
 | `maxArgs` | Number | `Infinity` | Maximum number of arguments allowed |
@@ -72,10 +76,37 @@ export default {
 | `premium` | Boolean | `false` | Only premium users can use |
 | `hidden` | Boolean | `false` | Hide from help menu |
 | `ownerOnly` | Boolean | `false` | Only bot owner can use |
+| `adminOnly` | Boolean | `false` | Only group admins can use |
+| `groupOnly` | Boolean | `false` | Only works in groups |
+| `botAdminRequired` | Boolean | `false` | Bot needs admin rights |
 | `supportsReply` | Boolean | `false` | Enable reply handler |
 | `supportsChat` | Boolean | `false` | Enable chat context |
 | `supportsReact` | Boolean | `false` | Enable reaction handler |
 | `supportsButtons` | Boolean | `false` | Command can send buttons |
+
+### Execute Function Parameters
+
+The `execute` function receives an object with these properties:
+
+```javascript
+{
+    sock,           // WhatsApp socket connection
+    message,        // Full message object
+    args,           // Command arguments array
+    command,        // Command object (this)
+    user,           // User database object
+    group,          // Group database object (if in group)
+    from,           // Chat ID (group or private)
+    sender,         // Sender's WhatsApp ID
+    isGroup,        // Boolean: is this a group chat?
+    isGroupAdmin,   // Boolean: is sender a group admin?
+    isBotAdmin,     // Boolean: is bot a group admin?
+    isOwner,        // Boolean: is sender the bot owner?
+    prefix,         // Command prefix (.)
+    quoted,         // Quoted message (if any)
+    body            // Full message body
+}
+```
 
 ---
 
@@ -83,7 +114,7 @@ export default {
 
 ### 1. Quoted Messages (REQUIRED)
 
-**ALL COMMANDS MUST USE QUOTED MESSAGES:**
+ALL COMMANDS MUST USE QUOTED MESSAGES:
 
 ```javascript
 await sock.sendMessage(from, {
@@ -91,9 +122,52 @@ await sock.sendMessage(from, {
 }, { quoted: message });
 ```
 
-### 2. Reply Handler (supportsReply: true)
+### 2. Canvas Graphics
 
-Allow users to reply to command output for follow-up interactions:
+Create beautiful images for your commands:
+
+```javascript
+import { createCanvas, loadImage } from 'canvas';
+import { applyGradient, roundRect } from '../utils/canvasUtils.js';
+
+export default {
+    name: 'profile',
+    category: 'utility',
+    description: 'Generate profile card',
+    
+    async execute({ sock, message, from, sender, user }) {
+        try {
+            const canvas = createCanvas(800, 400);
+            const ctx = canvas.getContext('2d');
+            
+            applyGradient(ctx, 800, 400, '#667eea', '#764ba2');
+            
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 48px Arial';
+            ctx.fillText('Profile Card', 50, 80);
+            
+            ctx.font = '32px Arial';
+            ctx.fillText(`User: ${sender.split('@')[0]}`, 50, 150);
+            ctx.fillText(`Balance: $${user.economy.balance}`, 50, 200);
+            
+            const buffer = canvas.toBuffer('image/png');
+            
+            await sock.sendMessage(from, {
+                image: buffer,
+                caption: '✨ Your profile card!'
+            }, { quoted: message });
+        } catch (error) {
+            await sock.sendMessage(from, {
+                text: '❌ Failed to generate profile card'
+            }, { quoted: message });
+        }
+    }
+};
+```
+
+### 3. Reply Handler (supportsReply: true)
+
+Allow users to reply to command output:
 
 ```javascript
 export default {
@@ -129,7 +203,7 @@ export default {
                 const isCorrect = answer === '4';
                 
                 await sock.sendMessage(from, {
-                    text: isCorrect ? '✅ Correct!' : '❌ Wrong! The answer is 4',
+                    text: isCorrect ? '✅ Correct! +100 points' : '❌ Wrong! The answer is 4',
                     mentions: [sender]
                 }, { quoted: replyMessage });
                 
@@ -141,9 +215,9 @@ export default {
 };
 ```
 
-### 3. Chat Context Handler (supportsChat: true)
+### 4. Chat Context Handler (supportsChat: true)
 
-Maintain conversation context for multi-turn interactions:
+Maintain conversation context:
 
 ```javascript
 export default {
@@ -199,9 +273,9 @@ export default {
 };
 ```
 
-### 4. Button Support (supportsButtons: true)
+### 5. Button Support (supportsButtons: true)
 
-Send interactive buttons with your command:
+Send interactive buttons:
 
 ```javascript
 export default {
@@ -217,10 +291,129 @@ export default {
         
         await sock.sendMessage(from, {
             text: '⚙️ Bot Settings\n\nChoose a setting to configure:',
-            footer: '© Ilom Bot',
+            footer: '© Amazing Bot',
             buttons: buttons,
             headerType: 1
         }, { quoted: message });
+    }
+};
+```
+
+### 6. Database Integration
+
+Work with user and group data:
+
+```javascript
+import { getUser, updateUser } from '../models/User.js';
+import { getGroup, updateGroup } from '../models/Group.js';
+
+export default {
+    name: 'balance',
+    category: 'economy',
+    description: 'Check your balance',
+    
+    async execute({ sock, message, from, sender, user }) {
+        const balanceText = `
+╭──⦿【 💰 BALANCE 】
+│
+│ 👤 User: @${sender.split('@')[0]}
+│ 💵 Balance: $${user.economy.balance}
+│ 🏦 Bank: $${user.economy.bank}
+│ 💎 Total: $${user.economy.balance + user.economy.bank}
+│ 📊 Level: ${user.level}
+│ ⭐ XP: ${user.xp}/${user.level * 100}
+│
+╰────────⦿`;
+        
+        await sock.sendMessage(from, {
+            text: balanceText,
+            mentions: [sender]
+        }, { quoted: message });
+    }
+};
+```
+
+### 7. External API Integration
+
+Fetch data from external services:
+
+```javascript
+import axios from 'axios';
+
+export default {
+    name: 'weather',
+    category: 'utility',
+    description: 'Get weather information',
+    usage: '.weather <city>',
+    cooldown: 5,
+    minArgs: 1,
+    
+    async execute({ sock, message, from, args }) {
+        try {
+            const city = args.join(' ');
+            const response = await axios.get(`https://api.weatherapi.com/v1/current.json`, {
+                params: {
+                    key: process.env.WEATHER_API_KEY,
+                    q: city
+                }
+            });
+            
+            const data = response.data;
+            const weatherText = `
+╭──⦿【 🌤️ WEATHER 】
+│
+│ 📍 Location: ${data.location.name}, ${data.location.country}
+│ 🌡️ Temperature: ${data.current.temp_c}°C
+│ ☁️ Condition: ${data.current.condition.text}
+│ 💨 Wind: ${data.current.wind_kph} km/h
+│ 💧 Humidity: ${data.current.humidity}%
+│
+╰────────⦿`;
+            
+            await sock.sendMessage(from, {
+                text: weatherText
+            }, { quoted: message });
+        } catch (error) {
+            await sock.sendMessage(from, {
+                text: '❌ Failed to fetch weather data'
+            }, { quoted: message });
+        }
+    }
+};
+```
+
+### 8. Media Processing
+
+Handle images, videos, and stickers:
+
+```javascript
+import { downloadMediaMessage } from '@whiskeysockets/baileys';
+import { createSticker } from '../utils/stickerUtils.js';
+
+export default {
+    name: 'sticker',
+    category: 'media',
+    description: 'Create sticker from image',
+    
+    async execute({ sock, message, from, quoted }) {
+        try {
+            if (!quoted?.imageMessage) {
+                return await sock.sendMessage(from, {
+                    text: '❌ Please reply to an image'
+                }, { quoted: message });
+            }
+            
+            const buffer = await downloadMediaMessage(message, 'buffer', {});
+            const sticker = await createSticker(buffer);
+            
+            await sock.sendMessage(from, {
+                sticker: sticker
+            });
+        } catch (error) {
+            await sock.sendMessage(from, {
+                text: '❌ Failed to create sticker'
+            }, { quoted: message });
+        }
     }
 };
 ```
@@ -229,50 +422,65 @@ export default {
 
 ## 📚 Complete Examples
 
-### Example 1: Simple Command (WITH QUOTED MESSAGE)
+### Example 1: Simple Greeting Command
 
 ```javascript
 export default {
-    name: 'ping',
-    aliases: ['p', 'test'],
-    category: 'general',
-    description: 'Check bot response time',
-    usage: 'ping',
-    cooldown: 3,
-    permissions: ['user'],
+    name: 'hello',
+    aliases: ['hi', 'hey'],
+    category: 'fun',
+    description: 'Greet the bot',
+    usage: '.hello',
+    cooldown: 2,
     
-    async execute({ sock, message, from }) {
-        const start = Date.now();
+    async execute({ sock, message, from, sender }) {
+        const greetings = [
+            '👋 Hello there!',
+            '🎉 Hey! How can I help?',
+            '😊 Hi! Nice to see you!',
+            '🌟 Greetings! Welcome!'
+        ];
+        
+        const randomGreeting = greetings[Math.floor(Math.random() * greetings.length)];
         
         await sock.sendMessage(from, {
-            text: `🏓 Pong! Response time: ${Date.now() - start}ms`
+            text: `${randomGreeting}\n\nUser: @${sender.split('@')[0]}`,
+            mentions: [sender]
         }, { quoted: message });
     }
 };
 ```
 
-### Example 2: Command with Arguments (WITH QUOTED MESSAGE)
+### Example 2: Calculator Command
 
 ```javascript
+import mathjs from 'mathjs';
+
 export default {
     name: 'calculator',
     aliases: ['calc', 'math'],
     category: 'utility',
     description: 'Perform mathematical calculations',
-    usage: 'calc <expression>',
-    example: 'calc 2 + 2',
+    usage: '.calc <expression>',
+    example: '.calc 2 + 2 * 3',
     cooldown: 2,
-    permissions: ['user'],
-    args: true,
     minArgs: 1,
     
     async execute({ sock, message, from, args }) {
         try {
             const expression = args.join(' ');
-            const result = eval(expression);
+            const result = mathjs.evaluate(expression);
+            
+            const calcText = `
+╭──⦿【 🧮 CALCULATOR 】
+│
+│ 📝 Expression: ${expression}
+│ ✅ Result: ${result}
+│
+╰────────⦿`;
             
             await sock.sendMessage(from, {
-                text: `🧮 Calculation:\n\n${expression} = ${result}`
+                text: calcText
             }, { quoted: message });
         } catch (error) {
             await sock.sendMessage(from, {
@@ -283,26 +491,21 @@ export default {
 };
 ```
 
-### Example 3: Admin Command (WITH QUOTED MESSAGE)
+### Example 3: Kick Command (Admin)
 
 ```javascript
 export default {
-    name: 'ban',
-    aliases: ['kick'],
+    name: 'kick',
+    aliases: ['remove'],
     category: 'admin',
-    description: 'Ban a user from the group',
-    usage: 'ban @user',
-    cooldown: 5,
-    permissions: ['admin', 'botAdmin'],
-    minArgs: 1,
+    description: 'Remove a member from the group',
+    usage: '.kick @user',
+    cooldown: 3,
+    adminOnly: true,
+    groupOnly: true,
+    botAdminRequired: true,
     
-    async execute({ sock, message, from, isGroup, isGroupAdmin, isBotAdmin, sender }) {
-        if (!isGroup) {
-            return sock.sendMessage(from, {
-                text: '❌ This command can only be used in groups!'
-            }, { quoted: message });
-        }
-        
+    async execute({ sock, message, from, isGroupAdmin, isBotAdmin }) {
         if (!isGroupAdmin) {
             return sock.sendMessage(from, {
                 text: '❌ You need to be a group admin to use this command!'
@@ -311,53 +514,119 @@ export default {
         
         if (!isBotAdmin) {
             return sock.sendMessage(from, {
-                text: '❌ Bot needs to be admin to ban users!'
+                text: '❌ Bot needs to be admin to kick users!'
             }, { quoted: message });
         }
         
-        const mentioned = message.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
+        const mentioned = message.message?.extendedTextMessage?.contextInfo?.mentionedJid;
         
-        if (!mentioned) {
+        if (!mentioned || mentioned.length === 0) {
             return sock.sendMessage(from, {
-                text: '❌ Please mention a user to ban!'
+                text: '❌ Please mention a user to kick!'
             }, { quoted: message });
         }
         
-        await sock.groupParticipantsUpdate(from, [mentioned], 'remove');
+        await sock.groupParticipantsUpdate(from, mentioned, 'remove');
         
         await sock.sendMessage(from, {
-            text: `✅ User banned successfully!`,
-            mentions: [mentioned, sender]
+            text: `✅ User removed successfully!`,
+            mentions: mentioned
         }, { quoted: message });
     }
 };
 ```
 
-### Example 4: Owner Command (CMD)
+### Example 4: Daily Reward Command
+
+```javascript
+import { getUser, updateUser } from '../models/User.js';
+
+export default {
+    name: 'daily',
+    category: 'economy',
+    description: 'Claim daily reward',
+    usage: '.daily',
+    cooldown: 86400,
+    
+    async execute({ sock, message, from, sender, user }) {
+        const now = Date.now();
+        const lastDaily = user.economy.lastDaily || 0;
+        const cooldown = 86400000;
+        
+        if (now - lastDaily < cooldown) {
+            const remaining = cooldown - (now - lastDaily);
+            const hours = Math.floor(remaining / 3600000);
+            const minutes = Math.floor((remaining % 3600000) / 60000);
+            
+            return await sock.sendMessage(from, {
+                text: `⏰ You already claimed your daily reward!\n\n⏳ Next claim in: ${hours}h ${minutes}m`
+            }, { quoted: message });
+        }
+        
+        const reward = Math.floor(Math.random() * 400) + 100;
+        
+        await updateUser(sender, {
+            'economy.balance': user.economy.balance + reward,
+            'economy.lastDaily': now
+        });
+        
+        const dailyText = `
+╭──⦿【 🎁 DAILY REWARD 】
+│
+│ 👤 User: @${sender.split('@')[0]}
+│ 💰 Reward: $${reward}
+│ 💵 New Balance: $${user.economy.balance + reward}
+│ ⏰ Next Claim: 24 hours
+│
+╰────────⦿`;
+        
+        await sock.sendMessage(from, {
+            text: dailyText,
+            mentions: [sender]
+        }, { quoted: message });
+    }
+};
+```
+
+### Example 5: Group Stats Command
 
 ```javascript
 export default {
-    name: 'cmd',
-    aliases: ['exec', 'shell'],
-    category: 'owner',
-    description: 'Execute shell commands or install packages',
-    usage: 'cmd <command|install|get> [args]',
-    example: 'cmd ls -la',
-    cooldown: 0,
-    permissions: ['owner'],
-    ownerOnly: true,
-    minArgs: 1,
+    name: 'groupstats',
+    aliases: ['gstats'],
+    category: 'admin',
+    description: 'Show group statistics',
+    groupOnly: true,
     
-    async execute({ sock, message, from, args }) {
-        const action = args[0];
-        
-        if (action === 'install') {
-            const packageName = args.slice(1).join(' ');
+    async execute({ sock, message, from, group }) {
+        try {
+            const metadata = await sock.groupMetadata(from);
+            
+            const admins = metadata.participants.filter(p => p.admin).length;
+            const members = metadata.participants.length - admins;
+            
+            const statsText = `
+╭──⦿【 📊 GROUP STATS 】
+│
+│ 📱 Name: ${metadata.subject}
+│ 🆔 ID: ${metadata.id}
+│ 👥 Total Members: ${metadata.participants.length}
+│ 👑 Admins: ${admins}
+│ 👤 Members: ${members}
+│ 📅 Created: ${new Date(metadata.creation * 1000).toLocaleDateString()}
+│ 💬 Total Messages: ${group?.stats?.totalMessages || 0}
+│ 🎉 Total Joins: ${group?.stats?.totalJoins || 0}
+│ 👋 Total Leaves: ${group?.stats?.totalLeaves || 0}
+│
+╰────────⦿`;
             
             await sock.sendMessage(from, {
-                text: `📦 Installing: ${packageName}\n⏳ Please wait...`
+                text: statsText
             }, { quoted: message });
-            
+        } catch (error) {
+            await sock.sendMessage(from, {
+                text: '❌ Failed to fetch group statistics'
+            }, { quoted: message });
         }
     }
 };
@@ -367,37 +636,163 @@ export default {
 
 ## ✅ Best Practices
 
-1. **Quoted Messages**: ALWAYS use `{ quoted: message }` when sending messages
-2. **Error Handling**: Always wrap your code in try-catch blocks
-3. **User Feedback**: Provide clear success/error messages
-4. **Performance**: Use async/await properly and avoid blocking operations
-5. **Security**: Validate all user inputs before processing
-6. **Permissions**: Check permissions before executing sensitive operations
-7. **Cooldowns**: Set appropriate cooldowns to prevent spam
-8. **Documentation**: Write clear descriptions and usage examples
-9. **Testing**: Test commands in both group and private chats
-10. **Cleanup**: Clear timeouts and handlers when done
-11. **Mentions**: Use mentions for user-specific responses
-12. **No Comments**: Never add comments to code unless explicitly requested
+### 1. Always Use Quoted Messages
+
+```javascript
+await sock.sendMessage(from, {
+    text: 'Your response'
+}, { quoted: message });
+```
+
+### 2. Error Handling
+
+Always wrap your code in try-catch blocks:
+
+```javascript
+async execute({ sock, message, from, args }) {
+    try {
+        // Your command logic
+    } catch (error) {
+        console.error('Command error:', error);
+        await sock.sendMessage(from, {
+            text: '❌ An error occurred. Please try again.'
+        }, { quoted: message });
+    }
+}
+```
+
+### 3. Input Validation
+
+Validate all user inputs:
+
+```javascript
+if (!args.length) {
+    return await sock.sendMessage(from, {
+        text: '❌ Please provide required arguments'
+    }, { quoted: message });
+}
+
+const amount = parseInt(args[0]);
+if (isNaN(amount) || amount <= 0) {
+    return await sock.sendMessage(from, {
+        text: '❌ Please provide a valid positive number'
+    }, { quoted: message });
+}
+```
+
+### 4. Permission Checks
+
+Always check permissions:
+
+```javascript
+if (!isGroupAdmin) {
+    return await sock.sendMessage(from, {
+        text: '❌ This command requires admin privileges'
+    }, { quoted: message });
+}
+```
+
+### 5. User Feedback
+
+Provide clear feedback:
+
+```javascript
+await sock.sendMessage(from, {
+    text: '⏳ Processing your request...'
+}, { quoted: message });
+
+await sock.sendMessage(from, {
+    text: '✅ Task completed successfully!'
+}, { quoted: message });
+```
+
+### 6. Clean Code Structure
+
+Keep your code organized:
+
+```javascript
+async function fetchData(query) {
+    // Data fetching logic
+}
+
+async function formatResponse(data) {
+    // Formatting logic
+}
+
+export default {
+    name: 'search',
+    async execute({ sock, message, from, args }) {
+        const data = await fetchData(args.join(' '));
+        const formatted = formatResponse(data);
+        await sock.sendMessage(from, { text: formatted }, { quoted: message });
+    }
+};
+```
+
+### 7. Use Mentions for User-Specific Responses
+
+```javascript
+await sock.sendMessage(from, {
+    text: `✅ @${sender.split('@')[0]} completed the task!`,
+    mentions: [sender]
+}, { quoted: message });
+```
+
+### 8. Implement Rate Limiting
+
+```javascript
+export default {
+    name: 'heavycommand',
+    cooldown: 10,
+    // ...
+};
+```
+
+### 9. Documentation
+
+Document your commands:
+
+```javascript
+/**
+ * Command: userinfo
+ * Description: Display detailed user information
+ * Category: utility
+ * Permissions: All users
+ * Usage: .userinfo [@user]
+ */
+export default {
+    name: 'userinfo',
+    // ...
+};
+```
+
+### 10. Testing
+
+Test commands in:
+- Private chats
+- Group chats
+- With different permission levels
+- With invalid inputs
+- With edge cases
 
 ---
 
 ## 🗂️ File Structure
 
-Save your command file in the appropriate category folder:
+Save commands in appropriate category folders:
 
 ```
 src/commands/
-├── admin/         - Group management commands
-├── ai/            - AI-powered features
-├── downloader/    - Media downloaders
-├── economy/       - Virtual economy
-├── fun/           - Entertainment commands
-├── games/         - Interactive games
-├── general/       - General utility commands
-├── media/         - Media processing
-├── owner/         - Owner-only commands
-└── utility/       - Developer tools
+├── admin/         # Group management, moderation
+├── ai/            # AI-powered features
+├── downloader/    # Media downloaders
+├── economy/       # Virtual economy system
+├── fun/           # Entertainment commands
+├── games/         # Interactive games
+├── general/       # General utility commands
+├── media/         # Media processing
+├── owner/         # Owner-only commands
+└── utility/       # Developer tools
 ```
 
 ---
@@ -410,30 +805,95 @@ export default {
     aliases: [],
     category: 'general',
     description: 'My awesome command',
-    usage: 'mycommand',
+    usage: '.mycommand [args]',
     cooldown: 3,
-    permissions: ['user'],
     
     async execute({ sock, message, from, args, sender }) {
-        await sock.sendMessage(from, {
-            text: 'Hello from my command!'
-        }, { quoted: message });
+        try {
+            await sock.sendMessage(from, {
+                text: 'Hello from my command!'
+            }, { quoted: message });
+        } catch (error) {
+            await sock.sendMessage(from, {
+                text: '❌ An error occurred'
+            }, { quoted: message });
+        }
     }
 };
 ```
 
 ---
 
-## 🔑 Key Updates
+## 🎨 Beautiful Formatting Templates
 
-1. **ALL commands MUST use quoted messages** - `{ quoted: message }`
-2. **Owner recognition** - Bot recognizes owner from .env even in groups
-3. **No auto-reply** - Bot only responds to commands with prefix
-4. **Better fonts** - Use stylish Unicode fonts for better appearance
-5. **Advanced cmd command** - Execute shell commands, install packages, get files
-6. **Canvas uptime** - Beautiful image-based uptime display
+### Success Message
+```javascript
+const successText = `
+╭──⦿【 ✅ SUCCESS 】
+│
+│ 🎉 Operation completed!
+│ 👤 User: @${sender.split('@')[0]}
+│ ⏰ Time: ${new Date().toLocaleTimeString()}
+│
+╰────────⦿`;
+```
+
+### Error Message
+```javascript
+const errorText = `
+╭──⦿【 ❌ ERROR 】
+│
+│ ⚠️ Something went wrong
+│ 📝 ${error.message}
+│ 💡 Please try again
+│
+╰────────⦿`;
+```
+
+### Info Message
+```javascript
+const infoText = `
+╭──⦿【 ℹ️ INFORMATION 】
+│
+│ 📌 Title: ${title}
+│ 📄 Description: ${desc}
+│ 🔗 More info: ${link}
+│
+╰────────⦿`;
+```
 
 ---
 
+## 🔑 Key Updates
+
+1. **Canvas Graphics** - Create beautiful visual notifications
+2. **Owner Recognition** - Automatic owner detection from .env
+3. **Enhanced Permission System** - Multi-level access control
+4. **Reply Handlers** - Interactive command follow-ups
+5. **Chat Context** - Maintain conversation state
+6. **Button Support** - Interactive button menus
+7. **Database Integration** - User and group data management
+8. **External APIs** - Fetch data from external services
+
+---
+
+## 💬 Support
+
+Need help creating commands?
+
+1. Check existing commands in `src/commands/` for examples
+2. Review the [main documentation](./README.md)
+3. Join our support group
+4. Open an issue on GitHub
+
+---
+
+<div align="center">
+
 **Created with ❤️ by Ilom**
-**Ilom Bot v1.0.0**
+
+**Amazing Bot v1.0.0**
+
+[Back to Main README](./README.md)
+
+</div>
