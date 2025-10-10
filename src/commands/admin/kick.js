@@ -1,56 +1,80 @@
+import formatResponse from '../../utils/formatUtils.js';
+
 export default {
     name: 'kick',
     aliases: ['remove'],
     category: 'admin',
     description: 'Remove a member from the group',
-    usage: 'kick @user',
+    usage: 'kick @user OR reply to message',
     cooldown: 3,
     permissions: ['admin'],
     groupOnly: true,
     adminOnly: true,
-    args: true,
 
-    async execute(sock, message, args, { isGroup, isBotAdmin, mentionedUsers, sender }) {
+    async execute({ sock, message, args, from, isGroup, isBotAdmin }) {
         if (!isGroup) {
-            return sock.sendMessage(message.key.remoteJid, {
-                text: '❌ This command can only be used in groups!'
-            });
+            return sock.sendMessage(from, {
+                text: formatResponse.error('GROUP ONLY',
+                    'This command can only be used in groups')
+            }, { quoted: message });
         }
 
         if (!isBotAdmin) {
-            return sock.sendMessage(message.key.remoteJid, {
-                text: '❌ I need admin privileges to kick members!'
-            });
-        }
-
-        if (mentionedUsers.length === 0) {
-            return sock.sendMessage(message.key.remoteJid, {
-                text: '❌ Please mention the user(s) to kick!\n\nExample: .kick @user'
-            });
+            return sock.sendMessage(from, {
+                text: formatResponse.error('BOT NOT ADMIN',
+                    'I need admin privileges to kick members',
+                    'Make me an admin first')
+            }, { quoted: message });
         }
 
         try {
-            const groupId = message.key.remoteJid;
-            const usersToKick = mentionedUsers.map(user => user.id);
+            const quotedUser = message.message?.extendedTextMessage?.contextInfo?.participant;
+            const mentionedUsers = message.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
             
-            await sock.sendMessage(groupId, {
-                text: `⚠️ Kicking ${mentionedUsers.length} member(s)...`
-            });
-
-            await sock.groupParticipantsUpdate(groupId, usersToKick, 'remove');
-
-            const kickedUsers = mentionedUsers.map(user => `@${user.id.split('@')[0]}`).join(', ');
+            let usersToKick = [];
+            if (quotedUser) {
+                usersToKick = [quotedUser];
+            } else if (mentionedUsers.length > 0) {
+                usersToKick = mentionedUsers;
+            } else {
+                return sock.sendMessage(from, {
+                    text: formatResponse.error('NO TARGET',
+                        'Reply to a message or mention user(s) to kick',
+                        'Usage: kick @user OR reply to message and type: kick')
+                }, { quoted: message });
+            }
             
-            await sock.sendMessage(groupId, {
-                text: `✅ Successfully kicked: ${kickedUsers}`,
+            await sock.sendMessage(from, {
+                text: `╭──⦿【 ⚠️ KICKING MEMBERS 】
+│
+│ 🔄 Processing ${usersToKick.length} member(s)...
+│
+╰────────────⦿`
+            }, { quoted: message });
+
+            await sock.groupParticipantsUpdate(from, usersToKick, 'remove');
+
+            const kickedList = usersToKick.map(u => `✧ @${u.split('@')[0]}`).join('\n│ ');
+            
+            await sock.sendMessage(from, {
+                text: `╭──⦿【 ✅ MEMBERS KICKED 】
+│
+│ 👥 𝗞𝗶𝗰𝗸𝗲𝗱 𝗠𝗲𝗺𝗯𝗲𝗿𝘀:
+│ ${kickedList}
+│
+│ 📊 𝗧𝗼𝘁𝗮𝗹: ${usersToKick.length}
+│ 📅 𝗗𝗮𝘁𝗲: ${new Date().toLocaleDateString()}
+│
+╰────────────⦿`,
                 mentions: usersToKick
-            });
+            }, { quoted: message });
 
         } catch (error) {
-            console.error('Kick command error:', error);
-            await sock.sendMessage(message.key.remoteJid, {
-                text: '❌ Failed to kick user(s). They might be admin or I lack permissions.'
-            });
+            await sock.sendMessage(from, {
+                text: formatResponse.error('KICK FAILED', 
+                    'Failed to kick user(s)',
+                    'They might be admin or I lack permissions')
+            }, { quoted: message });
         }
     }
 };

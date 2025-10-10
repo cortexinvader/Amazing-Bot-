@@ -1,23 +1,28 @@
+import formatResponse from '../../utils/formatUtils.js';
+
 export default {
     name: 'promote',
     aliases: ['promoteuser', 'makeadmin'],
     category: 'admin',
     description: 'Give admin privileges to a user',
-    usage: 'promote [@user]',
+    usage: 'promote @user OR reply to message',
     cooldown: 5,
     permissions: ['admin'],
 
-    async execute({ sock, message, args, from, user, isGroup, isGroupAdmin, isBotAdmin }) {
+    async execute({ sock, message, args, from, isGroup, isBotAdmin }) {
         if (!isGroup) {
             return await sock.sendMessage(from, {
-                text: '❌ *Group Only*\n\nThis command can only be used in groups.'
-            });
+                text: formatResponse.error('GROUP ONLY',
+                    'This command can only be used in groups')
+            }, { quoted: message });
         }
 
         if (!isBotAdmin) {
             return await sock.sendMessage(from, {
-                text: '❌ *Bot Not Admin*\n\nI need to be an admin to promote users.'
-            });
+                text: formatResponse.error('BOT NOT ADMIN',
+                    'I need to be an admin to promote users',
+                    'Make me an admin first')
+            }, { quoted: message });
         }
 
         try {
@@ -31,8 +36,10 @@ export default {
                 targetJid = mentionedUsers[0];
             } else {
                 return await sock.sendMessage(from, {
-                    text: '❌ *No Target*\n\nReply to a message or mention a user to promote.\n\n*Usage:* .promote [@user]'
-                });
+                    text: formatResponse.error('NO TARGET',
+                        'Reply to a message or mention a user to promote',
+                        'Usage: promote @user OR reply to message and type: promote')
+                }, { quoted: message });
             }
 
             const groupMetadata = await sock.groupMetadata(from);
@@ -40,29 +47,41 @@ export default {
 
             if (!targetUser) {
                 return await sock.sendMessage(from, {
-                    text: '❌ *User Not Found*\n\nThis user is not in the group.'
-                });
+                    text: formatResponse.error('USER NOT FOUND',
+                        'This user is not in the group')
+                }, { quoted: message });
             }
 
             if (targetUser.admin === 'admin' || targetUser.admin === 'superadmin') {
                 return await sock.sendMessage(from, {
-                    text: '❌ *Already Admin*\n\nThis user is already an admin.'
-                });
+                    text: formatResponse.info('ALREADY ADMIN',
+                        ['This user is already an admin'])
+                }, { quoted: message });
             }
 
             await sock.groupParticipantsUpdate(from, [targetJid], 'promote');
 
             const targetNumber = targetJid.split('@')[0];
             await sock.sendMessage(from, {
-                text: `👑 *User Promoted*\n\n*User:* @${targetNumber}\n*Action:* Given admin privileges\n\nUser is now a group admin with special permissions.`,
+                text: `╭──⦿【 👑 USER PROMOTED 】
+│
+│ 👤 𝗨𝘀𝗲𝗿: @${targetNumber}
+│ ⭐ 𝗔𝗰𝘁𝗶𝗼𝗻: Given admin privileges
+│ 📅 𝗗𝗮𝘁𝗲: ${new Date().toLocaleDateString()}
+│
+│ ✅ User is now a group admin
+│ with special permissions
+│
+╰────────────⦿`,
                 mentions: [targetJid]
-            });
+            }, { quoted: message });
 
         } catch (error) {
-            console.error('Promote command error:', error);
             await sock.sendMessage(from, {
-                text: '❌ *Error*\n\nFailed to promote user. Make sure I have admin permissions.'
-            });
+                text: formatResponse.error('PROMOTION FAILED',
+                    'Failed to promote user',
+                    'Make sure I have admin permissions')
+            }, { quoted: message });
         }
     }
 };

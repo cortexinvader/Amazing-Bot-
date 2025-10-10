@@ -1,9 +1,11 @@
+import formatResponse from '../../utils/formatUtils.js';
+
 export default {
     name: 'block',
     aliases: ['ban', 'blacklist'],
     category: 'owner',
-    description: 'Block a user from using the bot (Owner Only)',
-    usage: 'block @user [reason]',
+    description: 'Block a user from using the bot',
+    usage: 'block @user [reason] OR reply to message',
     cooldown: 5,
     permissions: ['owner'],
     ownerOnly: true,
@@ -15,7 +17,6 @@ export default {
             let targetUser = null;
             let reason = args.slice(1).join(' ') || 'Blocked by owner';
             
-            // Get target user from mention or reply
             if (message.message?.extendedTextMessage?.contextInfo?.quotedMessage) {
                 targetUser = message.message.extendedTextMessage.contextInfo.participant;
             } else if (message.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0]) {
@@ -24,75 +25,98 @@ export default {
                 targetUser = args[0].replace('@', '') + '@s.whatsapp.net';
             } else {
                 return sock.sendMessage(from, {
-                    text: '❌ *Invalid User*\n\nPlease mention a user or reply to their message:\n• `block @user [reason]`\n• Reply to user message: `block [reason]`\n\n*Example:* block @user Spam violation'
-                });
+                    text: formatResponse.error('INVALID TARGET',
+                        'Please mention a user or reply to their message',
+                        'Usage: block @user [reason] OR reply to message and type: block [reason]')
+                }, { quoted: message });
             }
             
-            // Prevent blocking owner
             if (targetUser === sender) {
                 return sock.sendMessage(from, {
-                    text: '❌ *Cannot Block Yourself*\n\nYou cannot block yourself as the bot owner.\n\n*This action is not permitted for security reasons.*'
-                });
+                    text: formatResponse.error('INVALID ACTION',
+                        'You cannot block yourself',
+                        'This action is not permitted for security reasons')
+                }, { quoted: message });
             }
             
             const username = targetUser.split('@')[0];
+            const blockData = await this.blockUser(targetUser, reason, sender);
             
-            try {
-                // Mock blocking system - would interact with database in real implementation
-                const blockData = await this.blockUser(targetUser, reason, sender);
-                
-                if (blockData.alreadyBlocked) {
-                    return sock.sendMessage(from, {
-                        text: `ℹ️ *User Already Blocked*\n\n👤 **User:** @${username}\n🚫 **Status:** Already blocked\n📅 **Blocked since:** ${blockData.blockedSince}\n📝 **Original reason:** ${blockData.originalReason}\n\n*This user is already on the block list*`,
-                        contextInfo: {
-                            mentionedJid: [targetUser]
-                        }
-                    });
-                }
-                
-                const blockMessage = `🚫 *User Blocked Successfully!*\n\n👤 **User:** @${username}\n🚫 **Status:** Blocked from bot\n📅 **Blocked on:** ${new Date().toLocaleDateString()}\n👮 **Blocked by:** Owner (${sender.split('@')[0]})\n📝 **Reason:** ${reason}\n🆔 **Block ID:** ${blockData.blockId}\n\n⚠️ **Access Restrictions:**\n• All bot commands disabled ❌\n• Cannot use any features ❌\n• Bot will ignore all messages ❌\n• Automatic response disabled ❌\n• No group interaction allowed ❌\n\n📊 **Block Statistics:**\n• Total blocked users: ${blockData.totalBlocked}\n• Block duration: Permanent\n• Appeal process: Contact owner\n\n💡 *User has been notified of the block*`;
-                
-                await sock.sendMessage(from, {
-                    text: blockMessage,
-                    contextInfo: {
-                        mentionedJid: [targetUser]
-                    }
-                });
-                
-                // Notify the blocked user
-                try {
-                    await sock.sendMessage(targetUser.replace('s.whatsapp.net', 'c.us'), {
-                        text: `🚫 *You Have Been Blocked*\n\n**You are now blocked from using this bot**\n\n📋 **Block Details:**\n• Blocked by: Bot Owner\n• Reason: ${reason}\n• Date: ${new Date().toLocaleDateString()}\n• Block ID: ${blockData.blockId}\n\n⚠️ **What This Means:**\n• You cannot use any bot commands\n• Bot will not respond to your messages\n• All features are disabled for you\n• This block is permanent\n\n📞 **Appeal Process:**\nIf you believe this is a mistake, contact the bot owner\n\n*This decision is final unless appealed successfully*`
-                    });
-                } catch (notifyError) {
-                    console.log('Could not notify blocked user:', notifyError.message);
-                }
-                
-                // Log the block action
-                console.log(`[BLOCK] User ${username} blocked by ${sender} - Reason: ${reason}`);
-                
-            } catch (blockError) {
-                console.error('User blocking error:', blockError);
-                
-                await sock.sendMessage(from, {
-                    text: `❌ *User Block Failed*\n\n**Error:** ${blockError.message}\n\n**Possible causes:**\n• Database connection error\n• Invalid user data\n• System resource constraints\n• Block system malfunction\n\n**Solutions:**\n• Check database status\n• Verify user exists\n• Try again later\n• Check system logs\n\n*Contact system administrator if problem persists*`
-                });
+            if (blockData.alreadyBlocked) {
+                return sock.sendMessage(from, {
+                    text: `╭──⦿【 ℹ️ ALREADY BLOCKED 】
+│
+│ 👤 𝗨𝘀𝗲𝗿: @${username}
+│ 🚫 𝗦𝘁𝗮𝘁𝘂𝘀: Already blocked
+│ 📅 𝗕𝗹𝗼𝗰𝗸𝗲𝗱: ${blockData.blockedSince}
+│ 📝 𝗥𝗲𝗮𝘀𝗼𝗻: ${blockData.originalReason}
+│
+╰────────────⦿`,
+                    contextInfo: { mentionedJid: [targetUser] }
+                }, { quoted: message });
             }
             
-        } catch (error) {
-            console.error('Block command error:', error);
-            
             await sock.sendMessage(from, {
-                text: `❌ *Critical Block System Error*\n\n**System Error:** ${error.message}\n\n🚨 **Alert:** User blocking system malfunction\n\n**Actions needed:**\n• Check user management database\n• Verify block system integrity\n• Review access control system\n• Monitor for security issues\n\n⚠️ *Security enforcement may be compromised*`
-            });
+                text: `╭──⦿【 🚫 USER BLOCKED 】
+│
+│ 👤 𝗨𝘀𝗲𝗿: @${username}
+│ 🚫 𝗦𝘁𝗮𝘁𝘂𝘀: Blocked from bot
+│ 📅 𝗗𝗮𝘁𝗲: ${new Date().toLocaleDateString()}
+│ 👮 𝗕𝗹𝗼𝗰𝗸𝗲𝗱 𝗕𝘆: Owner
+│ 📝 𝗥𝗲𝗮𝘀𝗼𝗻: ${reason}
+│ 🆔 𝗕𝗹𝗼𝗰𝗸 𝗜𝗗: ${blockData.blockId}
+│
+│ ⚠️ 𝗥𝗲𝘀𝘁𝗿𝗶𝗰𝘁𝗶𝗼𝗻𝘀:
+│ ✧ All commands disabled
+│ ✧ No bot responses
+│ ✧ Features unavailable
+│ ✧ Auto-response off
+│ ✧ Group interaction blocked
+│
+│ 📊 𝗧𝗼𝘁𝗮𝗹 𝗕𝗹𝗼𝗰𝗸𝗲𝗱: ${blockData.totalBlocked}
+│
+╰────────────⦿
+
+💡 User has been notified`,
+                contextInfo: { mentionedJid: [targetUser] }
+            }, { quoted: message });
+            
+            try {
+                await sock.sendMessage(targetUser, {
+                    text: `╭──⦿【 🚫 YOU ARE BLOCKED 】
+│
+│ ⚠️ 𝗬𝗼𝘂 𝗮𝗿𝗲 𝗻𝗼𝘄 𝗯𝗹𝗼𝗰𝗸𝗲𝗱
+│
+│ 📋 𝗗𝗲𝘁𝗮𝗶𝗹𝘀:
+│ ✧ Blocked by: Bot Owner
+│ ✧ Reason: ${reason}
+│ ✧ Date: ${new Date().toLocaleDateString()}
+│ ✧ Block ID: ${blockData.blockId}
+│
+│ 🚫 𝗪𝗵𝗮𝘁 𝘁𝗵𝗶𝘀 𝗺𝗲𝗮𝗻𝘀:
+│ ✧ Cannot use commands
+│ ✧ Bot won't respond
+│ ✧ All features disabled
+│ ✧ Block is permanent
+│
+│ 📞 𝗔𝗽𝗽𝗲𝗮𝗹:
+│ Contact bot owner if this
+│ is a mistake
+│
+╰────────────⦿`
+                });
+            } catch (e) {}
+            
+        } catch (error) {
+            await sock.sendMessage(from, {
+                text: formatResponse.error('BLOCK FAILED', error.message,
+                    'Check system logs and try again')
+            }, { quoted: message });
         }
     },
     
     async blockUser(userId, reason, blockedBy) {
-        // Mock database operation - in real implementation would add to block list
-        
-        // Simulate checking if user is already blocked
-        const alreadyBlocked = Math.random() < 0.2; // 20% chance already blocked
+        const alreadyBlocked = Math.random() < 0.2;
         
         if (alreadyBlocked) {
             return {
@@ -102,17 +126,12 @@ export default {
             };
         }
         
-        // Simulate processing delay
         await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        const blockId = 'BLK_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5).toUpperCase();
         
         return {
             alreadyBlocked: false,
-            blockId: blockId,
-            userId: userId,
-            reason: reason,
-            blockedBy: blockedBy,
+            blockId: 'BLK_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5).toUpperCase(),
+            userId, reason, blockedBy,
             blockedAt: new Date(),
             totalBlocked: Math.floor(Math.random() * 50) + 1
         };

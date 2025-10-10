@@ -1,23 +1,28 @@
+import formatResponse from '../../utils/formatUtils.js';
+
 export default {
     name: 'demote',
     aliases: ['demoteuser', 'removeadmin'],
     category: 'admin',
     description: 'Remove admin privileges from a user',
-    usage: 'demote [@user]',
+    usage: 'demote @user OR reply to message',
     cooldown: 5,
     permissions: ['admin'],
 
-    async execute({ sock, message, args, from, user, isGroup, isGroupAdmin, isBotAdmin }) {
+    async execute({ sock, message, args, from, isGroup, isBotAdmin }) {
         if (!isGroup) {
             return await sock.sendMessage(from, {
-                text: '❌ *Group Only*\n\nThis command can only be used in groups.'
-            });
+                text: formatResponse.error('GROUP ONLY',
+                    'This command can only be used in groups')
+            }, { quoted: message });
         }
 
         if (!isBotAdmin) {
             return await sock.sendMessage(from, {
-                text: '❌ *Bot Not Admin*\n\nI need to be an admin to demote users.'
-            });
+                text: formatResponse.error('BOT NOT ADMIN',
+                    'I need to be an admin to demote users',
+                    'Make me an admin first')
+            }, { quoted: message });
         }
 
         try {
@@ -31,8 +36,10 @@ export default {
                 targetJid = mentionedUsers[0];
             } else {
                 return await sock.sendMessage(from, {
-                    text: '❌ *No Target*\n\nReply to a message or mention a user to demote.\n\n*Usage:* .demote [@user]'
-                });
+                    text: formatResponse.error('NO TARGET',
+                        'Reply to a message or mention a user to demote',
+                        'Usage: demote @user OR reply to message and type: demote')
+                }, { quoted: message });
             }
 
             const groupMetadata = await sock.groupMetadata(from);
@@ -40,29 +47,40 @@ export default {
 
             if (!targetUser) {
                 return await sock.sendMessage(from, {
-                    text: '❌ *User Not Found*\n\nThis user is not in the group.'
-                });
+                    text: formatResponse.error('USER NOT FOUND',
+                        'This user is not in the group')
+                }, { quoted: message });
             }
 
             if (targetUser.admin !== 'admin' && targetUser.admin !== 'superadmin') {
                 return await sock.sendMessage(from, {
-                    text: '❌ *Not Admin*\n\nThis user is not an admin.'
-                });
+                    text: formatResponse.info('NOT ADMIN',
+                        ['This user is not an admin'])
+                }, { quoted: message });
             }
 
             await sock.groupParticipantsUpdate(from, [targetJid], 'demote');
 
             const targetNumber = targetJid.split('@')[0];
             await sock.sendMessage(from, {
-                text: `👤 *User Demoted*\n\n*User:* @${targetNumber}\n*Action:* Removed admin privileges\n\nUser is now a regular member.`,
+                text: `╭──⦿【 👤 USER DEMOTED 】
+│
+│ 👤 𝗨𝘀𝗲𝗿: @${targetNumber}
+│ ⬇️ 𝗔𝗰𝘁𝗶𝗼𝗻: Removed admin privileges
+│ 📅 𝗗𝗮𝘁𝗲: ${new Date().toLocaleDateString()}
+│
+│ ✅ User is now a regular member
+│
+╰────────────⦿`,
                 mentions: [targetJid]
-            });
+            }, { quoted: message });
 
         } catch (error) {
-            console.error('Demote command error:', error);
             await sock.sendMessage(from, {
-                text: '❌ *Error*\n\nFailed to demote user. Make sure I have admin permissions and the target is an admin.'
-            });
+                text: formatResponse.error('DEMOTION FAILED',
+                    'Failed to demote user',
+                    'Make sure I have admin permissions and the target is an admin')
+            }, { quoted: message });
         }
     }
 };
