@@ -46,10 +46,6 @@ externalPort = 3003
 localPort = 37225
 externalPort = 3001
 
-[[ports]]
-localPort = 43673
-externalPort = 3002
-
 [deployment]
 deploymentTarget = "vm"
 run = ["node", "index.js"]
