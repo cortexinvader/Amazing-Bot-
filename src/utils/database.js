@@ -19,7 +19,12 @@ class DatabaseManager {
             }
 
             logger.info('Connecting to database...');
-            logger.info(`Database URL: ${config.database.url}`);
+            if (config.database.url && typeof config.database.url === 'string' && config.database.url.length > 0) {
+                const sanitizedUrl = config.database.url.replace(/\/\/([^:]+):([^@]+)@/, '//****:****@');
+                logger.info(`Database URL: ${sanitizedUrl}`);
+            } else {
+                logger.info('Database URL: <not configured>');
+            }
             
             // For development/Replit environment, skip database connection
             if (process.env.NODE_ENV === 'development' || !config.database.url || 

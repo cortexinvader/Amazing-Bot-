@@ -135,35 +135,60 @@ class CommandHandler {
         return this.commandStats.get(commandName) || { used: 0, errors: 0 };
     }
 
+    extractPhone(jid) {
+        if (!jid) return '';
+        return jid
+            .replace(/@s\.whatsapp\.net/g, '')
+            .replace(/@c\.us/g, '')
+            .replace(/@lid/g, '')
+            .replace(/:\d+/g, '')
+            .split(':')[0]
+            .split('@')[0]
+            .trim();
+    }
+
+    isOwner(jid) {
+        if (!jid) return false;
+        const userPhone = this.extractPhone(jid);
+        return config.ownerNumbers.some(ownerNum => {
+            const ownerPhone = this.extractPhone(ownerNum);
+            return userPhone === ownerPhone;
+        });
+    }
+
+    async isGroupAdmin(sock, groupId, participantJid) {
+        try {
+            const groupMetadata = await sock.groupMetadata(groupId);
+            const participant = groupMetadata.participants.find(p => 
+                p.id === participantJid || 
+                p.lid === participantJid ||
+                this.extractPhone(p.id) === this.extractPhone(participantJid)
+            );
+            return participant?.admin === 'admin' || participant?.admin === 'superadmin';
+        } catch (error) {
+            logger.error('Error checking group admin status:', error);
+            return false;
+        }
+    }
+
+    async isBotAdmin(sock, groupId) {
+        try {
+            const groupMetadata = await sock.groupMetadata(groupId);
+            const botParticipant = groupMetadata.participants.find(p => p.id === sock.user.id);
+            return botParticipant?.admin === 'admin' || botParticipant?.admin === 'superadmin';
+        } catch (error) {
+            logger.error('Error checking bot admin status:', error);
+            return false;
+        }
+    }
+
     async checkPermissions(command, user, group, isGroupAdmin, isBotAdmin, sender) {
         if (!command.permissions || command.permissions.length === 0) return true;
         
         const senderJid = sender || user.jid;
+        const isOwner = this.isOwner(senderJid);
         
-        const extractPhone = (jid) => {
-            return jid
-                .replace(/@s\.whatsapp\.net/g, '')
-                .replace(/@c\.us/g, '')
-                .replace(/@lid/g, '')
-                .replace(/:\d+/g, '')
-                .split(':')[0]
-                .split('@')[0]
-                .trim();
-        };
-        
-        const userPhone = extractPhone(senderJid);
-        const userJidPhone = extractPhone(user.jid);
-        
-        logger.debug(`Permission check - Command: ${command.name}, Sender JID: ${senderJid}, User JID: ${user.jid}, Extracted Phone: ${userPhone}, User DB Phone: ${userJidPhone}`);
-        
-        const isOwner = config.ownerNumbers.some(ownerNum => {
-            const ownerPhone = extractPhone(ownerNum);
-            const matches = userPhone === ownerPhone || userJidPhone === ownerPhone;
-            logger.debug(`Comparing user ${userPhone}/${userJidPhone} with owner ${ownerPhone}: ${matches}`);
-            return matches;
-        });
-        
-        logger.debug(`Is owner: ${isOwner}, Required permissions: ${command.permissions.join(', ')}`);
+        logger.debug(`Permission check - Command: ${command.name}, Sender: ${senderJid}, Is Owner: ${isOwner}, Permissions: ${command.permissions.join(', ')}`);
         
         for (const permission of command.permissions) {
             switch (permission) {
@@ -186,7 +211,7 @@ class CommandHandler {
                     if (!group) return true;
                     break;
                 case 'botAdmin':
-                    if (isBotAdmin) return true;
+                    if (isBotAdmin || isOwner) return true;
                     break;
             }
         }
@@ -256,59 +281,47 @@ class CommandHandler {
                 logger.warn(`User not found: ${sender}`);
                 return false;
             }
-            
-            if (user.isBanned) {
+
+            if (user.isBanned && !this.isOwner(sender)) {
                 await sock.sendMessage(from, {
                     text: `❌ *You are banned from using this bot*\n\n*Reason:* ${user.banReason || 'No reason provided'}\n*Until:* ${user.banUntil || 'Permanent'}`
                 });
                 return true;
             }
             
-            if (isGroup && group?.isBanned) {
+            if (isGroup && group?.isBanned && !this.isOwner(sender)) {
                 await sock.sendMessage(from, {
                     text: `❌ *This group is banned from using bot commands*\n\n*Reason:* ${group.banReason || 'No reason provided'}`
                 });
                 return true;
             }
             
+            let actualSender = sender;
             let isGroupAdmin = false;
             let isBotAdmin = false;
-            let actualSender = sender;
             
             if (isGroup) {
                 const groupMetadata = await sock.groupMetadata(from);
-                
-                logger.debug(`Group participants count: ${groupMetadata.participants.length}`);
                 
                 if (sender.endsWith('@lid')) {
                     logger.debug(`Processing LID sender: ${sender}`);
                     
                     for (const participant of groupMetadata.participants) {
-                        logger.debug(`Checking participant: id=${participant.id}, lid=${participant.lid}`);
-                        
-                        if (participant.lid === sender || participant.id === sender) {
-                            if (participant.id && !participant.id.endsWith('@lid')) {
-                                actualSender = participant.id;
-                                logger.debug(`Resolved LID ${sender} to actual JID ${actualSender}`);
-                                break;
-                            }
+                        if (participant.lid === sender && participant.id && !participant.id.endsWith('@lid')) {
+                            actualSender = participant.id;
+                            logger.debug(`Resolved LID ${sender} to ${actualSender}`);
+                            break;
                         }
                     }
                     
                     if (actualSender.endsWith('@lid')) {
-                        logger.debug(`LID still not resolved, checking against owner numbers`);
                         for (const ownerNum of config.ownerNumbers) {
-                            const ownerPhone = ownerNum.split('@')[0];
-                            logger.debug(`Checking against owner: ${ownerPhone}`);
-                            
+                            const ownerPhone = this.extractPhone(ownerNum);
                             for (const participant of groupMetadata.participants) {
-                                if (participant.id && participant.id.includes(ownerPhone)) {
-                                    logger.debug(`Found participant with owner phone: ${participant.id}, checking if LID matches`);
-                                    if (participant.lid === sender) {
-                                        actualSender = participant.id;
-                                        logger.info(`✅ Matched LID ${sender} to owner ${ownerPhone} via participant.id ${actualSender}`);
-                                        break;
-                                    }
+                                if (participant.id && this.extractPhone(participant.id) === ownerPhone && participant.lid === sender) {
+                                    actualSender = participant.id;
+                                    logger.info(`✅ Matched LID ${sender} to owner ${ownerPhone}`);
+                                    break;
                                 }
                             }
                             if (!actualSender.endsWith('@lid')) break;
@@ -316,27 +329,67 @@ class CommandHandler {
                     }
                 }
                 
-                const senderParticipant = groupMetadata.participants.find(p => 
-                    p.id === actualSender || 
-                    p.id === sender || 
-                    p.lid === sender ||
-                    p.lid === actualSender
-                );
-                const botParticipant = groupMetadata.participants.find(p => p.id === sock.user.id);
-                
-                isGroupAdmin = senderParticipant?.admin === 'admin' || senderParticipant?.admin === 'superadmin';
-                isBotAdmin = botParticipant?.admin === 'admin' || botParticipant?.admin === 'superadmin';
+                isGroupAdmin = await this.isGroupAdmin(sock, from, actualSender);
+                isBotAdmin = await this.isBotAdmin(sock, from);
             }
             
-            const hasPermission = await this.checkPermissions(command, user, group, isGroupAdmin, isBotAdmin, actualSender);
-            if (!hasPermission) {
+            const isOwner = this.isOwner(actualSender);
+            
+            if (config.selfMode && !isOwner) {
+                return false;
+            }
+            
+            if (!config.publicMode && !isOwner) {
                 await sock.sendMessage(from, {
-                    text: `❌ *Access Denied*\n\nYou don't have permission to use this command.\n\n*Required:* ${command.permissions?.join(', ') || 'None'}`
+                    text: '🔒 *Bot is in private mode*\n\nOnly the owner can use commands right now.'
                 });
                 return true;
             }
             
-            const cooldownCheck = await this.checkCooldown(commandName, sender);
+            if (command.ownerOnly && !isOwner) {
+                await sock.sendMessage(from, {
+                    text: `❌ *Owner Only Command*\n\nThis command can only be used by the bot owner.\n\n*Category:* ${command.category.toUpperCase()}`
+                });
+                return true;
+            }
+            
+            if (command.adminOnly && !isGroupAdmin && !isOwner) {
+                await sock.sendMessage(from, {
+                    text: `❌ *Admin Only Command*\n\nYou need to be a group admin to use this command.\n\n*Category:* ${command.category.toUpperCase()}`
+                });
+                return true;
+            }
+            
+            if (command.groupOnly && !isGroup) {
+                await sock.sendMessage(from, {
+                    text: `❌ *Group Only Command*\n\nThis command can only be used in groups.\n\n*Category:* ${command.category.toUpperCase()}`
+                });
+                return true;
+            }
+            
+            if (command.privateOnly && isGroup) {
+                await sock.sendMessage(from, {
+                    text: `❌ *Private Chat Only*\n\nThis command can only be used in private chats.\n\n*Category:* ${command.category.toUpperCase()}`
+                });
+                return true;
+            }
+            
+            if (command.botAdminRequired && isGroup && !isBotAdmin) {
+                await sock.sendMessage(from, {
+                    text: `❌ *Bot Admin Required*\n\nI need admin privileges to execute this command.\n\n*Solution:* Make me a group admin first.`
+                });
+                return true;
+            }
+
+            const hasPermission = await this.checkPermissions(command, user, group, isGroupAdmin, isBotAdmin, actualSender);
+            if (!hasPermission) {
+                await sock.sendMessage(from, {
+                    text: `❌ *Access Denied*\n\nYou don't have permission to use this command.\n\n*Required:* ${command.permissions?.join(', ') || 'None'}\n*Category:* ${command.category.toUpperCase()}`
+                });
+                return true;
+            }
+            
+            const cooldownCheck = await this.checkCooldown(commandName, actualSender);
             if (cooldownCheck.success === false) {
                 await sock.sendMessage(from, {
                     text: `⏰ *Cooldown Active*\n\nPlease wait ${cooldownCheck.timeLeft} seconds before using this command again.`
@@ -344,20 +397,22 @@ class CommandHandler {
                 return true;
             }
             
-            const rateLimitCheck = await rateLimiter.checkLimit(sender, commandName);
-            if (!rateLimitCheck.allowed) {
-                await sock.sendMessage(from, {
-                    text: `🚫 *Rate Limited*\n\nToo many requests. Try again in ${Math.ceil(rateLimitCheck.resetTime / 1000)} seconds.`
-                });
-                return true;
-            }
-            
-            const spamCheck = await antiSpam.checkSpam(sender, message);
-            if (spamCheck.isSpam) {
-                await sock.sendMessage(from, {
-                    text: `⚠️ *Anti-Spam Protection*\n\nSlow down! Wait ${spamCheck.waitTime} seconds.`
-                });
-                return true;
+            if (!isOwner) {
+                const rateLimitCheck = await rateLimiter.checkLimit(actualSender, commandName);
+                if (!rateLimitCheck.allowed) {
+                    await sock.sendMessage(from, {
+                        text: `🚫 *Rate Limited*\n\nToo many requests. Try again in ${Math.ceil(rateLimitCheck.resetTime / 1000)} seconds.`
+                    });
+                    return true;
+                }
+                
+                const spamCheck = await antiSpam.checkSpam(actualSender, message);
+                if (spamCheck.isSpam) {
+                    await sock.sendMessage(from, {
+                        text: `⚠️ *Anti-Spam Protection*\n\nSlow down! Wait ${spamCheck.waitTime} seconds.`
+                    });
+                    return true;
+                }
             }
             
             const argsValid = await this.validateArguments(command, args, sock, message);
@@ -377,10 +432,11 @@ class CommandHandler {
                 user,
                 group,
                 from,
-                sender,
+                sender: actualSender,
                 isGroup,
                 isGroupAdmin,
                 isBotAdmin,
+                isOwner,
                 prefix: config.prefix
             });
             
@@ -391,8 +447,8 @@ class CommandHandler {
             this.commandStats.set(command.name, stats);
             
             await Promise.all([
-                logCommand(sender, commandName, from, isGroup, executionTime),
-                updateUser(sender, { $inc: { commandsUsed: 1 } }),
+                logCommand(actualSender, commandName, from, isGroup, executionTime),
+                updateUser(actualSender, { $inc: { commandsUsed: 1 } }),
                 isGroup ? updateGroup(from, { $inc: { commandsUsed: 1 } }) : Promise.resolve()
             ]);
             
@@ -400,7 +456,7 @@ class CommandHandler {
                 logger.warn(`Slow command execution: ${commandName} took ${executionTime}ms`);
             }
             
-            cache.set(`lastCommand_${sender}`, {
+            cache.set(`lastCommand_${actualSender}`, {
                 command: commandName,
                 timestamp: Date.now(),
                 executionTime
@@ -428,7 +484,7 @@ class CommandHandler {
     }
 
     async getHelpMessage(category = null, user = null) {
-        const isOwner = user && config.ownerNumbers.includes(user.jid);
+        const isOwner = user && this.isOwner(user.jid);
         const isPremium = user?.isPremium || isOwner;
         
         if (category) {
@@ -501,7 +557,7 @@ class CommandHandler {
     }
 
     async searchCommands(query, user = null) {
-        const isOwner = user && config.ownerNumbers.includes(user.jid);
+        const isOwner = user && this.isOwner(user.jid);
         const isPremium = user?.isPremium || isOwner;
         
         const results = [];

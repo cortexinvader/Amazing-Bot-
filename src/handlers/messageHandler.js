@@ -10,6 +10,12 @@ import antiSpam from '../utils/antiSpam.js';
 import { cache } from '../utils/cache.js';
 import fs from 'fs-extra';
 import path from 'path';
+import handleAutoReaction from '../events/autoReaction.js';
+import handleAntiLink from '../plugins/antiLink.js';
+import handleLevelUp from '../events/levelUp.js';
+import handleGroupJoin from '../events/groupJoin.js';
+import handleGroupLeave from '../events/groupLeave.js';
+import handleGroupUpdate from '../events/groupUpdate.js';
 
 class MessageHandler {
     constructor() {
@@ -359,9 +365,15 @@ class MessageHandler {
 
             await this.handleMentions(sock, message, messageContent.text, isGroup);
 
+            await handleAntiLink(sock, message);
+            
+            await handleAutoReaction(sock, message);
+
             const isCommand = await this.processCommand(
                 sock, message, messageContent.text, user, group, isGroup
             );
+
+            await handleLevelUp(sock, message, isCommand);
 
             cache.set(`lastMessage_${sender}`, {
                 content: messageContent.text,
@@ -456,6 +468,12 @@ class MessageHandler {
             if (!group) return;
             
             const metadata = await sock.groupMetadata(groupId);
+            
+            if (action === 'add') {
+                await handleGroupJoin(sock, update);
+            } else if (action === 'remove' || action === 'leave') {
+                await handleGroupLeave(sock, update);
+            }
             
             for (const participant of participants) {
                 switch (action) {
@@ -604,6 +622,8 @@ class MessageHandler {
 
     async handleGroupUpdate(sock, update) {
         try {
+            await handleGroupUpdate(sock, update);
+            
             const { id: groupId, subject, desc, announce, restrict } = update;
             
             const group = await getGroup(groupId);

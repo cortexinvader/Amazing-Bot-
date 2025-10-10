@@ -16,18 +16,19 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "WhatsApp Bot"
+args = "Bot"
 
 [[workflows.workflow]]
-name = "WhatsApp Bot"
+name = "Bot"
 author = "agent"
-
-[workflows.workflow.metadata]
-outputType = "console"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "node index.js"
+args = "npm start"
+waitForPort = 5000
+
+[workflows.workflow.metadata]
+outputType = "webview"
 
 [[ports]]
 localPort = 3000
