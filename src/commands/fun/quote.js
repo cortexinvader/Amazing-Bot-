@@ -1,113 +1,233 @@
+import { createCanvas, loadImage } from 'canvas';
+import axios from 'axios';
+import fs from 'fs';
+import path from 'path';
+
 export default {
     name: 'quote',
-    aliases: ['quotes', 'inspiration', 'wisdom'],
+    aliases: ['inspireme', 'motivation', 'wisdom', 'inspire'],
     category: 'fun',
-    description: 'Get an inspirational or funny quote',
-    usage: 'quote [type]',
-    cooldown: 3,
+    description: 'Generate stunning motivational quote cards with beautiful designs using live API',
+    usage: 'quote [category]',
+    example: 'quote\nquote life\nquote success\nquote love',
+    cooldown: 8,
     permissions: ['user'],
+    args: false,
+    minArgs: 0,
+    maxArgs: 1,
+    typing: true,
+    premium: false,
+    hidden: false,
+    ownerOnly: false,
+    supportsReply: false,
+    supportsChat: false,
+    supportsReact: true,
+    supportsButtons: false,
 
-    async execute({ sock, message, args, from, user, prefix }) {
+    async execute({ sock, message, args, command, user, group, from, sender, isGroup, isGroupAdmin, isBotAdmin, prefix }) {
         try {
-            const quoteType = args[0]?.toLowerCase() || 'random';
+            await sock.sendMessage(from, {
+                react: { text: '✨', key: message.key }
+            });
 
-            const quotes = {
-                motivational: [
-                    { text: "The only way to do great work is to love what you do.", author: "Steve Jobs" },
-                    { text: "Life is what happens to you while you're busy making other plans.", author: "John Lennon" },
-                    { text: "The future belongs to those who believe in the beauty of their dreams.", author: "Eleanor Roosevelt" },
-                    { text: "Innovation distinguishes between a leader and a follower.", author: "Steve Jobs" },
-                    { text: "Success is not final, failure is not fatal: it is the courage to continue that counts.", author: "Winston Churchill" },
-                    { text: "The only impossible journey is the one you never begin.", author: "Tony Robbins" },
-                    { text: "In the middle of every difficulty lies opportunity.", author: "Albert Einstein" },
-                    { text: "Believe you can and you're halfway there.", author: "Theodore Roosevelt" }
-                ],
-                funny: [
-                    { text: "I haven't failed. I've just found 10,000 ways that won't work.", author: "Thomas Edison" },
-                    { text: "I'm not superstitious, but I am a little stitious.", author: "Michael Scott" },
-                    { text: "The trouble with having an open mind is that people keep coming along and sticking things into it.", author: "Terry Pratchett" },
-                    { text: "I can resist everything except temptation.", author: "Oscar Wilde" },
-                    { text: "A day without sunshine is like, you know, night.", author: "Steve Martin" },
-                    { text: "The early bird might get the worm, but the second mouse gets the cheese.", author: "Anonymous" },
-                    { text: "I'm writing a book. I've got the page numbers done.", author: "Steven Wright" },
-                    { text: "Weather forecast for tonight: dark.", author: "George Carlin" }
-                ],
-                success: [
-                    { text: "Success is not the key to happiness. Happiness is the key to success.", author: "Albert Schweitzer" },
-                    { text: "Don't be afraid to give up the good to go for the great.", author: "John D. Rockefeller" },
-                    { text: "The way to get started is to quit talking and begin doing.", author: "Walt Disney" },
-                    { text: "Success is walking from failure to failure with no loss of enthusiasm.", author: "Winston Churchill" },
-                    { text: "Opportunities don't happen. You create them.", author: "Chris Grosser" },
-                    { text: "Success is not in what you have, but who you are.", author: "Bo Bennett" }
-                ],
-                wisdom: [
-                    { text: "The only true wisdom is in knowing you know nothing.", author: "Socrates" },
-                    { text: "Yesterday is history, tomorrow is a mystery, today is a gift.", author: "Eleanor Roosevelt" },
-                    { text: "Be yourself; everyone else is already taken.", author: "Oscar Wilde" },
-                    { text: "Two things are infinite: the universe and human stupidity; and I'm not sure about the universe.", author: "Albert Einstein" },
-                    { text: "A room without books is like a body without a soul.", author: "Marcus Tullius Cicero" },
-                    { text: "Be the change that you wish to see in the world.", author: "Mahatma Gandhi" }
-                ]
-            };
+            const statusMsg = await sock.sendMessage(from, {
+                text: '╭──⦿【 ✨ GENERATING 】\n│ 🎨 𝗦𝘁𝗮𝘁𝘂𝘀: Fetching quote...\n│ 🌐 𝗦𝗼𝘂𝗿𝗰𝗲: Live API\n│ ⏳ 𝗣𝗹𝗲𝗮𝘀𝗲 𝘄𝗮𝗶𝘁: Few seconds\n╰────────⦿'
+            }, { quoted: message });
 
-            let selectedQuotes;
-            let categoryName;
+            const category = args[0]?.toLowerCase() || 'random';
+            let quoteData;
 
-            if (quoteType === 'random' || !quotes[quoteType]) {
-                // Random quote from any category
-                const allQuotes = Object.values(quotes).flat();
-                selectedQuotes = allQuotes;
-                categoryName = 'Random';
-            } else {
-                selectedQuotes = quotes[quoteType];
-                categoryName = quoteType.charAt(0).toUpperCase() + quoteType.slice(1);
+            try {
+                const response = await axios.get('https://api.quotable.io/random', {
+                    params: category !== 'random' ? { tags: category } : {},
+                    timeout: 10000
+                });
+                quoteData = {
+                    text: response.data.content,
+                    author: response.data.author,
+                    category: response.data.tags?.[0] || 'wisdom'
+                };
+            } catch (apiError) {
+                const fallbackResponse = await axios.get('https://zenquotes.io/api/random');
+                quoteData = {
+                    text: fallbackResponse.data[0].q,
+                    author: fallbackResponse.data[0].a,
+                    category: 'inspiration'
+                };
             }
 
-            const randomQuote = selectedQuotes[Math.floor(Math.random() * selectedQuotes.length)];
+            const canvas = createCanvas(1080, 1080);
+            const ctx = canvas.getContext('2d');
 
-            const emojis = {
-                motivational: '💪',
-                funny: '😂',
-                success: '🏆',
-                wisdom: '🧠',
-                random: '✨'
-            };
-
-            const emoji = emojis[quoteType] || emojis.random;
-
-            let responseText = `${emoji} *${categoryName.toUpperCase()} QUOTE*\n\n`;
-            responseText += `💭 "${randomQuote.text}"\n\n`;
-            responseText += `👤 *— ${randomQuote.author}*\n\n`;
-
-            // Add a random inspirational element
-            const inspirations = [
-                "🌟 Let this inspire your day!",
-                "💡 Food for thought!",
-                "🚀 Fuel for your journey!",
-                "🌈 Words to live by!",
-                "⭐ Wisdom worth sharing!",
-                "🎯 Something to reflect on!",
-                "💫 Daily dose of inspiration!",
-                "🌸 Gentle reminder from the universe!"
+            const gradients = [
+                { colors: ['#667eea', '#764ba2', '#f093fb'], name: 'Purple Dream' },
+                { colors: ['#4facfe', '#00f2fe'], name: 'Ocean Blue' },
+                { colors: ['#43e97b', '#38f9d7'], name: 'Mint Fresh' },
+                { colors: ['#fa709a', '#fee140'], name: 'Sunset Vibes' },
+                { colors: ['#30cfd0', '#330867'], name: 'Deep Ocean' },
+                { colors: ['#a8edea', '#fed6e3'], name: 'Cotton Candy' },
+                { colors: ['#ff9a56', '#ff6a88'], name: 'Warm Sunset' },
+                { colors: ['#ffecd2', '#fcb69f'], name: 'Peach Glow' },
+                { colors: ['#89f7fe', '#66a6ff'], name: 'Sky Blue' },
+                { colors: ['#fddb92', '#d1fdff'], name: 'Golden Dawn' }
             ];
 
-            const randomInspiration = inspirations[Math.floor(Math.random() * inspirations.length)];
-            responseText += randomInspiration;
+            const selectedGradient = gradients[Math.floor(Math.random() * gradients.length)];
+            const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+            
+            selectedGradient.colors.forEach((color, index) => {
+                gradient.addColorStop(index / (selectedGradient.colors.length - 1), color);
+            });
 
-            responseText += `\n\n💡 *Try these types:*\n`;
-            responseText += `• ${prefix}quote motivational\n`;
-            responseText += `• ${prefix}quote funny\n`;
-            responseText += `• ${prefix}quote success\n`;
-            responseText += `• ${prefix}quote wisdom\n`;
-            responseText += `• ${prefix}quote random`;
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            await sock.sendMessage(from, { text: responseText });
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
+            for (let i = 0; i < 50; i++) {
+                const x = Math.random() * canvas.width;
+                const y = Math.random() * canvas.height;
+                const radius = Math.random() * 100 + 50;
+                ctx.beginPath();
+                ctx.arc(x, y, radius, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+            this.roundRect(ctx, 80, 80, canvas.width - 160, canvas.height - 160, 40);
+            ctx.fill();
+
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+            this.roundRect(ctx, 120, 200, canvas.width - 240, canvas.height - 400, 30);
+            ctx.fill();
+
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 180px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('"', canvas.width / 2, 320);
+
+            ctx.fillStyle = '#2d3436';
+            ctx.font = 'bold 52px Arial';
+            ctx.textAlign = 'center';
+
+            const maxWidth = canvas.width - 280;
+            const words = quoteData.text.split(' ');
+            let lines = [];
+            let currentLine = '';
+
+            for (const word of words) {
+                const testLine = currentLine + (currentLine ? ' ' : '') + word;
+                const metrics = ctx.measureText(testLine);
+                
+                if (metrics.width > maxWidth && currentLine) {
+                    lines.push(currentLine);
+                    currentLine = word;
+                } else {
+                    currentLine = testLine;
+                }
+            }
+            if (currentLine) lines.push(currentLine);
+
+            const lineHeight = 70;
+            const startY = 420;
+
+            lines.forEach((line, index) => {
+                ctx.fillText(line, canvas.width / 2, startY + (index * lineHeight));
+            });
+
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 180px Arial';
+            ctx.fillText('"', canvas.width / 2, startY + (lines.length * lineHeight) + 80);
+
+            ctx.fillStyle = '#636e72';
+            ctx.font = 'italic 38px Arial';
+            ctx.fillText(`— ${quoteData.author}`, canvas.width / 2, startY + (lines.length * lineHeight) + 180);
+
+            const decorSize = 60;
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+            ctx.beginPath();
+            ctx.arc(150, 150, decorSize, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(canvas.width - 150, canvas.height - 150, decorSize, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+            ctx.font = 'bold 28px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('ILOM BOT', canvas.width / 2, canvas.height - 80);
+
+            const buffer = canvas.toBuffer('image/png');
+            const tempPath = path.join(process.cwd(), 'temp', `quote_${Date.now()}.png`);
+            
+            if (!fs.existsSync(path.dirname(tempPath))) {
+                fs.mkdirSync(path.dirname(tempPath), { recursive: true });
+            }
+            
+            fs.writeFileSync(tempPath, buffer);
+
+            await sock.sendMessage(from, { delete: statusMsg.key });
+
+            await sock.sendMessage(from, {
+                image: buffer,
+                caption: `╭──⦿【 ✨ QUOTE GENERATED 】
+│ 🎨 𝗧𝗵𝗲𝗺𝗲: ${selectedGradient.name}
+│ 💬 𝗔𝘂𝘁𝗵𝗼𝗿: ${quoteData.author}
+│ 🏷️ 𝗖𝗮𝘁𝗲𝗴𝗼𝗿𝘆: ${quoteData.category}
+│ 📏 𝗦𝗶𝘇𝗲: 1080x1080px
+│ 🎯 𝗤𝘂𝗮𝗹𝗶𝘁𝘆: HD
+│ 🌐 𝗦𝗼𝘂𝗿𝗰𝗲: Live API
+╰────────⦿
+
+╭──⦿【 📚 CATEGORIES 】
+│ ${prefix}quote life
+│ ${prefix}quote success
+│ ${prefix}quote love
+│ ${prefix}quote wisdom
+│ ${prefix}quote happiness
+╰────────⦿
+
+╭─────────────⦿
+│💫 | [ Ilom Bot 🍀 ]
+╰────────────⦿`
+            }, { quoted: message });
+
+            setTimeout(() => {
+                if (fs.existsSync(tempPath)) {
+                    fs.unlinkSync(tempPath);
+                }
+            }, 5000);
+
+            await sock.sendMessage(from, {
+                react: { text: '✅', key: message.key }
+            });
 
         } catch (error) {
             console.error('Quote command error:', error);
             await sock.sendMessage(from, {
-                text: '❌ *Quote Error*\n\n💭 "The only failure is not trying at all."\n\n— Bot trying to be inspirational despite the error 😅'
+                text: `╭──⦿【 ❌ ERROR 】
+│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: Generation failed
+│
+│ ⚠️ 𝗗𝗲𝘁𝗮𝗶𝗹𝘀: ${error.message}
+╰────────⦿`
+            }, { quoted: message });
+
+            await sock.sendMessage(from, {
+                react: { text: '❌', key: message.key }
             });
         }
+    },
+
+    roundRect(ctx, x, y, width, height, radius) {
+        ctx.beginPath();
+        ctx.moveTo(x + radius, y);
+        ctx.lineTo(x + width - radius, y);
+        ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+        ctx.lineTo(x + width, y + height - radius);
+        ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+        ctx.lineTo(x + radius, y + height);
+        ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+        ctx.lineTo(x, y + radius);
+        ctx.quadraticCurveTo(x, y, x + radius, y);
+        ctx.closePath();
     }
 };
