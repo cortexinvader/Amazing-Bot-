@@ -4,6 +4,8 @@ Ilom WhatsApp Bot is a feature-rich Node.js application built on the Baileys lib
 
 ## Recent Changes (October 2025)
 
+- ✅ **Canvas Package Migration** (Oct 12): Replaced legacy `canvas` package with `@napi-rs/canvas` v0.1.58 for better hosting platform compatibility. Fixed deployment errors on bot-hosting.net and similar platforms that don't support native compilation. Updated all canvas imports across 8 files.
+- ✅ **Git Configuration** (Oct 12): Removed package-lock.json from .gitignore to allow proper dependency tracking in version control
 - ✅ **Installation System**: Added comprehensive installation scripts with cross-platform support (automated setup, postinstall checks)
 - ✅ **Utility Scripts**: Complete set of maintenance tools (cleanup, backup, restore, migrate, seed, update)
 - ✅ **Directory Structure**: All directories populated with documentation and .gitkeep files
@@ -51,7 +53,7 @@ Preferred communication style: Simple, everyday language.
 
 **Event Handlers**: Welcome/goodbye messages with canvas-generated images, member promotion/demotion notifications, group settings updates, and auto-reaction to specific keywords.
 
-**Canvas Graphics**: Dynamic image generation using node-canvas for welcome cards (shows username, group name, member count, profile picture), goodbye cards, promotion/demotion announcements, and level-up notifications with gradient backgrounds.
+**Canvas Graphics**: Dynamic image generation using @napi-rs/canvas for welcome cards (shows username, group name, member count, profile picture), goodbye cards, promotion/demotion announcements, and level-up notifications with gradient backgrounds.
 
 **Auto-Moderation**: Link detection and removal, spam prevention, warning system with persistent tracking via MongoDB, and configurable group settings (welcome messages, antilink, auto-reactions).
 
