@@ -369,13 +369,22 @@ async function establishWhatsAppConnection() {
         logger.info('📢 Setting up connection event handlers...');
         
         // Set up connection timeout
-        const connectionTimeout = setTimeout(() => {
+        const connectionTimeout = setTimeout(async () => {
             logger.warn('⚠️  Connection timeout - WhatsApp connection took too long');
             logger.info('💡 This might be due to:');
             logger.info('   - Invalid or expired SESSION_ID');
             logger.info('   - Network connectivity issues');
             logger.info('   - WhatsApp server problems');
             logger.info('🔄 Attempting to reconnect...');
+            
+            // Close existing socket and reconnect
+            if (sock && sock.end) {
+                await sock.end();
+            }
+            if (reconnectAttempts < MAX_RECONNECT) {
+                reconnectAttempts++;
+                setTimeout(establishWhatsAppConnection, 5000);
+            }
         }, 30000); // 30 seconds timeout
         
         sock.ev.on('connection.update', (update) => {

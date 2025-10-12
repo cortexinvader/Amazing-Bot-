@@ -4,6 +4,7 @@ Ilom WhatsApp Bot is a feature-rich Node.js application built on the Baileys lib
 
 ## Recent Changes (October 2025)
 
+- ✅ **WhatsApp Connection Enhancement** (Oct 12): Significantly improved WhatsApp connection reliability with enhanced logging, better QR code handling, comprehensive disconnect reason handling, and connection timeout detection with auto-reconnect. The bot now successfully connects and provides clear diagnostic information at each step.
 - ✅ **Canvas Package Migration** (Oct 12): Replaced legacy `canvas` package with `@napi-rs/canvas` v0.1.58 for better hosting platform compatibility. Fixed deployment errors on bot-hosting.net and similar platforms that don't support native compilation. Updated all canvas imports across 8 files.
 - ✅ **Git Configuration** (Oct 12): Removed package-lock.json from .gitignore to allow proper dependency tracking in version control
 - ✅ **Installation System**: Added comprehensive installation scripts with cross-platform support (automated setup, postinstall checks)
