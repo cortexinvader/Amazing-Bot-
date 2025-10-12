@@ -239,7 +239,8 @@ async function sendBotStatusUpdate(sock) {
 }
 
 async function handleConnectionEvents(sock, connectionUpdate) {
-    const { DisconnectReason } = await import('@whiskeysockets/baileys');
+    const baileys = await import('@whiskeysockets/baileys');
+    const { DisconnectReason } = baileys;
     const { connection, lastDisconnect, qr, receivedPendingNotifications } = connectionUpdate;
 
     if (qr && !process.env.SESSION_ID) {
@@ -290,7 +291,7 @@ async function handleConnectionEvents(sock, connectionUpdate) {
 
 async function establishWhatsAppConnection() {
     try {
-        const { default: makeWASocket, Browsers, useMultiFileAuthState, fetchLatestBaileysVersion, makeCacheableSignalKeyStore } = await import('@whiskeysockets/baileys');
+        const { makeWASocket, Browsers, useMultiFileAuthState, fetchLatestBaileysVersion, makeCacheableSignalKeyStore } = await import('@whiskeysockets/baileys');
         const { state, saveCreds } = await useMultiFileAuthState(SESSION_PATH);
         const { version } = await fetchLatestBaileysVersion();
         
