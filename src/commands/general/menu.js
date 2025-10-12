@@ -167,7 +167,46 @@ export default {
 ✨ Join our community: ${prefix}support
 🌟 Stay powerful, Saiyan Warrior!`;
 
+        const supportGroup = config.supportGroup || process.env.SUPPORT_GROUP || 'https://chat.whatsapp.com/YOUR_GROUP_LINK';
+        
+        const buttons = [
+            {
+                buttonId: `${prefix}owner`,
+                buttonText: { displayText: '👨‍💻 Owner' },
+                type: 1
+            },
+            {
+                buttonId: `${prefix}support`,
+                buttonText: { displayText: '🆘 Support Group' },
+                type: 1
+            },
+            {
+                buttonId: `${prefix}stats`,
+                buttonText: { displayText: '📊 Bot Stats' },
+                type: 1
+            }
+        ];
+
         try {
+            await sock.sendMessage(from, {
+                image: { url: dragonBallImage },
+                caption: menuText,
+                footer: `© ${config.botName} - Tap buttons for quick access`,
+                buttons: buttons,
+                headerType: 4,
+                contextInfo: {
+                    externalAdReply: {
+                        title: `🐉 ${config.botName} - Ultimate Menu`,
+                        body: `Total Commands: ${totalCommands} | Power Level: ${userLevel}`,
+                        thumbnailUrl: dragonBallImage,
+                        sourceUrl: supportGroup,
+                        mediaType: 1,
+                        renderLargerThumbnail: true
+                    }
+                }
+            }, { quoted: message });
+        } catch (error) {
+            console.error('Error sending menu with buttons:', error);
             await sock.sendMessage(from, {
                 image: { url: dragonBallImage },
                 caption: menuText,
@@ -176,22 +215,7 @@ export default {
                         title: `🐉 ${config.botName} - Ultimate Menu`,
                         body: `Total Commands: ${totalCommands} | Power Level: ${userLevel}`,
                         thumbnailUrl: dragonBallImage,
-                        sourceUrl: config.botRepository,
-                        mediaType: 1,
-                        renderLargerThumbnail: true
-                    }
-                }
-            }, { quoted: message });
-        } catch (error) {
-            console.error('Error sending menu with image:', error);
-            await sock.sendMessage(from, {
-                text: menuText,
-                contextInfo: {
-                    externalAdReply: {
-                        title: `🐉 ${config.botName} - Ultimate Menu`,
-                        body: `Total Commands: ${totalCommands} | Power Level: ${userLevel}`,
-                        thumbnailUrl: dragonBallImage,
-                        sourceUrl: config.botRepository,
+                        sourceUrl: supportGroup,
                         mediaType: 1,
                         renderLargerThumbnail: true
                     }

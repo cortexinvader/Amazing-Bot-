@@ -2,13 +2,14 @@ import config from '../../config.js';
 import { commandHandler } from '../../handlers/commandHandler.js';
 import { getUser } from '../../models/User.js';
 import moment from 'moment';
+import { createCanvas, loadImage } from '@napi-rs/canvas';
 import fetch from 'node-fetch';
 
 export default {
     name: 'help',
     aliases: ['h', 'menu', 'commands'],
     category: 'utility',
-    description: 'Display bot commands and features with stylish design',
+    description: 'Display bot commands with stunning canvas graphics',
     usage: 'help [command]',
     cooldown: 3,
     permissions: ['user'],
@@ -26,116 +27,147 @@ export default {
         const totalCommands = commandHandler.getCommandCount();
         
         const now = moment();
-        const day = now.format('dddd');
-        const date = now.format('DD/MM/YYYY');
-        const time = now.format('hh:mm:ss A') + ' UTC';
-        
-        const userStatus = user.isPremium ? 'PREMIUM ELITE' : 'FREE USER';
-        const userPower = user.isPremium ? 'UNLIMITED ACCESS' : 'LIMITED ACCESS';
-        const userCredits = user.isPremium ? '∞ INFINITE' : user.economy?.balance || 0;
+        const userStatus = user.isPremium ? '⚡ PREMIUM' : '🌟 FREE';
         const userName = user.name || 'User';
-        const userId = sender.split('@')[0];
         
-        const thumbnail = await this.getRandomAnimeImage();
-        
-        const categoryMap = {
-            'admin': { emoji: '🛡️', title: 'ADMIN' },
-            'ai': { emoji: '🤖', title: 'AI' },
-            'downloader': { emoji: '📥', title: 'DOWNLOADER' },
-            'economy': { emoji: '💰', title: 'ECONOMY' },
-            'fun': { emoji: '🎭', title: 'FUN' },
-            'games': { emoji: '🎮', title: 'GAMES' },
-            'general': { emoji: '📱', title: 'GENERAL' },
-            'media': { emoji: '📱', title: 'MEDIA' },
-            'owner': { emoji: '👑', title: 'OWNER' },
-            'utility': { emoji: '🔧', title: 'UTILITY' }
-        };
-        
-        let helpText = `╭──⦿【 ⚡ ${config.botName.toUpperCase()} 】
-│ 🎯 𝗨𝘀𝗲𝗿: ${userName}
-│ 🔰 𝗜𝗗: @${userId}
-│ 👑 𝗦𝘁𝗮𝘁𝘂𝘀: ${userStatus}
-│ ⚡ 𝗣𝗼𝘄𝗲𝗿: ${userPower}
-│ 💎 𝗖𝗿𝗲𝗱𝗶𝘁𝘀: ${userCredits}
-│ 🌐 𝗣𝗿𝗲𝗳𝗶𝘅: ${prefix}
-│ 🤖 𝗦𝘆𝘀𝘁𝗲𝗺: ${config.botName} v${config.botVersion}
-│ 👨‍💻 𝗖𝗿𝗲𝗮𝘁𝗼𝗿: ${config.ownerName}
-│ 🔄 𝗦𝘁𝗮𝘁𝘂𝘀: ONLINE & ACTIVE
-│ 📅 𝗗𝗮𝘁𝗲: ${date}
-│ 📆 𝗗𝗮𝘆: ${day}
-│ ⏰ 𝗧𝗶𝗺𝗲: ${time}
-╰────────⦿
-
-`;
-
-        for (const category of categories.sort()) {
-            const commands = commandHandler.getCommandsByCategory(category);
-            if (commands.length === 0) continue;
-            
-            const categoryInfo = categoryMap[category] || { emoji: '⭐', title: category.toUpperCase() };
-            
-            helpText += `╭──⦿【 ${categoryInfo.emoji} 𝗖𝗠𝗗 - ${categoryInfo.title} 】\n`;
-            
-            const commandList = commands.map(cmd => `✧${cmd.name}`).join(' ');
-            const words = commandList.split(' ');
-            let currentLine = '│';
-            
-            for (const word of words) {
-                if ((currentLine + ' ' + word).length > 60) {
-                    helpText += currentLine + '\n';
-                    currentLine = '│' + word;
-                } else {
-                    currentLine += (currentLine === '│' ? '' : ' ') + word;
-                }
-            }
-            
-            if (currentLine !== '│') {
-                helpText += currentLine + '\n';
-            }
-            
-            helpText += '╰────────⦿\n\n';
-        }
-        
-        helpText += `╭──────────⦿
-│ 𝗧𝗼𝘁𝗮𝗹 𝗰𝗺𝗱𝘀:「${totalCommands}」
-│ 𝗧𝘆𝗽𝗲: [ ${prefix}𝚑𝚎𝚕𝚙 <𝚌𝚖𝚍> ]
-│ 𝘁𝗼 𝗹𝗲𝗮𝗿𝗻 𝘁𝗵𝗲 𝘂𝘀𝗮𝗴𝗲.
-│ 𝗧𝘆𝗽𝗲: [ ${prefix}𝚜𝘂𝚙𝚙𝚘𝚛𝚝 ] to join
-│ Support Group
-╰─────────────⦿
-╭─────────────⦿
-│💫 | [ ${config.botName} 🍀 ]
-╰────────────⦿`;
-
-        const buttons = [
-            { buttonId: `${prefix}owner`, buttonText: { displayText: '👨‍💻 Owner' }, type: 1 },
-            { buttonId: `${prefix}support`, buttonText: { displayText: '🆘 Support' }, type: 1 },
-            { buttonId: `${prefix}stats`, buttonText: { displayText: '📊 Stats' }, type: 1 }
-        ];
-
         try {
+            const imageBuffer = await this.createHelpCanvas(userName, userStatus, totalCommands, categories);
+            
+            const categoryMap = {
+                'admin': '🛡️', 'ai': '🤖', 'downloader': '📥', 'economy': '💰',
+                'fun': '🎭', 'games': '🎮', 'general': '📱', 'media': '🎨',
+                'owner': '👑', 'utility': '🔧'
+            };
+
+            let helpText = `╭──⦿【 ⚡ ${config.botName.toUpperCase()} HELP 】\n`;
+            helpText += `│ 👤 User: ${userName}\n`;
+            helpText += `│ 👑 Status: ${userStatus}\n`;
+            helpText += `│ 🌐 Prefix: ${prefix}\n`;
+            helpText += `│ 📊 Commands: ${totalCommands}\n`;
+            helpText += `╰────────⦿\n\n`;
+
+            for (const category of categories.sort()) {
+                const commands = commandHandler.getCommandsByCategory(category);
+                if (commands.length === 0) continue;
+                
+                const emoji = categoryMap[category] || '⭐';
+                helpText += `${emoji} *${category.toUpperCase()}*\n`;
+                helpText += commands.map(cmd => `  ✧ ${cmd.name}`).join('\n') + '\n\n';
+            }
+
+            helpText += `💡 Type ${prefix}help <command> for details\n`;
+            helpText += `🆘 Type ${prefix}support to join our group`;
+
             await sock.sendMessage(from, {
-                image: { url: thumbnail },
+                image: imageBuffer,
                 caption: helpText,
-                footer: `© ${config.botName} - Powered by ${config.ownerName}`,
-                buttons: buttons,
-                headerType: 4
-            }, { quoted: message });
-        } catch (error) {
-            await sock.sendMessage(from, {
-                text: helpText,
                 contextInfo: {
                     externalAdReply: {
-                        title: `${config.botName} - Help Menu`,
-                        body: `Total Commands: ${totalCommands}`,
-                        thumbnailUrl: thumbnail,
+                        title: `${config.botName} - Command Center`,
+                        body: `${totalCommands} Commands Available`,
+                        thumbnailUrl: config.botThumbnail,
                         sourceUrl: config.botRepository,
                         mediaType: 1,
                         renderLargerThumbnail: true
                     }
                 }
             }, { quoted: message });
+        } catch (error) {
+            console.error('Canvas error:', error);
+            await this.sendTextHelp(sock, message, from, categories, totalCommands, userName, userStatus, prefix);
         }
+    },
+
+    async createHelpCanvas(userName, userStatus, totalCommands, categories) {
+        const canvas = createCanvas(1200, 700);
+        const ctx = canvas.getContext('2d');
+
+        const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+        gradient.addColorStop(0, '#667eea');
+        gradient.addColorStop(0.5, '#764ba2');
+        gradient.addColorStop(1, '#f093fb');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.font = 'bold 80px Arial';
+        ctx.fillStyle = '#ffffff';
+        ctx.textAlign = 'center';
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+        ctx.shadowBlur = 10;
+        ctx.fillText('⚡ COMMAND CENTER ⚡', 600, 120);
+
+        ctx.font = 'bold 45px Arial';
+        ctx.fillStyle = '#ffd700';
+        ctx.fillText(`Welcome, ${userName}!`, 600, 200);
+
+        ctx.font = '35px Arial';
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(`Status: ${userStatus}`, 600, 260);
+
+        ctx.font = '40px Arial';
+        ctx.fillStyle = '#00ff88';
+        ctx.fillText(`${totalCommands} Commands Available`, 600, 340);
+
+        ctx.font = '30px Arial';
+        ctx.fillStyle = '#e0e0e0';
+        ctx.fillText(`${categories.length} Categories | Always Online`, 600, 400);
+
+        const boxY = 450;
+        const boxWidth = 1000;
+        const boxHeight = 180;
+        const boxX = (canvas.width - boxWidth) / 2;
+
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+        ctx.roundRect(boxX, boxY, boxWidth, boxHeight, 20);
+        ctx.fill();
+
+        ctx.font = '28px Arial';
+        ctx.fillStyle = '#ffffff';
+        ctx.textAlign = 'center';
+        ctx.fillText('🎯 Quick Start Guide', 600, 500);
+
+        ctx.font = '24px Arial';
+        ctx.fillStyle = '#e0e0e0';
+        ctx.fillText('Use prefix followed by command name', 600, 545);
+        ctx.fillText('Reply to any command for instant help', 600, 585);
+
+        ctx.font = '22px Arial';
+        ctx.fillStyle = '#ffd700';
+        ctx.fillText(`Powered by ${config.botName} v${config.botVersion}`, 600, 660);
+
+        return canvas.toBuffer('image/png');
+    },
+
+    async sendTextHelp(sock, message, from, categories, totalCommands, userName, userStatus, prefix) {
+        const categoryMap = {
+            'admin': '🛡️', 'ai': '🤖', 'downloader': '📥', 'economy': '💰',
+            'fun': '🎭', 'games': '🎮', 'general': '📱', 'media': '🎨',
+            'owner': '👑', 'utility': '🔧'
+        };
+
+        let helpText = `╭──⦿【 ⚡ ${config.botName.toUpperCase()} 】\n`;
+        helpText += `│ 🎯 User: ${userName}\n`;
+        helpText += `│ 👑 Status: ${userStatus}\n`;
+        helpText += `│ 🌐 Prefix: ${prefix}\n`;
+        helpText += `│ 📊 Commands: ${totalCommands}\n`;
+        helpText += `╰────────⦿\n\n`;
+
+        for (const category of categories.sort()) {
+            const commands = commandHandler.getCommandsByCategory(category);
+            if (commands.length === 0) continue;
+            
+            const emoji = categoryMap[category] || '⭐';
+            helpText += `╭──⦿【 ${emoji} ${category.toUpperCase()} 】\n`;
+            helpText += commands.map(cmd => `│ ✧ ${cmd.name}`).join('\n') + '\n';
+            helpText += `╰────────⦿\n\n`;
+        }
+
+        helpText += `💡 Type ${prefix}help <command> for details`;
+
+        await sock.sendMessage(from, { text: helpText }, { quoted: message });
     },
 
     async showCommandDetails({ sock, message, from, commandName, prefix, user }) {
@@ -146,61 +178,14 @@ export default {
                 text: `❌ Command "${commandName}" not found.\n\n💡 Use ${prefix}help to see all commands.`
             }, { quoted: message });
         }
-        
-        const categoryInfo = {
-            'admin': '🛡️',
-            'ai': '🤖',
-            'downloader': '📥',
-            'economy': '💰',
-            'fun': '🎭',
-            'games': '🎮',
-            'general': '📱',
-            'media': '📱',
-            'owner': '👑',
-            'utility': '🔧'
-        };
-        
-        const categoryEmoji = categoryInfo[command.category] || '⭐';
-        const thumbnail = await this.getRandomAnimeImage();
-        
-        const helpText = `╭──⦿【 ${categoryEmoji} ${command.name.toUpperCase()} 】
-│
-│ 📝 𝗗𝗲𝘀𝗰𝗿𝗶𝗽𝘁𝗶𝗼𝗻:
-│ ${command.description || 'No description available'}
-│
-│ 🏷️ 𝗖𝗮𝘁𝗲𝗴𝗼𝗿𝘆: ${command.category.toUpperCase()}
-│
-│ 📖 𝗨𝘀𝗮𝗴𝗲:
-│ ${prefix}${command.usage || command.name}
-│
-│ ⏱️ 𝗖𝗼𝗼𝗹𝗱𝗼𝘄𝗻: ${command.cooldown || 0} seconds
-│
-│ 👥 𝗣𝗲𝗿𝗺𝗶𝘀𝘀𝗶𝗼𝗻𝘀: ${(command.permissions || ['user']).join(', ')}
-${command.aliases && command.aliases.length > 0 ? `│\n│ 🔗 𝗔𝗹𝗶𝗮𝘀𝗲𝘀:\n│ ${command.aliases.map(a => `${prefix}${a}`).join(', ')}` : ''}
-│
-╰────────────⦿
 
-💡 𝗧𝗶𝗽: Reply to this message with your question about this command!`;
+        const helpText = `╭──⦿【 ${command.name.toUpperCase()} 】\n│\n│ 📝 Description:\n│ ${command.description || 'No description'}\n│\n│ 🏷️ Category: ${command.category.toUpperCase()}\n│\n│ 📖 Usage:\n│ ${prefix}${command.usage || command.name}\n│\n│ ⏱️ Cooldown: ${command.cooldown || 0}s\n│\n│ 👥 Permissions: ${(command.permissions || ['user']).join(', ')}\n${command.aliases && command.aliases.length > 0 ? `│\n│ 🔗 Aliases:\n│ ${command.aliases.map(a => prefix + a).join(', ')}` : ''}\n│\n╰────────────⦿\n\n💡 Reply to this message for help!`;
         
-        const sentMsg = await sock.sendMessage(from, {
-            text: helpText,
-            contextInfo: {
-                externalAdReply: {
-                    title: `${command.name.toUpperCase()} Command`,
-                    body: command.description,
-                    thumbnailUrl: thumbnail,
-                    sourceUrl: config.botRepository,
-                    mediaType: 1,
-                    renderLargerThumbnail: true
-                }
-            }
-        }, { quoted: message });
+        const sentMsg = await sock.sendMessage(from, { text: helpText }, { quoted: message });
         
         if (command.supportsReply && sentMsg) {
             this.setupReplyHandler(sock, from, sentMsg.key.id, command, prefix);
         }
-        
-        return sentMsg;
     },
 
     setupReplyHandler(sock, from, messageId, command, prefix) {
@@ -218,56 +203,13 @@ ${command.aliases && command.aliases.length > 0 ? `│\n│ 🔗 𝗔𝗹𝗶�
             command: command.name,
             timeout: replyTimeout,
             handler: async (replyText, replyMessage) => {
-                const response = `╭──⦿【 💬 AUTO RESPONSE 】
-│
-│ Command: ${command.name}
-│ Question: ${replyText}
-│
-│ 📖 Answer:
-│ For detailed usage of ${prefix}${command.name}, 
-│ please type: ${prefix}${command.usage || command.name}
-│
-│ If you need more help, contact the owner
-│ using ${prefix}owner command.
-│
-╰────────────⦿`;
+                const response = `╭──⦿【 💬 HELP RESPONSE 】\n│\n│ Command: ${command.name}\n│ Question: ${replyText}\n│\n│ 📖 Answer:\n│ For ${prefix}${command.name}, use:\n│ ${prefix}${command.usage || command.name}\n│\n│ Need more help?\n│ Contact owner: ${prefix}owner\n│\n╰────────────⦿`;
                 
-                await sock.sendMessage(from, {
-                    text: response,
-                    mentions: [replyMessage.participant || replyMessage.key.participant]
-                }, { quoted: replyMessage });
+                await sock.sendMessage(from, { text: response }, { quoted: replyMessage });
                 
                 clearTimeout(replyTimeout);
                 delete global.replyHandlers[messageId];
             }
         };
-    },
-
-    async getRandomAnimeImage() {
-        const animeApis = [
-            'https://api.waifu.pics/sfw/waifu',
-            'https://api.waifu.pics/sfw/neko',
-            'https://nekos.best/api/v2/neko',
-            'https://nekos.best/api/v2/waifu',
-            'https://api.nekosapi.com/v3/images/random?rating=safe&limit=1'
-        ];
-        
-        try {
-            const randomApi = animeApis[Math.floor(Math.random() * animeApis.length)];
-            const response = await fetch(randomApi);
-            const data = await response.json();
-            
-            if (randomApi.includes('waifu.pics')) {
-                return data.url || config.botThumbnail || 'https://i.ibb.co/2M7rtLk/ilom.jpg';
-            } else if (randomApi.includes('nekos.best')) {
-                return data.results?.[0]?.url || config.botThumbnail || 'https://i.ibb.co/2M7rtLk/ilom.jpg';
-            } else if (randomApi.includes('nekosapi')) {
-                return data.items?.[0]?.image_url || config.botThumbnail || 'https://i.ibb.co/2M7rtLk/ilom.jpg';
-            }
-        } catch (error) {
-            console.error('Error fetching anime image:', error);
-        }
-        
-        return config.botThumbnail || 'https://i.ibb.co/2M7rtLk/ilom.jpg';
     }
 };

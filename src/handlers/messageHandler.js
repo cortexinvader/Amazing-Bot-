@@ -285,7 +285,9 @@ class MessageHandler {
 
     async handleIncomingMessage(sock, message) {
         try {
-            if (!message || message.key.fromMe) return;
+            const selfListeningEnabled = config.selfMode || false;
+            if (!message) return;
+            if (message.key.fromMe && !selfListeningEnabled) return;
             
             const from = message.key.remoteJid;
             const sender = message.key.participant || from;

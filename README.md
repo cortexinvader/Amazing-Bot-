@@ -6,6 +6,8 @@
 
 ### 💫 *The Ultimate WhatsApp Automation Revolution* 💫
 
+<img src="https://readme-typing-svg.herokuapp.com?font=Fira+Code&weight=600&size=28&pause=1000&color=667EEA&center=true&vCenter=true&width=900&lines=Welcome+to+Amazing+Bot!;Advanced+AI+Integration;Beautiful+Canvas+Graphics;142%2B+Powerful+Commands;Professional+WhatsApp+Automation" alt="Typing SVG" />
+
 <p align="center">
   <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/Node.js-20+-339933.svg?style=for-the-badge&logo=node.js&logoColor=white" alt="Node.js"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-4285F4.svg?style=for-the-badge&logo=opensourceinitiative&logoColor=white" alt="License"></a>
@@ -33,33 +35,53 @@
 
 ## 🌟 What's New in Latest Update
 
+<div align="center">
+
+### 🎉 **Major Enhancement Release!** 🎉
+
+</div>
+
 <table>
 <tr>
 <td width="50%">
 
 ### ✨ Latest Enhancements
-- ✅ **Canvas-Based Group Events** - Beautiful welcome/goodbye cards
+- ✅ **Beautiful Canvas Graphics** - Stunning visual cards for all commands
+- ✅ **Advanced Help System** - Interactive help with onReply support
+- ✅ **Epic Hangman Game** - Canvas-based game with reply functionality
 - ✅ **Smart Admin Commands** - Enhanced permission handling
 - ✅ **Anti-Link Protection** - Comprehensive link detection & actions
-- ✅ **Auto-Reaction System** - 20+ smart reactions
+- ✅ **Auto-Reaction System** - 20+ context-aware reactions
 - ✅ **Leveling System** - XP progression with visual rewards
-- ✅ **Security Hardened** - Database credential sanitization
+- ✅ **Self-Listening Mode** - Process own messages when needed
+- ✅ **Security Hardened** - Enterprise-grade protection
 
 </td>
 <td width="50%">
 
 ### 🔥 Key Highlights
 - ⚡ **Sub-100ms Response Time**
+- 🎨 **Canvas Graphics** - Professional visual cards
 - 🛡️ **Enterprise-Grade Security**
 - 🤖 **Multi-AI Integration** (GPT, Gemini)
 - 💾 **Optional Database** - Works without it!
 - 🌐 **10+ Languages Supported**
-- 📊 **Real-time Analytics**
-- 🎨 **Canvas Graphics** - Professional visuals
+- 📊 **Real-time Analytics Dashboard**
+- 🎮 **Interactive Games** - Reply-based gameplay
+- 💬 **Reply Handlers** - Smart message interactions
+- 🔘 **Interactive Buttons** - Quick command access
 
 </td>
 </tr>
 </table>
+
+<div align="center">
+
+![WhatsApp Bot Features](./attached_assets/stock_images/whatsapp_messaging_c_4b3b734a.jpg)
+
+### 🚀 **Experience the Future of WhatsApp Automation!** 🚀
+
+</div>
 
 ---
 
