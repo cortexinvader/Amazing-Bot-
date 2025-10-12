@@ -1,16 +1,12 @@
 import { createCanvas } from '@napi-rs/canvas';
+import axios from 'axios';
 import config from '../../config.js';
 
-const quotes = [
+const fallbackQuotes = [
     { text: "The only way to do great work is to love what you do.", author: "Steve Jobs" },
     { text: "Innovation distinguishes between a leader and a follower.", author: "Steve Jobs" },
-    { text: "Your time is limited, don't waste it living someone else's life.", author: "Steve Jobs" },
-    { text: "Stay hungry, stay foolish.", author: "Steve Jobs" },
     { text: "Code is like humor. When you have to explain it, it's bad.", author: "Cory House" },
     { text: "First, solve the problem. Then, write the code.", author: "John Johnson" },
-    { text: "The best error message is the one that never shows up.", author: "Thomas Fuchs" },
-    { text: "Programming isn't about what you know; it's about what you can figure out.", author: "Chris Pine" },
-    { text: "The most disastrous thing that you can ever learn is your first programming language.", author: "Alan Kay" },
     { text: "Make it work, make it right, make it fast.", author: "Kent Beck" }
 ];
 
@@ -24,7 +20,26 @@ export default {
     permissions: ['user'],
 
     async execute({ sock, message, from }) {
-        const quote = quotes[Math.floor(Math.random() * quotes.length)];
+        let quote;
+        
+        try {
+            const response = await axios.get('https://zenquotes.io/api/random', {
+                timeout: 5000,
+                headers: { 'Accept': 'application/json' }
+            });
+            
+            if (response.data && response.data[0]) {
+                quote = {
+                    text: response.data[0].q,
+                    author: response.data[0].a
+                };
+            } else {
+                quote = fallbackQuotes[Math.floor(Math.random() * fallbackQuotes.length)];
+            }
+        } catch (error) {
+            console.log('API fetch failed, using fallback quote');
+            quote = fallbackQuotes[Math.floor(Math.random() * fallbackQuotes.length)];
+        }
         
         try {
             const imageBuffer = await this.createInspireCanvas(quote.text, quote.author);
