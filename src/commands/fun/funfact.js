@@ -1,17 +1,13 @@
 import { createCanvas } from '@napi-rs/canvas';
+import axios from 'axios';
 import config from '../../config.js';
 
-const facts = [
+const fallbackFacts = [
     "The first computer bug was an actual bug! A moth was found in a Harvard Mark II computer in 1947.",
     "The first 1GB hard drive, released in 1980, weighed over 500 pounds and cost $40,000.",
     "The QWERTY keyboard layout was designed to slow down typing to prevent mechanical typewriters from jamming.",
-    "The first computer mouse was made of wood and had only one button.",
     "Google's original name was 'Backrub' before it became Google in 1997.",
     "The first website ever created is still online at info.cern.ch",
-    "Approximately 90% of the world's currency only exists on computers.",
-    "The first email was sent by Ray Tomlinson to himself in 1971.",
-    "The average person spends about 6 hours a day on the internet.",
-    "There are more possible iterations of a game of chess than there are atoms in the known universe.",
     "Python is named after Monty Python, not the snake.",
     "The first computer programmer was a woman named Ada Lovelace in the 1840s."
 ];
@@ -26,7 +22,23 @@ export default {
     permissions: ['user'],
 
     async execute({ sock, message, from }) {
-        const fact = facts[Math.floor(Math.random() * facts.length)];
+        let fact;
+        
+        try {
+            const response = await axios.get('https://uselessfacts.jsph.pl/random.json?language=en', {
+                timeout: 5000,
+                headers: { 'Accept': 'application/json' }
+            });
+            
+            if (response.data && response.data.text) {
+                fact = response.data.text;
+            } else {
+                fact = fallbackFacts[Math.floor(Math.random() * fallbackFacts.length)];
+            }
+        } catch (error) {
+            console.log('API fetch failed, using fallback fact');
+            fact = fallbackFacts[Math.floor(Math.random() * fallbackFacts.length)];
+        }
         
         try {
             const imageBuffer = await this.createFactCanvas(fact);
@@ -44,7 +56,7 @@ export default {
                 caption: factText,
                 contextInfo: {
                     externalAdReply: {
-                        title: '🧠 Tech Fun Fact',
+                        title: '🧠 Fun Fact',
                         body: 'Learn something new!',
                         thumbnailUrl: config.botThumbnail,
                         sourceUrl: config.botWebsite,

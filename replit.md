@@ -4,6 +4,11 @@ Ilom WhatsApp Bot is a feature-rich Node.js application built on the Baileys lib
 
 ## Recent Changes (October 2025)
 
+- ✅ **API Integration for Dynamic Content** (Oct 12): Updated inspire and funfact commands to use live APIs instead of hardcoded data. Inspire uses ZenQuotes API for fresh motivational quotes, funfact uses Useless Facts API for random facts. Both include fallback arrays for offline resilience.
+- ✅ **Enhanced Command Visuals** (Oct 12): Added canvas-based visual cards to help, hangman, info, owner, inspire, and funfact commands with gradient backgrounds, shadows, and professional styling using @napi-rs/canvas.
+- ✅ **Interactive Game Features** (Oct 12): Perfected hangman with onReply functionality, quoted message handling, and canvas graphics showing game progress. Fixed timer message leaks in replyHandler system.
+- ✅ **Self-Listening Mode** (Oct 12): Added self-listening capability via config.selfMode to allow bot to process its own messages when needed.
+- ✅ **Menu Enhancement** (Oct 12): Added interactive buttons (Owner, Support, Stats) to menu command with support group link for easy community access.
 - ✅ **WhatsApp Connection Enhancement** (Oct 12): Significantly improved WhatsApp connection reliability with enhanced logging, better QR code handling, comprehensive disconnect reason handling, and connection timeout detection with auto-reconnect. The bot now successfully connects and provides clear diagnostic information at each step.
 - ✅ **Canvas Package Migration** (Oct 12): Replaced legacy `canvas` package with `@napi-rs/canvas` v0.1.58 for better hosting platform compatibility. Fixed deployment errors on bot-hosting.net and similar platforms that don't support native compilation. Updated all canvas imports across 8 files.
 - ✅ **Git Configuration** (Oct 12): Removed package-lock.json from .gitignore to allow proper dependency tracking in version control
