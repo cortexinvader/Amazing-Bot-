@@ -3,6 +3,8 @@ import { promisify } from 'util';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import config from '../../config.js';
+import moment from 'moment';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -23,49 +25,145 @@ export default {
             const branch = args[0] || 'main';
             const packageJson = JSON.parse(fs.readFileSync(path.join(__dirname, '../../package.json'), 'utf8'));
             const currentVersion = packageJson.version || 'Unknown';
+            const userId = sender.split('@')[0];
+            const now = moment();
+            const time = now.format('hh:mm:ss A') + ' UTC';
+            const date = now.format('DD/MM/YYYY');
+            
+            const initialMessage = `╭──⦿【 🔄 UPDATE SYSTEM 】
+│
+│ 👨‍💻 𝗜𝗻𝗶𝘁𝗶𝗮𝘁𝗲𝗱 𝗯𝘆: @${userId}
+│ 📂 𝗕𝗿𝗮𝗻𝗰𝗵: ${branch}
+│ 📦 𝗖𝘂𝗿𝗿𝗲𝗻𝘁 𝗩𝗲𝗿𝘀𝗶𝗼𝗻: v${currentVersion}
+│ 📅 𝗗𝗮𝘁𝗲: ${date}
+│ ⏰ 𝗧𝗶𝗺𝗲: ${time}
+│ 🤖 𝗦𝘆𝘀𝘁𝗲𝗺: ${config.botName}
+│
+│ ⚠️ 𝗪𝗮𝗿𝗻𝗶𝗻𝗴:
+│ Bot will restart after update
+│
+│ ⏳ 𝗦𝘁𝗮𝘁𝘂𝘀: Checking for updates...
+│
+╰────────────⦿`;
             
             await sock.sendMessage(from, {
-                text: `🔄 *Bot Update System Activated*\n\n👤 **Initiated by:** Owner (${sender.split('@')[0]})\n📂 **Branch:** ${branch}\n📦 **Current Version:** v${currentVersion}\n⏰ **Started:** ${new Date().toLocaleString()}\n\n⚠️ **Warning:** Bot will restart after update\n⏳ *Checking for updates...*`
+                text: initialMessage,
+                mentions: [sender]
             });
             
             try {
-                // Step 1: Check git status
+                const step1Message = `╭──⦿【 🔍 STEP 1/5 】
+│
+│ 𝗖𝗵𝗲𝗰𝗸𝗶𝗻𝗴 𝗥𝗲𝗽𝗼𝘀𝗶𝘁𝗼𝗿𝘆 𝗦𝘁𝗮𝘁𝘂𝘀
+│
+│ ✧ Verifying git repository...
+│ ✧ Checking remote connection...
+│ ✧ Analyzing current state...
+│
+╰────────────⦿`;
+                
                 await sock.sendMessage(from, {
-                    text: `🔍 *Step 1/5: Checking Repository Status*\n\n📊 Verifying git repository...\n🔗 Checking remote connection...\n📋 Analyzing current state...`
+                    text: step1Message
                 });
                 
                 const gitStatus = await this.checkGitStatus();
                 
-                // Step 2: Fetch updates
+                const step2Message = `╭──⦿【 📥 STEP 2/5 】
+│
+│ 𝗙𝗲𝘁𝗰𝗵𝗶𝗻𝗴 𝗨𝗽𝗱𝗮𝘁𝗲𝘀
+│
+│ ✧ Connecting to repository...
+│ ✧ Downloading latest changes...
+│ ✧ Branch: ${branch}
+│
+╰────────────⦿`;
+                
                 await sock.sendMessage(from, {
-                    text: `📥 *Step 2/5: Fetching Updates*\n\n🌐 Connecting to repository...\n📦 Downloading latest changes...\n🔄 Branch: ${branch}`
+                    text: step2Message
                 });
                 
                 const fetchResult = await this.fetchUpdates(branch);
                 
-                // Step 3: Check for changes
+                const step3Message = `╭──⦿【 🔍 STEP 3/5 】
+│
+│ 𝗔𝗻𝗮𝗹𝘆𝘇𝗶𝗻𝗴 𝗖𝗵𝗮𝗻𝗴𝗲𝘀
+│
+│ ✧ Comparing versions...
+│ ✧ Checking commit history...
+│ ✧ Detecting file changes...
+│
+╰────────────⦿`;
+                
                 await sock.sendMessage(from, {
-                    text: `🔍 *Step 3/5: Analyzing Changes*\n\n📊 Comparing versions...\n📝 Checking commit history...\n🔧 Detecting file changes...`
+                    text: step3Message
                 });
                 
                 const changeAnalysis = await this.analyzeChanges(branch);
                 
                 if (!changeAnalysis.hasUpdates) {
+                    const upToDateMessage = `╭──⦿【 ✅ UP TO DATE 】
+│
+│ 🎉 𝗬𝗼𝘂𝗿 𝗯𝗼𝘁 𝗶𝘀 𝗮𝗹𝗿𝗲𝗮𝗱𝘆 𝘂𝗽𝗱𝗮𝘁𝗲𝗱!
+│
+│ 📦 𝗩𝗲𝗿𝘀𝗶𝗼𝗻: v${currentVersion}
+│ 📂 𝗕𝗿𝗮𝗻𝗰𝗵: ${branch}
+│ ⏰ 𝗟𝗮𝘀𝘁 𝗖𝗵𝗲𝗰𝗸: ${time}
+│ 📊 𝗦𝘁𝗮𝘁𝘂𝘀: No updates available
+│
+│ 💡 𝗡𝗲𝘅𝘁 𝗦𝘁𝗲𝗽𝘀:
+│ ✧ Monitor for future updates
+│ ✧ Check release notes
+│ ✧ Consider switching branches
+│
+╰────────────⦿`;
+                    
                     return sock.sendMessage(from, {
-                        text: `✅ *Bot Already Up to Date!*\n\n📦 **Current Version:** v${currentVersion}\n📂 **Branch:** ${branch}\n⏰ **Last Check:** ${new Date().toLocaleString()}\n📊 **Status:** No updates available\n\n🎉 *Your bot is running the latest version!*\n\n💡 **Next Steps:**\n• Monitor for future updates\n• Check release notes\n• Consider switching branches if needed`
+                        text: upToDateMessage
                     });
                 }
                 
-                // Step 4: Apply updates
+                const step4Message = `╭──⦿【 ⬇️ STEP 4/5 】
+│
+│ 𝗔𝗽𝗽𝗹𝘆𝗶𝗻𝗴 𝗨𝗽𝗱𝗮𝘁𝗲𝘀
+│
+│ 📊 𝗨𝗽𝗱𝗮𝘁𝗲 𝗦𝘂𝗺𝗺𝗮𝗿𝘆:
+│ ✧ Files changed: ${changeAnalysis.filesChanged}
+│ ✧ Commits: ${changeAnalysis.newCommits}
+│ ✧ New features: ${changeAnalysis.features}
+│ ✧ Bug fixes: ${changeAnalysis.fixes}
+│
+│ ⚠️ Applying updates now...
+│
+╰────────────⦿`;
+                
                 await sock.sendMessage(from, {
-                    text: `⬇️ *Step 4/5: Applying Updates*\n\n🔄 **Update Summary:**\n• Files changed: ${changeAnalysis.filesChanged}\n• Commits: ${changeAnalysis.newCommits}\n• New features: ${changeAnalysis.features}\n• Bug fixes: ${changeAnalysis.fixes}\n\n⚠️ *Applying updates now...*`
+                    text: step4Message
                 });
                 
                 const updateResult = await this.applyUpdates(branch);
                 
-                // Step 5: Restart bot
+                const step5Message = `╭──⦿【 🎉 STEP 5/5 】
+│
+│ 𝗨𝗽𝗱𝗮𝘁𝗲 𝗖𝗼𝗺𝗽𝗹𝗲𝘁𝗲!
+│
+│ ✅ 𝗨𝗽𝗱𝗮𝘁𝗲 𝗦𝘂𝗺𝗺𝗮𝗿𝘆:
+│ ✧ Status: Successfully updated
+│ ✧ Version: v${currentVersion} → v${updateResult.newVersion}
+│ ✧ Files updated: ${updateResult.filesUpdated}
+│ ✧ Duration: ${updateResult.duration}ms
+│
+│ 🔄 𝗥𝗲𝘀𝘁𝗮𝗿𝘁 𝗥𝗲𝗾𝘂𝗶𝗿𝗲𝗱:
+│ Bot will restart in 10 seconds
+│ to apply changes
+│
+│ ⏳ See you after restart!
+│
+╰────────────⦿
+
+💫 | [ ${config.botName} 🍀 ]`;
+                
                 await sock.sendMessage(from, {
-                    text: `🎉 *Step 5/5: Update Complete!*\n\n✅ **Update Summary:**\n• Status: Successfully updated\n• Version: v${currentVersion} → v${updateResult.newVersion}\n• Files updated: ${updateResult.filesUpdated}\n• Duration: ${updateResult.duration}ms\n\n🔄 **Restart Required:**\nBot will restart in 10 seconds to apply changes\n\n⏳ *See you after restart!*`
+                    text: step5Message
                 });
                 
                 // Auto-restart after update
@@ -77,16 +175,56 @@ export default {
             } catch (updateError) {
                 console.error('Update process error:', updateError);
                 
+                const errorMessage = `╭──⦿【 ❌ UPDATE FAILED 】
+│
+│ 🚨 𝗘𝗿𝗿𝗼𝗿: ${updateError.message}
+│
+│ 🔍 𝗣𝗼𝘀𝘀𝗶𝗯𝗹𝗲 𝗰𝗮𝘂𝘀𝗲𝘀:
+│ ✧ Network connectivity issues
+│ ✧ Git repository access denied
+│ ✧ Merge conflicts in code
+│ ✧ Insufficient permissions
+│ ✧ Branch does not exist
+│ ✧ Local changes conflict
+│
+│ 💡 𝗦𝗼𝗹𝘂𝘁𝗶𝗼𝗻𝘀:
+│ ✧ Check internet connection
+│ ✧ Verify repository access
+│ ✧ Resolve any merge conflicts
+│ ✧ Try different branch
+│ ✧ Manual update via git pull
+│
+│ 📦 𝗖𝘂𝗿𝗿𝗲𝗻𝘁 𝗩𝗲𝗿𝘀𝗶𝗼𝗻: v${currentVersion}
+│
+╰────────────⦿`;
+                
                 await sock.sendMessage(from, {
-                    text: `❌ *Update Failed*\n\n**Error:** ${updateError.message}\n\n**Possible causes:**\n• Network connectivity issues\n• Git repository access denied\n• Merge conflicts in code\n• Insufficient permissions\n• Branch does not exist\n• Local changes conflict\n\n**Solutions:**\n• Check internet connection\n• Verify repository access\n• Resolve any merge conflicts\n• Try different branch\n• Manual update via git pull\n\n*Bot remains on current version: v${currentVersion}*`
+                    text: errorMessage
                 });
             }
             
         } catch (error) {
             console.error('Update command error:', error);
             
+            const criticalErrorMessage = `╭──⦿【 🚨 CRITICAL ERROR 】
+│
+│ ❌ 𝗦𝘆𝘀𝘁𝗲𝗺 𝗘𝗿𝗿𝗼𝗿: ${error.message}
+│
+│ 🚨 𝗔𝗹𝗲𝗿𝘁: Update system malfunction
+│
+│ ⚠️ 𝗘𝗺𝗲𝗿𝗴𝗲𝗻𝗰𝘆 𝗮𝗰𝘁𝗶𝗼𝗻𝘀:
+│ ✧ Check system file integrity
+│ ✧ Verify git installation
+│ ✧ Review update system logs
+│ ✧ Consider manual code update
+│ ✧ Monitor for system corruption
+│
+│ ⚠️ Bot update functionality compromised
+│
+╰────────────⦿`;
+            
             await sock.sendMessage(from, {
-                text: `❌ *Critical Update System Error*\n\n**System Error:** ${error.message}\n\n🚨 **Alert:** Update system malfunction\n\n**Emergency actions needed:**\n• Check system file integrity\n• Verify git installation\n• Review update system logs\n• Consider manual code update\n• Monitor for system corruption\n\n⚠️ **Bot update functionality compromised**`
+                text: criticalErrorMessage
             });
         }
     },
