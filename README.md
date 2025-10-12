@@ -260,37 +260,40 @@
 
 ## 🔧 Local Installation
 
-### Option 1: Quick Setup (Recommended)
+### Prerequisites
+
+Before installing, ensure you have:
+- ✅ **Node.js 20+** ([Download](https://nodejs.org/))
+- ✅ **Git** ([Download](https://git-scm.com/))
+- 🟡 **FFmpeg** (Optional, for media features) ([Download](https://ffmpeg.org/))
+- 🟡 **MongoDB** (Optional, for data persistence) ([MongoDB Atlas Free](https://www.mongodb.com/cloud/atlas))
+
+### Option 1: Automated Setup (Recommended)
 
 ```bash
-# Clone repository
 git clone https://github.com/NexusCoders-cyber/Amazing-Bot-.git
 cd Amazing-Bot-
 
-# Install dependencies
-npm install
-
-# Setup environment
-cp .env.example .env
-nano .env  # Edit with your configuration
-
-# Start bot
-npm start
+npm run setup
 ```
+
+This will:
+- ✅ Check Node.js version
+- ✅ Install all dependencies
+- ✅ Create directory structure
+- ✅ Generate .env from template
+- ✅ Verify required binaries
 
 ### Option 2: Manual Setup
 
 ```bash
-# Download and extract
-wget https://github.com/NexusCoders-cyber/Amazing-Bot-/archive/main.zip
-unzip main.zip
-cd Amazing-Bot--main
+git clone https://github.com/NexusCoders-cyber/Amazing-Bot-.git
+cd Amazing-Bot-
 
-# Install dependencies
 npm install
 
-# Configure
 cp .env.example .env
+nano .env
 
 # Start
 npm start
@@ -1071,6 +1074,140 @@ We stand on the shoulders of giants. Special thanks to:
 </table>
 
 </div>
+
+---
+
+## 🛠️ Utility Scripts & Maintenance
+
+The bot includes comprehensive utility scripts for easy management:
+
+### 📦 Installation & Setup
+```bash
+npm run setup          # Automated installation with checks
+npm install            # Standard npm install (auto-runs postinstall)
+```
+
+### 🧹 Maintenance
+```bash
+npm run cleanup        # Clean temporary files and cache
+npm run backup         # Create full backup of bot data
+npm run restore        # Restore from backup (requires timestamp)
+```
+
+### 🗄️ Database
+```bash
+npm run migrate        # Run database migrations
+npm run seed           # Seed database with demo data
+```
+
+### 🔄 Updates
+```bash
+npm run update         # Pull latest changes and reinstall
+```
+
+### 📊 Monitoring
+```bash
+npm run logs           # View PM2 logs (if using PM2)
+npm run debug          # Start in debug mode
+```
+
+### Script Details
+
+| Script | Purpose | Safe Mode |
+|--------|---------|-----------|
+| `cleanup.js` | Removes temp files, preserves session | ✅ Yes |
+| `backup.sh` | Backs up session, media, database | ✅ Yes |
+| `restore.sh` | Restores from backup with confirmation | ⚠️ Overwrites |
+| `migrate.js` | Database schema migrations | ✅ With rollback |
+| `seed.js` | Populate DB with demo data | ✅ Idempotent |
+| `update.sh` | Git pull + dependency update | ⚠️ Stashes changes |
+
+---
+
+## 🔐 Session Management
+
+The bot supports multiple session formats for maximum compatibility:
+
+### Supported Formats:
+
+1. **Ilom Format** (Default)
+   ```
+   SESSION_ID=Ilom~eyJub2lzZUtleS...
+   ```
+
+2. **Base64 JSON**
+   ```
+   SESSION_ID=eyJjcmVkcyI6eyJub...
+   ```
+
+3. **Direct JSON**
+   ```
+   SESSION_ID={"creds":{"noiseKey":...}}
+   ```
+
+4. **Mega.nz Cloud**
+   ```
+   SESSION_ID=sypher™--MEGA_FILE_ID
+   ```
+
+5. **Multi-File Baileys** (Auto-generated)
+   - Location: `cache/auth_info_baileys/`
+   - Contains: `creds.json` + `keys/*.json`
+
+### Getting Your Session:
+
+**Method 1: QR Code (Recommended)**
+1. Leave `SESSION_ID` empty in `.env`
+2. Run `npm start`
+3. Scan QR code with WhatsApp
+4. Session automatically saved
+
+**Method 2: Pairing Code**
+```bash
+QR_SCANNER_ENABLED=true
+npm start
+```
+
+**Method 3: Existing Session**
+- Paste your existing SESSION_ID in `.env`
+- Bot auto-detects format and converts
+
+### Session Backup
+```bash
+npm run backup
+```
+
+---
+
+## 📚 Additional Documentation
+
+- 📖 [Installation Guide](./docs/guides/installation.md)
+- ⚙️ [Configuration Guide](./docs/guides/configuration.md)
+- 🚀 [Deployment Guide](./docs/guides/deployment.md)
+- 📝 [Command Reference](./docs/commands/)
+- 🔌 [Plugin Development](./docs/guides/plugins.md)
+- 🐛 [Troubleshooting](./docs/guides/troubleshooting.md)
+- 🔐 [Security Policy](./SECURITY.md)
+- 🤝 [Contributing](./CONTRIBUTING.md)
+
+---
+
+## 🏆 Credits & Acknowledgments
+
+### Core Contributors
+- **Ilom** - Lead Developer & Project Creator
+- **NexusCoders** - Development Team
+
+### Technology Stack
+- [Baileys](https://github.com/WhiskeySockets/Baileys) - WhatsApp Web API
+- [Node.js](https://nodejs.org/) - Runtime Environment
+- [MongoDB](https://www.mongodb.com/) - Database (Optional)
+- [Express.js](https://expressjs.com/) - Web Framework
+
+### Special Thanks
+- All contributors who helped improve this project
+- The open-source community for amazing tools
+- Beta testers for valuable feedback
 
 ---
 
