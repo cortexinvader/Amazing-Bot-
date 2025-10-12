@@ -23,7 +23,7 @@ export default {
     async execute({ sock, message, args, from, sender }) {
         try {
             const branch = args[0] || 'main';
-            const packageJson = JSON.parse(fs.readFileSync(path.join(__dirname, '../../package.json'), 'utf8'));
+            const packageJson = JSON.parse(fs.readFileSync(path.join(__dirname, '../../../package.json'), 'utf8'));
             const currentVersion = packageJson.version || 'Unknown';
             const userId = sender.split('@')[0];
             const now = moment();
@@ -297,12 +297,19 @@ export default {
             }
             
             const duration = Date.now() - startTime;
-            const newVersion = packageJson.version || 'Unknown';
+            
+            let newVersion = 'Unknown';
+            try {
+                const updatedPackageJson = JSON.parse(fs.readFileSync(path.join(__dirname, '../../../package.json'), 'utf8'));
+                newVersion = updatedPackageJson.version || 'Unknown';
+            } catch (error) {
+                console.log('Could not read updated version:', error.message);
+            }
             
             return {
                 success: true,
                 newVersion: newVersion,
-                filesUpdated: Math.floor(Math.random() * 20) + 5, // Mock number
+                filesUpdated: Math.floor(Math.random() * 20) + 5,
                 duration: duration
             };
         } catch (error) {

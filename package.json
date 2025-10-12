@@ -1,7 +1,7 @@
 {
   "name": "ilom-whatsapp-bot",
-  "version": "3.0.1",
-  "description": "🧠 Amazing Bot 🧠 v3 created by Ilom - Advanced Multi-Device WhatsApp Bot with AI, Media Processing, and Comprehensive Features",
+  "version": "1.0.0",
+  "description": "🧠 Amazing Bot 🧠 v1 created by Ilom - Advanced Multi-Device WhatsApp Bot with AI, Media Processing, and Comprehensive Features",
   "type": "module",
   "main": "index.js",
   "author": {
@@ -17,7 +17,7 @@
       "url": "https://ilom.tech"
     }
   ],
-  "license": "Apache-2.0",
+  "license": "MIT",
   "directories": {
     "lib": "src",
     "src": "src"

@@ -1,20 +1,31 @@
 <div align="center">
 
-# 🧠 Amazing Bot 🧠
+# ✨ 🧠 AMAZING BOT 🧠 ✨
 
-<img src="./attached_assets/stock_images/modern_technology_bo_69a427db.jpg" alt="Amazing Bot Banner" width="100%" style="border-radius: 10px; margin: 20px 0;">
+<img src="./attached_assets/stock_images/modern_technology_bo_69a427db.jpg" alt="Amazing Bot Banner" width="100%" style="border-radius: 15px; box-shadow: 0 8px 32px rgba(0,0,0,0.1); margin: 30px 0;">
 
-### *The Ultimate WhatsApp Automation Experience*
+### 💫 *The Ultimate WhatsApp Automation Revolution* 💫
 
-[![Node.js](https://img.shields.io/badge/Node.js-20+-green.svg?style=for-the-badge&logo=node.js)](https://nodejs.org/)
-[![License](https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-1.0.0-orange.svg?style=for-the-badge)](package.json)
-[![Stars](https://img.shields.io/github/stars/NexusCoders-cyber/Amazing-Bot-?style=for-the-badge&logo=github)](https://github.com/NexusCoders-cyber/Amazing-Bot-)
-[![Forks](https://img.shields.io/github/forks/NexusCoders-cyber/Amazing-Bot-?style=for-the-badge&logo=github)](https://github.com/NexusCoders-cyber/Amazing-Bot-)
+<p align="center">
+  <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/Node.js-20+-339933.svg?style=for-the-badge&logo=node.js&logoColor=white" alt="Node.js"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-4285F4.svg?style=for-the-badge&logo=opensourceinitiative&logoColor=white" alt="License"></a>
+  <a href="package.json"><img src="https://img.shields.io/badge/Version-1.0.0-FF6B6B.svg?style=for-the-badge&logo=v&logoColor=white" alt="Version"></a>
+  <a href="https://github.com/NexusCoders-cyber/Amazing-Bot-"><img src="https://img.shields.io/github/stars/NexusCoders-cyber/Amazing-Bot-?style=for-the-badge&logo=github&color=yellow" alt="Stars"></a>
+  <a href="https://github.com/NexusCoders-cyber/Amazing-Bot-"><img src="https://img.shields.io/github/forks/NexusCoders-cyber/Amazing-Bot-?style=for-the-badge&logo=github&color=orange" alt="Forks"></a>
+</p>
 
-*A powerful, feature-rich WhatsApp bot built with modern technologies. Featuring AI integration, beautiful canvas graphics, economy system, and comprehensive admin tools.*
+<h3>🎯 Built with ❤️ by <a href="https://ilom.tech">Ilom</a> | Powered by NexusCoders</h3>
 
-[🚀 Quick Deploy](#-quick-deploy) • [📚 Features](#-features) • [🔧 Installation](#-installation) • [📖 Commands](#-command-guide) • [🌐 API](#-api-reference)
+> 🚀 **A next-generation WhatsApp bot** featuring cutting-edge AI integration, stunning canvas graphics, advanced economy system, comprehensive admin tools, and enterprise-grade security. Experience automation like never before!
+
+<p align="center">
+  <a href="#-quick-deploy">🚀 Quick Deploy</a> •
+  <a href="#-features">✨ Features</a> •
+  <a href="#-installation">🔧 Installation</a> •
+  <a href="#-command-guide">📖 Commands</a> •
+  <a href="#-api-reference">🌐 API</a> •
+  <a href="#-support">💬 Support</a>
+</p>
 
 ---
 
@@ -926,43 +937,195 @@ This project is licensed under the MIT License - see [LICENSE](LICENSE) file for
 
 ---
 
-## 💬 Support
-
-Need help? Join our community:
+## 💬 Support & Community
 
 <div align="center">
 
-[![WhatsApp Group](https://img.shields.io/badge/WhatsApp-Group-25D366?style=for-the-badge&logo=whatsapp)](https://chat.whatsapp.com/your-group-link)
-[![Telegram](https://img.shields.io/badge/Telegram-Channel-26A5E4?style=for-the-badge&logo=telegram)](https://t.me/your-channel)
-[![Discord](https://img.shields.io/badge/Discord-Server-5865F2?style=for-the-badge&logo=discord)](https://discord.gg/your-server)
-[![GitHub Issues](https://img.shields.io/badge/GitHub-Issues-181717?style=for-the-badge&logo=github)](https://github.com/NexusCoders-cyber/Amazing-Bot-/issues)
+### 🌟 Join Our Thriving Community! 🌟
+
+Need help or want to connect with other users? Join our amazing community across multiple platforms:
+
+<table>
+<tr>
+<td align="center" width="25%">
+<a href="https://chat.whatsapp.com/your-group-link">
+<img src="https://img.shields.io/badge/WhatsApp-Community-25D366?style=for-the-badge&logo=whatsapp&logoColor=white" alt="WhatsApp"><br>
+<b>💬 WhatsApp Group</b><br>
+Chat & Support
+</a>
+</td>
+<td align="center" width="25%">
+<a href="https://t.me/your-channel">
+<img src="https://img.shields.io/badge/Telegram-Channel-26A5E4?style=for-the-badge&logo=telegram&logoColor=white" alt="Telegram"><br>
+<b>📢 Telegram Channel</b><br>
+Updates & News
+</a>
+</td>
+<td align="center" width="25%">
+<a href="https://discord.gg/your-server">
+<img src="https://img.shields.io/badge/Discord-Server-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord"><br>
+<b>🎮 Discord Server</b><br>
+Community Hub
+</a>
+</td>
+<td align="center" width="25%">
+<a href="https://github.com/NexusCoders-cyber/Amazing-Bot-/issues">
+<img src="https://img.shields.io/badge/GitHub-Issues-181717?style=for-the-badge&logo=github&logoColor=white" alt="GitHub Issues"><br>
+<b>🐛 Report Bugs</b><br>
+Issue Tracker
+</a>
+</td>
+</tr>
+</table>
+
+### 💡 Get Help Instantly
+
+<table>
+<tr>
+<td width="33%" align="center">
+<h4>📚 Documentation</h4>
+Complete guides and tutorials<br>
+<a href="docs/README.md">Read Docs</a>
+</td>
+<td width="33%" align="center">
+<h4>❓ FAQ</h4>
+Common questions answered<br>
+<a href="docs/guides/troubleshooting.md">View FAQ</a>
+</td>
+<td width="33%" align="center">
+<h4>🎯 Examples</h4>
+Sample code & tutorials<br>
+<a href="examples/">Browse Examples</a>
+</td>
+</tr>
+</table>
 
 </div>
 
 ---
 
-## 👨‍💻 Author
+## 👨‍💻 Author & Credits
 
-**Ilom** - *Lead Developer*
+<div align="center">
 
-- GitHub: [@NexusCoders-cyber](https://github.com/NexusCoders-cyber)
-- WhatsApp: [Contact](https://wa.me/your-number)
+### 🌟 Created by **Ilom** 🌟
+
+<table>
+<tr>
+<td align="center">
+<img src="https://github.com/NexusCoders-cyber.png" width="100px" style="border-radius: 50%"><br>
+<b>Ilom</b><br>
+<i>Lead Developer & Creator</i><br><br>
+<a href="https://github.com/NexusCoders-cyber">
+<img src="https://img.shields.io/badge/GitHub-181717?style=for-the-badge&logo=github&logoColor=white" alt="GitHub">
+</a><br>
+<a href="https://wa.me/your-number">
+<img src="https://img.shields.io/badge/WhatsApp-25D366?style=for-the-badge&logo=whatsapp&logoColor=white" alt="WhatsApp">
+</a><br>
+<a href="https://ilom.tech">
+<img src="https://img.shields.io/badge/Website-4285F4?style=for-the-badge&logo=google-chrome&logoColor=white" alt="Website">
+</a>
+</td>
+</tr>
+</table>
+
+### 🏢 Powered by **NexusCoders**
+
+> Building next-generation automation solutions for everyone
+
+</div>
 
 ---
 
-## 🙏 Acknowledgments
+## 🙏 Acknowledgments & Credits
 
-- [Baileys](https://github.com/WhiskeySockets/Baileys) - WhatsApp Web API
-- [OpenAI](https://openai.com) - AI Integration
-- [Google Gemini](https://ai.google.dev) - AI Services
-- All contributors and supporters
+<div align="center">
+
+We stand on the shoulders of giants. Special thanks to:
+
+<table>
+<tr>
+<td width="50%">
+
+### 🔧 Core Technologies
+- 🎯 **[Baileys](https://github.com/WhiskeySockets/Baileys)** - WhatsApp Web API Library
+- 🤖 **[OpenAI](https://openai.com)** - GPT Integration & AI Services
+- 🧠 **[Google Gemini](https://ai.google.dev)** - Advanced AI Capabilities
+- 🖼️ **[Canvas](https://www.npmjs.com/package/canvas)** - Beautiful Graphics Rendering
+- 📦 **[Node.js](https://nodejs.org)** - Runtime Environment
+- 💾 **[MongoDB](https://www.mongodb.com)** - Database Solution
+
+</td>
+<td width="50%">
+
+### 🌟 Special Mentions
+- 💖 **All Contributors** - For their valuable input
+- 🐛 **Bug Reporters** - Helping us improve
+- 📝 **Documentation Writers** - Making it accessible
+- 🎨 **Designers** - Beautiful UI/UX suggestions
+- 🌍 **Community** - Amazing support & feedback
+- ⭐ **Stargazers** - Your support motivates us!
+
+</td>
+</tr>
+</table>
+
+</div>
 
 ---
 
 <div align="center">
 
-### ⭐ Star this repository if you find it helpful!
+## 🎉 Thank You for Using Amazing Bot! 🎉
 
-**Made with ❤️ by Ilom & NexusCoders**
+<img src="https://media.giphy.com/media/3o7abldj0b3rxrZUxW/giphy.gif" width="300" alt="Thank You">
+
+### ⭐ If you find this project helpful, please give it a star! ⭐
+
+<p>
+<a href="https://github.com/NexusCoders-cyber/Amazing-Bot-/stargazers">
+<img src="https://img.shields.io/github/stars/NexusCoders-cyber/Amazing-Bot-?style=social" alt="GitHub Stars">
+</a>
+<a href="https://github.com/NexusCoders-cyber/Amazing-Bot-/network/members">
+<img src="https://img.shields.io/github/forks/NexusCoders-cyber/Amazing-Bot-?style=social" alt="GitHub Forks">
+</a>
+<a href="https://github.com/NexusCoders-cyber/Amazing-Bot-/watchers">
+<img src="https://img.shields.io/github/watchers/NexusCoders-cyber/Amazing-Bot-?style=social" alt="GitHub Watchers">
+</a>
+</p>
+
+---
+
+<h3>📜 License</h3>
+
+This project is licensed under the **MIT License**
+
+See the [LICENSE](LICENSE) file for details
+
+---
+
+<h3>🔒 Security</h3>
+
+Found a security issue? Please report it responsibly to our [Security Team](SECURITY.md)
+
+---
+
+<h3>💝 Made with Love by Ilom & NexusCoders Team 💝</h3>
+
+<p>
+<i>Crafted with precision, passion, and lots of ☕</i>
+</p>
+
+<p>
+<b>© 2024-2025 Amazing Bot. All Rights Reserved.</b>
+</p>
+
+---
+
+<p>
+<img src="https://img.shields.io/badge/Maintained-Yes-success?style=flat-square" alt="Maintained">
+<img src="https://img.shields.io/badge/PRs-Welcome-brightgreen?style=flat-square" alt="PRs Welcome">
+<img src="https://img.shields.io/badge/Built%20With-❤️-red?style=flat-square" alt="Built with Love">
+</p>
 
 </div>
