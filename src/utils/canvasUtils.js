@@ -1,10 +1,8 @@
-import canvas from 'canvas';
+import { createCanvas, loadImage, GlobalFonts } from '@napi-rs/canvas';
 import fs from 'fs-extra';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import config from '../config.js';
-
-const { createCanvas, loadImage, registerFont } = canvas;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -13,8 +11,15 @@ const fontsPath = path.join(assetsPath, 'fonts');
 const imagesPath = path.join(assetsPath, 'images');
 
 try {
-    registerFont(path.join(fontsPath, 'primary.ttf'), { family: 'Primary' });
-    registerFont(path.join(fontsPath, 'secondary.ttf'), { family: 'Secondary' });
+    const primaryFont = path.join(fontsPath, 'primary.ttf');
+    const secondaryFont = path.join(fontsPath, 'secondary.ttf');
+    
+    if (fs.existsSync(primaryFont)) {
+        GlobalFonts.registerFromPath(primaryFont, 'Primary');
+    }
+    if (fs.existsSync(secondaryFont)) {
+        GlobalFonts.registerFromPath(secondaryFont, 'Secondary');
+    }
 } catch (error) {
     console.warn('Custom fonts not loaded, using default fonts');
 }

@@ -1,5 +1,5 @@
 import os from 'os';
-import { createCanvas, loadImage, registerFont } from 'canvas';
+import { createCanvas, loadImage, GlobalFonts } from '@napi-rs/canvas';
 import fs from 'fs-extra';
 import path from 'path';
 import config from '../../config.js';

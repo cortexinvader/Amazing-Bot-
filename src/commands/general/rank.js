@@ -1,4 +1,4 @@
-import { createCanvas, loadImage, registerFont } from 'canvas';
+import { createCanvas, loadImage, GlobalFonts } from '@napi-rs/canvas';
 import { getUser } from '../../models/User.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
