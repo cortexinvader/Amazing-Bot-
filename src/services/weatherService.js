@@ -14,7 +14,7 @@ class WeatherService {
                 return null;
             }
 
-            const response = await axios.get(\`\${this.baseUrl}/weather\`, {
+            const response = await axios.get(`${this.baseUrl}/weather`, {
                 params: {
                     q: city,
                     appid: this.apiKey,

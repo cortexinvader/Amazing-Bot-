@@ -14,7 +14,7 @@ class NewsService {
                 return [];
             }
 
-            const response = await axios.get(\`\${this.baseUrl}/top-headlines\`, {
+            const response = await axios.get(`${this.baseUrl}/top-headlines`, {
                 params: { country, category, apiKey: this.apiKey }
             });
 
@@ -32,7 +32,7 @@ class NewsService {
                 return [];
             }
 
-            const response = await axios.get(\`\${this.baseUrl}/everything\`, {
+            const response = await axios.get(`${this.baseUrl}/everything`, {
                 params: { q: query, pageSize, apiKey: this.apiKey }
             });
 

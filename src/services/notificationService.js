@@ -10,13 +10,13 @@ class NotificationService {
             this.subscribers.set(event, new Map());
         }
         this.subscribers.get(event).set(userId, callback);
-        logger.info(\`User \${userId} subscribed to \${event}\`);
+        logger.info(`User ${userId} subscribed to ${event}`);
     }
 
     unsubscribe(userId, event) {
         if (this.subscribers.has(event)) {
             this.subscribers.get(event).delete(userId);
-            logger.info(\`User \${userId} unsubscribed from \${event}\`);
+            logger.info(`User ${userId} unsubscribed from ${event}`);
         }
     }
 
@@ -28,7 +28,7 @@ class NotificationService {
             try {
                 await callback(data);
             } catch (error) {
-                logger.error(\`Error notifying user \${userId}:\`, error);
+                logger.error(`Error notifying user ${userId}:`, error);
             }
         }
     }

@@ -20,7 +20,7 @@ class GameService {
             };
 
             this.activeGames.set(gameId, game);
-            logger.info(\`Game started: \${gameType} by \${userJid}\`);
+            logger.info(`Game started: ${gameType} by ${userJid}`);
             return game;
         } catch (error) {
             logger.error('Error starting game:', error);
@@ -35,7 +35,7 @@ class GameService {
                 game.active = false;
                 game.endTime = Date.now();
                 this.activeGames.delete(gameId);
-                logger.info(\`Game ended: \${gameId}\`);
+                logger.info(`Game ended: ${gameId}`);
                 return game;
             }
             return null;

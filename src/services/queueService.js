@@ -10,14 +10,14 @@ class QueueService {
         if (!this.queues.has(name)) {
             this.queues.set(name, []);
             this.processing.set(name, false);
-            logger.info(\`Queue created: \${name}\`);
+            logger.info(`Queue created: ${name}`);
         }
     }
 
     async enqueue(queueName, task) {
         this.createQueue(queueName);
         this.queues.get(queueName).push(task);
-        logger.debug(\`Task added to queue \${queueName}\`);
+        logger.debug(`Task added to queue ${queueName}`);
         
         if (!this.processing.get(queueName)) {
             await this.processQueue(queueName);
@@ -35,7 +35,7 @@ class QueueService {
             try {
                 await task();
             } catch (error) {
-                logger.error(\`Error processing task in queue \${queueName}:\`, error);
+                logger.error(`Error processing task in queue ${queueName}:`, error);
             }
         }
 

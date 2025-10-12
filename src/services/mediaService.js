@@ -8,7 +8,7 @@ class MediaService {
 
     async downloadMedia(url, platform) {
         try {
-            logger.info(\`Downloading media from \${platform}: \${url}\`);
+            logger.info(`Downloading media from ${platform}: ${url}`);
             return {
                 success: true,
                 url,
@@ -23,7 +23,7 @@ class MediaService {
 
     async getMediaInfo(url) {
         try {
-            logger.info(\`Getting media info for: \${url}\`);
+            logger.info(`Getting media info for: ${url}`);
             return {
                 title: 'Media Title',
                 duration: 0,
