@@ -39,7 +39,10 @@ async function postInstall() {
     for (const [binary, description] of Object.entries(requiredBinaries)) {
         try {
             const { execSync } = await import('child_process');
-            execSync(`which ${binary}`, { stdio: 'ignore' });
+            const command = process.platform === 'win32' 
+                ? `where ${binary}` 
+                : `which ${binary}`;
+            execSync(command, { stdio: 'ignore' });
             console.log(`✅ ${description}: Found`);
         } catch {
             if (binary === 'ffmpeg') {

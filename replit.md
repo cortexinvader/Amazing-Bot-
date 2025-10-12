@@ -1,6 +1,15 @@
 # Overview
 
-Ilom WhatsApp Bot is a feature-rich Node.js application built on the Baileys library for WhatsApp Web automation. The bot provides AI integration (OpenAI GPT and Google Gemini), comprehensive media processing, economy systems, admin tools, anti-spam protection, and automated group management. It features 120+ commands organized into 10 categories with extensive plugin support and cloud deployment capabilities.
+Ilom WhatsApp Bot is a feature-rich Node.js application built on the Baileys library for WhatsApp Web automation. The bot provides AI integration (OpenAI GPT and Google Gemini), comprehensive media processing, economy systems, admin tools, anti-spam protection, and automated group management. It features 143 commands organized into 10 categories with extensive plugin support and cloud deployment capabilities.
+
+## Recent Changes (October 2025)
+
+- ✅ **Installation System**: Added comprehensive installation scripts with cross-platform support (automated setup, postinstall checks)
+- ✅ **Utility Scripts**: Complete set of maintenance tools (cleanup, backup, restore, migrate, seed, update)
+- ✅ **Directory Structure**: All directories populated with documentation and .gitkeep files
+- ✅ **NPM Configuration**: Lockfile-free installation for better cross-platform compatibility
+- ✅ **README Enhancement**: Professional documentation with utility scripts guide and session management
+- ✅ **Windows Support**: Cross-platform binary detection and documented shell script alternatives
 
 # User Preferences
 

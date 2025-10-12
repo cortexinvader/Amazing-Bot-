@@ -268,6 +268,8 @@ Before installing, ensure you have:
 - 🟡 **FFmpeg** (Optional, for media features) ([Download](https://ffmpeg.org/))
 - 🟡 **MongoDB** (Optional, for data persistence) ([MongoDB Atlas Free](https://www.mongodb.com/cloud/atlas))
 
+**Windows Users:** For shell scripts (backup, update, etc.), use [Git Bash](https://git-scm.com/downloads) or [WSL](https://docs.microsoft.com/en-us/windows/wsl/install). Alternatively, run commands manually from the scripts.
+
 ### Option 1: Automated Setup (Recommended)
 
 ```bash
