@@ -58,7 +58,8 @@
     "restore": "bash scripts/restore.sh",
     "migrate": "node scripts/migrate.js",
     "seed": "node scripts/seed.js",
-    "update": "bash scripts/update.sh",
+    "update": "node scripts/update.js",
+    "update:shell": "bash scripts/update.sh",
     "debug": "DEBUG=* node index.js",
     "logs": "pm2 logs ilom-bot"
   },

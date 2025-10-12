@@ -231,6 +231,15 @@ export default {
     
     async checkGitStatus() {
         try {
+            const isReplit = process.env.REPL_ID || process.env.REPLIT_DB_URL;
+            
+            if (isReplit) {
+                return {
+                    hasLocalChanges: false,
+                    localChanges: []
+                };
+            }
+            
             const { stdout } = await execAsync('git status --porcelain');
             return {
                 hasLocalChanges: stdout.trim().length > 0,
@@ -243,7 +252,10 @@ export default {
     
     async fetchUpdates(branch) {
         try {
-            await execAsync(`git fetch origin ${branch}`);
+            const isReplit = process.env.REPL_ID || process.env.REPLIT_DB_URL;
+            if (!isReplit) {
+                await execAsync(`git fetch origin ${branch}`);
+            }
             return { success: true };
         } catch (error) {
             throw new Error('Failed to fetch updates from remote repository');
@@ -252,6 +264,18 @@ export default {
     
     async analyzeChanges(branch) {
         try {
+            const isReplit = process.env.REPL_ID || process.env.REPLIT_DB_URL;
+            
+            if (isReplit) {
+                return {
+                    hasUpdates: true,
+                    filesChanged: 1,
+                    newCommits: 1,
+                    features: 0,
+                    fixes: 0
+                };
+            }
+            
             const { stdout: localCommit } = await execAsync('git rev-parse HEAD');
             const { stdout: remoteCommit } = await execAsync(`git rev-parse origin/${branch}`);
             
@@ -285,15 +309,18 @@ export default {
     async applyUpdates(branch) {
         try {
             const startTime = Date.now();
+            const isReplit = process.env.REPL_ID || process.env.REPLIT_DB_URL;
             
-            // Pull updates
-            await execAsync(`git pull origin ${branch}`);
-            
-            // Install new dependencies if package.json changed
-            try {
-                await execAsync('npm install');
-            } catch (npmError) {
-                console.log('NPM install skipped or failed:', npmError.message);
+            if (isReplit) {
+                await execAsync('npm run update');
+            } else {
+                await execAsync(`git pull origin ${branch}`);
+                
+                try {
+                    await execAsync('npm run update');
+                } catch (updateError) {
+                    await execAsync('npm install');
+                }
             }
             
             const duration = Date.now() - startTime;

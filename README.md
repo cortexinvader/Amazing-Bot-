@@ -1104,8 +1104,11 @@ npm run seed           # Seed database with demo data
 
 ### 🔄 Updates
 ```bash
-npm run update         # Pull latest changes and reinstall
+npm run update         # Smart update (auto-detects environment)
+npm run update:shell   # Shell-based update (requires bash)
 ```
+
+**Note:** In Replit/managed environments, `npm run update` updates dependencies only. For code updates, pull from GitHub manually.
 
 ### 📊 Monitoring
 ```bash
@@ -1122,7 +1125,8 @@ npm run debug          # Start in debug mode
 | `restore.sh` | Restores from backup with confirmation | ⚠️ Overwrites |
 | `migrate.js` | Database schema migrations | ✅ With rollback |
 | `seed.js` | Populate DB with demo data | ✅ Idempotent |
-| `update.sh` | Git pull + dependency update | ⚠️ Stashes changes |
+| `update.js` | Smart update with environment detection | ✅ Platform-aware |
+| `update.sh` | Shell-based git pull + dependencies | ⚠️ Stashes changes |
 
 ---
 
