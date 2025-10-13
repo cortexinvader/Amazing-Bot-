@@ -1,39 +1,79 @@
+import axios from 'axios';
+
 export default {
     name: 'fbdl',
-    description: 'Download Facebook videos',
+    aliases: ['facebook', 'fbvideo', 'fb', 'fbdown'],
     category: 'downloader',
-    aliases: ['facebook', 'fb'],
-    usage: 'fbdl <url>',
-    cooldown: 10,
+    description: 'Download Facebook videos in HD quality',
+    usage: 'fbdl <facebook video url>',
+    example: 'fbdl https://facebook.com/watch?v=123456',
+    cooldown: 30,
     permissions: ['user'],
     args: true,
     minArgs: 1,
+    maxArgs: 1,
+    typing: true,
+    premium: false,
+    hidden: false,
+    ownerOnly: false,
+    supportsReply: false,
+    supportsChat: false,
+    supportsReact: true,
+    supportsButtons: false,
 
-    async execute({ sock, message, args, from, user, prefix }) {
+    async execute({ sock, message, args, command, user, group, from, sender, isGroup, isGroupAdmin, isBotAdmin, prefix }) {
         try {
             const url = args[0];
-            
-            if (!url.includes('facebook.com') && !url.includes('fb.watch')) {
-                return await sock.sendMessage(from, {
-                    text: '❌ *Invalid URL*\n\nPlease provide a valid Facebook video URL.\n\n*Supported formats:*\n• facebook.com/watch/?v=\n• fb.watch/\n• facebook.com/username/videos/'
-                });
+
+            const regex = /^(?:https?:\/\/)?(?:www\.|m\.|touch\.|mobile\.|l\.|lm\.|fb\.me\.)?(?:facebook\.com|fb\.me|fb\.com)\/(?:(?:.+\/)*)(?:videos\/.+|watch\/.+|reel\/.+|reels\/.+|share\/v\/.+|share\/r\/.+|story\.php\?story_fbid=\d+&id=\d+|video\.php\?v=\d+|\d+\/videos\/.+|.*\/videos\/\d+)(?:[\/?].*)?$/i;
+
+            if (!url.match(regex)) {
+                await sock.sendMessage(from, {
+                    text: '╭──⦿【 ❌ ERROR 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: Invalid Facebook URL\n│\n│ 💡 𝗨𝘀𝗮𝗴𝗲:\n│ ' + prefix + 'fbdl <facebook url>\n│\n│ 📝 𝗘𝘅𝗮𝗺𝗽𝗹𝗲:\n│ ' + prefix + 'fbdl https://fb.com/video\n╰────────⦿'
+                }, { quoted: message });
+                return;
             }
 
             await sock.sendMessage(from, {
-                text: '📥 *Facebook Video Downloader*\n\n🔄 *Processing your request...*\n\n🔗 *URL:* ' + url + '\n⏳ *Status:* Analyzing video...\n📱 *Platform:* Facebook\n\n*Please wait while we process your download...*'
+                react: { text: '⏳', key: message.key }
             });
 
-            // Simulate processing time
-            setTimeout(async () => {
-                const responseText = `🎬 *Facebook Download Ready*\n\n✅ *Status:* Analysis Complete\n📊 *Quality:* HD Available\n📁 *Format:* MP4\n⚡ *Size:* Optimized\n\n🚀 *Download Process:*\n1. Video successfully analyzed\n2. Quality options detected\n3. Direct download link prepared\n\n⚠️ *Note:* This is a framework implementation. For full functionality, integrate with Facebook API or third-party service.\n\n💡 *Features Ready:*\n• HD/SD quality selection\n• Audio-only extraction\n• Thumbnail generation\n• Metadata collection\n\n🔒 *Privacy:* All downloads are temporary and secure.`;
+            const statusMsg = await sock.sendMessage(from, {
+                text: '╭──⦿【 📥 DOWNLOADING 】\n│ 🎬 𝗧𝘆𝗽𝗲: Facebook Video\n│ ⏳ 𝗦𝘁𝗮𝘁𝘂𝘀: Processing...\n│ 📡 𝗤𝘂𝗮𝗹𝗶𝘁𝘆: HD\n╰────────⦿'
+            }, { quoted: message });
 
-                await sock.sendMessage(from, { text: responseText });
-            }, 3000);
+            const apiUrl = `https://myapi-2f5b.onrender.com/fbvideo/search?url=${encodeURIComponent(url)}`;
+            const response = await axios.get(apiUrl, { timeout: 60000 });
+            const data = response.data;
+
+            if (!data || !data.hd) {
+                await sock.sendMessage(from, { delete: statusMsg.key });
+                await sock.sendMessage(from, {
+                    text: '╭──⦿【 ❌ ERROR 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: Download failed\n│\n│ ⚠️ 𝗥𝗲𝗮𝘀𝗼𝗻: No HD link found\n│ 💡 𝗧𝗶𝗽: Try another video\n╰────────⦿'
+                }, { quoted: message });
+                return;
+            }
+
+            await sock.sendMessage(from, { delete: statusMsg.key });
+
+            await sock.sendMessage(from, {
+                video: { url: data.hd },
+                mimetype: 'video/mp4',
+                caption: '╭──⦿【 ✅ DOWNLOADED 】\n│ 🎬 𝗧𝘆𝗽𝗲: Facebook Video\n│ 📦 𝗙𝗼𝗿𝗺𝗮𝘁: MP4\n│ 🎯 𝗤𝘂𝗮𝗹𝗶𝘁𝘆: HD\n│ 🔗 𝗦𝗼𝘂𝗿𝗰𝗲: Facebook\n╰────────⦿\n\n╭─────────────⦿\n│💫 | [ Ilom Bot 🍀 ]\n╰────────────⦿'
+            }, { quoted: message });
+
+            await sock.sendMessage(from, {
+                react: { text: '✅', key: message.key }
+            });
 
         } catch (error) {
             console.error('Facebook download error:', error);
             await sock.sendMessage(from, {
-                text: '❌ *Download Failed*\n\nError processing Facebook video. This could be due to:\n• Private video\n• Geo-restrictions\n• Invalid URL\n• Service temporarily unavailable\n\nPlease try again or use a different video.'
+                text: '╭──⦿【 ❌ ERROR 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: Download failed\n│\n│ ⚠️ 𝗗𝗲𝘁𝗮𝗶𝗹𝘀: ' + error.message + '\n│ 💡 𝗧𝗶𝗽: Try again later\n╰────────⦿'
+            }, { quoted: message });
+
+            await sock.sendMessage(from, {
+                react: { text: '❌', key: message.key }
             });
         }
     }
