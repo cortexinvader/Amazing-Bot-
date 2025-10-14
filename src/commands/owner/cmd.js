@@ -38,31 +38,31 @@ export default {
                 case 'list':
                 case 'ls': {
                     const category = args[1]?.toLowerCase();
-                    let result = '╭──⦿【 📋 COMMAND LIST 】\n';
+                    let result = '📋 COMMAND LIST\n\n';
                     
                     if (category && categories.includes(category)) {
                         const categoryPath = path.join(commandsDir, category);
                         const files = fs.readdirSync(categoryPath).filter(f => f.endsWith('.js'));
-                        result += `│ 📁 𝗖𝗮𝘁𝗲𝗴𝗼𝗿𝘆: ${category}\n`;
-                        result += `│ 📊 𝗧𝗼𝘁𝗮𝗹: ${files.length} commands\n`;
-                        result += `│\n`;
+                        result += `📁 Category: ${category.toUpperCase()}\n`;
+                        result += `📊 Total: ${files.length} commands\n\n`;
                         files.forEach((file, i) => {
-                            result += `│ ${i + 1}. ${file.replace('.js', '')}\n`;
+                            result += `${i + 1}. ${file.replace('.js', '')}\n`;
                         });
                     } else {
                         let totalCommands = 0;
+                        result += 'Available Categories:\n';
                         for (const cat of categories) {
                             const categoryPath = path.join(commandsDir, cat);
                             if (fs.existsSync(categoryPath)) {
                                 const files = fs.readdirSync(categoryPath).filter(f => f.endsWith('.js'));
                                 totalCommands += files.length;
-                                result += `│ 📁 ${cat.padEnd(12)}: ${files.length} commands\n`;
+                                result += `${cat.padEnd(12)}: ${files.length} commands\n`;
                             }
                         }
-                        result += `│\n│ 📊 𝗧𝗼𝘁𝗮𝗹: ${totalCommands} commands\n`;
+                        result += `\n📊 Total: ${totalCommands} commands\n`;
                     }
                     
-                    result += '╰────────⦿\n\n╭─────────────⦿\n│💫 | [ Ilom Bot 🍀 ]\n╰────────────⦿';
+                    result += `\n💫 Ilom Bot 🍀`;
                     
                     await sock.sendMessage(from, { text: result }, { quoted: message });
                     break;
@@ -72,7 +72,7 @@ export default {
                 case 'search': {
                     if (!args[1]) {
                         await sock.sendMessage(from, {
-                            text: '╭──⦿【 ❌ ERROR 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: Command name required\n│\n│ 💡 𝗨𝘀𝗮𝗴𝗲: cmd find <name>\n╰────────⦿'
+                            text: '❌ ERROR\nMessage: Command name required\n\n💡 Usage: cmd find <name>'
                         }, { quoted: message });
                         return;
                     }
@@ -98,16 +98,16 @@ export default {
 
                     if (results.length === 0) {
                         await sock.sendMessage(from, {
-                            text: `╭──⦿【 🔍 SEARCH RESULTS 】\n│ 🔎 𝗤𝘂𝗲𝗿𝘆: ${searchTerm}\n│ 📊 𝗙𝗼𝘂𝗻𝗱: 0 commands\n│\n│ ❌ No matches found\n╰────────⦿`
+                            text: `🔍 SEARCH RESULTS\nQuery: ${searchTerm}\nFound: 0 commands\n\n❌ No matches found`
                         }, { quoted: message });
                         return;
                     }
 
-                    let resultText = `╭──⦿【 🔍 SEARCH RESULTS 】\n│ 🔎 𝗤𝘂𝗲𝗿𝘆: ${searchTerm}\n│ 📊 𝗙𝗼𝘂𝗻𝗱: ${results.length} commands\n│\n`;
+                    let resultText = `🔍 SEARCH RESULTS\nQuery: ${searchTerm}\nFound: ${results.length} commands\n\n`;
                     results.forEach((r, i) => {
-                        resultText += `│ ${i + 1}. ${r.file.replace('.js', '')}\n│    📁 ${r.category}\n│    📄 ${r.path}\n│\n`;
+                        resultText += `${i + 1}. ${r.file.replace('.js', '')}\n   📁 ${r.category}\n   📄 ${r.path}\n\n`;
                     });
-                    resultText += '╰────────⦿\n\n╭─────────────⦿\n│💫 | [ Ilom Bot 🍀 ]\n╰────────────⦿';
+                    resultText += `\n💫 Ilom Bot 🍀`;
 
                     await sock.sendMessage(from, { text: resultText }, { quoted: message });
                     break;
@@ -119,7 +119,7 @@ export default {
                 case 'download': {
                     if (!args[1]) {
                         await sock.sendMessage(from, {
-                            text: '╭──⦿【 ❌ ERROR 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: Command path required\n│\n│ 💡 𝗨𝘀𝗮𝗴𝗲: cmd get <category/file>\n│ 📝 𝗘𝘅𝗮𝗺𝗽𝗹𝗲: cmd get general/ping.js\n╰────────⦿'
+                            text: '❌ ERROR\nMessage: Command path required\n\n💡 Usage: cmd get <category/file>\n📝 Example: cmd get general/ping.js'
                         }, { quoted: message });
                         return;
                     }
@@ -129,7 +129,7 @@ export default {
 
                     if (!fs.existsSync(fullPath)) {
                         await sock.sendMessage(from, {
-                            text: `╭──⦿【 ❌ ERROR 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: File not found\n│\n│ 📂 𝗣𝗮𝘁𝗵: ${cmdPath}\n╰────────⦿`
+                            text: `❌ ERROR\nMessage: File not found\n\n📂 Path: ${cmdPath}`
                         }, { quoted: message });
                         return;
                     }
@@ -143,7 +143,7 @@ export default {
                         document: Buffer.from(content, 'utf8'),
                         mimetype: 'text/javascript',
                         fileName: fileName,
-                        caption: `╭──⦿【 📄 COMMAND FILE 】\n│ 📁 𝗙𝗶𝗹𝗲: ${fileName}\n│ 📂 𝗣𝗮𝘁𝗵: ${cmdPath}\n│ 💾 𝗦𝗶𝘇𝗲: ${fileSize} KB\n│ 📝 𝗟𝗶𝗻𝗲𝘀: ${lines}\n╰────────⦿\n\n╭─────────────⦿\n│💫 | [ Ilom Bot 🍀 ]\n╰────────────⦿`
+                        caption: `📄 COMMAND FILE\n📁 File: ${fileName}\n📂 Path: ${cmdPath}\n💾 Size: ${fileSize} KB\n📝 Lines: ${lines}\n\n💫 Ilom Bot 🍀`
                     }, { quoted: message });
                     break;
                 }
@@ -152,7 +152,7 @@ export default {
                 case 'add': {
                     if (!args[1]) {
                         await sock.sendMessage(from, {
-                            text: '╭──⦿【 ❌ ERROR 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: URL or path required\n│\n│ 💡 𝗨𝘀𝗮𝗴𝗲: cmd install <url> [category]\n│ 📝 𝗘𝘅𝗮𝗺𝗽𝗹𝗲: cmd install https://url.com/cmd.js general\n╰────────⦿'
+                            text: '❌ ERROR\nMessage: URL or path required\n\n💡 Usage: cmd install <url> [category]\n📝 Example: cmd install https://url.com/cmd.js general'
                         }, { quoted: message });
                         return;
                     }
@@ -162,7 +162,7 @@ export default {
 
                     if (!categories.includes(targetCategory)) {
                         await sock.sendMessage(from, {
-                            text: `╭──⦿【 ❌ ERROR 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: Invalid category\n│\n│ 📁 𝗔𝘃𝗮𝗶𝗹𝗮𝗯𝗹𝗲:\n${categories.map(c => `│    • ${c}`).join('\n')}\n╰────────⦿`
+                            text: `❌ ERROR\nMessage: Invalid category\n\n📁 Available:\n${categories.map(c => `   • ${c}`).join('\n')}`
                         }, { quoted: message });
                         return;
                     }
@@ -178,14 +178,14 @@ export default {
                             if (!fileName.endsWith('.js')) fileName += '.js';
                         } catch (error) {
                             await sock.sendMessage(from, {
-                                text: `╭──⦿【 ❌ ERROR 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: Download failed\n│\n│ 🔗 𝗨𝗥𝗟: ${source}\n│ ⚠️ 𝗘𝗿𝗿𝗼𝗿: ${error.message}\n╰────────⦿`
+                                text: `❌ ERROR\nMessage: Download failed\n\n🔗 URL: ${source}\n⚠️ Error: ${error.message}`
                             }, { quoted: message });
                             return;
                         }
                     } else {
                         if (!fs.existsSync(source)) {
                             await sock.sendMessage(from, {
-                                text: `╭──⦿【 ❌ ERROR 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: File not found\n│\n│ 📂 𝗣𝗮𝘁𝗵: ${source}\n╰────────⦿`
+                                text: `❌ ERROR\nMessage: File not found\n\n📂 Path: ${source}`
                             }, { quoted: message });
                             return;
                         }
@@ -197,7 +197,7 @@ export default {
 
                     if (fs.existsSync(targetPath)) {
                         await sock.sendMessage(from, {
-                            text: `╭──⦿【 ⚠️ WARNING 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: File already exists\n│\n│ 📄 𝗙𝗶𝗹𝗲: ${fileName}\n│ 📁 𝗖𝗮𝘁𝗲𝗴𝗼𝗿𝘆: ${targetCategory}\n│\n│ 💡 Delete it first or rename\n╰────────⦿`
+                            text: `⚠️ WARNING\nMessage: File already exists\n\n📄 File: ${fileName}\n📁 Category: ${targetCategory}\n\n💡 Delete it first or rename`
                         }, { quoted: message });
                         return;
                     }
@@ -207,7 +207,7 @@ export default {
                     const fileSize = (content.length / 1024).toFixed(2);
 
                     await sock.sendMessage(from, {
-                        text: `╭──⦿【 ✅ INSTALLED 】\n│ 📄 𝗙𝗶𝗹𝗲: ${fileName}\n│ 📁 𝗖𝗮𝘁𝗲𝗴𝗼𝗿𝘆: ${targetCategory}\n│ 📂 𝗣𝗮𝘁𝗵: ${targetCategory}/${fileName}\n│ 💾 𝗦𝗶𝘇𝗲: ${fileSize} KB\n╰────────⦿\n\n╭──⦿【 ⚡ STATUS 】\n│ 🔄 Restart bot to load\n╰────────⦿\n\n╭─────────────⦿\n│💫 | [ Ilom Bot 🍀 ]\n╰────────────⦿`
+                        text: `✅ INSTALLED\n📄 File: ${fileName}\n📁 Category: ${targetCategory}\n📂 Path: ${targetCategory}/${fileName}\n💾 Size: ${fileSize} KB\n\n⚡ STATUS\n🔄 Restart bot to load\n\n💫 Ilom Bot 🍀`
                     }, { quoted: message });
                     break;
                 }
@@ -218,7 +218,7 @@ export default {
 
                     if (!categories.includes(targetCategory)) {
                         await sock.sendMessage(from, {
-                            text: `╭──⦿【 ❌ ERROR 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: Invalid category\n│\n│ 📁 𝗔𝘃𝗮𝗶𝗹𝗮𝗯𝗹𝗲:\n${categories.map(c => `│    • ${c}`).join('\n')}\n╰────────⦿`
+                            text: `❌ ERROR\nMessage: Invalid category\n\n📁 Available:\n${categories.map(c => `   • ${c}`).join('\n')}`
                         }, { quoted: message });
                         return;
                     }
@@ -228,7 +228,7 @@ export default {
 
                     if (!documentMsg) {
                         await sock.sendMessage(from, {
-                            text: `╭──⦿【 💡 UPLOAD GUIDE 】\n│ 𝗛𝗼𝘄 𝘁𝗼 𝘂𝘀𝗲:\n│\n│ 1. Send your .js file\n│ 2. Reply to it with:\n│    ${prefix}cmd upload [category]\n│\n│ 📝 𝗘𝘅𝗮𝗺𝗽𝗹𝗲:\n│    ${prefix}cmd upload general\n│    ${prefix}cmd upload fun\n╰────────⦿\n\n╭─────────────⦿\n│💫 | [ Ilom Bot 🍀 ]\n╰────────────⦿`
+                            text: `💡 UPLOAD GUIDE\nHow to use:\n\n1. Send your .js file\n2. Reply to it with:\n   ${prefix}cmd upload [category]\n\n📝 Example:\n   ${prefix}cmd upload general\n   ${prefix}cmd upload fun\n\n💫 Ilom Bot 🍀`
                         }, { quoted: message });
                         return;
                     }
@@ -237,7 +237,7 @@ export default {
                     
                     if (!fileName.endsWith('.js')) {
                         await sock.sendMessage(from, {
-                            text: '╭──⦿【 ❌ ERROR 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: Invalid file type\n│\n│ 📄 𝗥𝗲𝗾𝘂𝗶𝗿𝗲𝗱: .js file\n╰────────⦿'
+                            text: '❌ ERROR\nMessage: Invalid file type\n\n📄 Required: .js file'
                         }, { quoted: message });
                         return;
                     }
@@ -246,7 +246,7 @@ export default {
 
                     if (fs.existsSync(targetPath)) {
                         await sock.sendMessage(from, {
-                            text: `╭──⦿【 ⚠️ WARNING 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: File already exists\n│\n│ 📄 𝗙𝗶𝗹𝗲: ${fileName}\n│ 📁 𝗖𝗮𝘁𝗲𝗴𝗼𝗿𝘆: ${targetCategory}\n│\n│ 💡 Delete it first or rename\n╰────────⦿`
+                            text: `⚠️ WARNING\nMessage: File already exists\n\n📄 File: ${fileName}\n📁 Category: ${targetCategory}\n\n💡 Delete it first or rename`
                         }, { quoted: message });
                         return;
                     }
@@ -269,11 +269,11 @@ export default {
                         const fileSize = (buffer.length / 1024).toFixed(2);
 
                         await sock.sendMessage(from, {
-                            text: `╭──⦿【 ✅ UPLOADED 】\n│ 📄 𝗙𝗶𝗹𝗲: ${fileName}\n│ 📁 𝗖𝗮𝘁𝗲𝗴𝗼𝗿𝘆: ${targetCategory}\n│ 📂 𝗣𝗮𝘁𝗵: ${targetCategory}/${fileName}\n│ 💾 𝗦𝗶𝘇𝗲: ${fileSize} KB\n╰────────⦿\n\n╭──⦿【 ⚡ STATUS 】\n│ 🔄 Restart bot to load\n╰────────⦿\n\n╭─────────────⦿\n│💫 | [ Ilom Bot 🍀 ]\n╰────────────⦿`
+                            text: `✅ UPLOADED\n📄 File: ${fileName}\n📁 Category: ${targetCategory}\n📂 Path: ${targetCategory}/${fileName}\n💾 Size: ${fileSize} KB\n\n⚡ STATUS\n🔄 Restart bot to load\n\n💫 Ilom Bot 🍀`
                         }, { quoted: message });
                     } catch (error) {
                         await sock.sendMessage(from, {
-                            text: `╭──⦿【 ❌ ERROR 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: Upload failed\n│\n│ ⚠️ 𝗘𝗿𝗿𝗼𝗿: ${error.message}\n╰────────⦿`
+                            text: `❌ ERROR\nMessage: Upload failed\n\n⚠️ Error: ${error.message}`
                         }, { quoted: message });
                     }
                     break;
@@ -284,7 +284,7 @@ export default {
                 case 'rm': {
                     if (!args[1]) {
                         await sock.sendMessage(from, {
-                            text: '╭──⦿【 ❌ ERROR 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: Command path required\n│\n│ 💡 𝗨𝘀𝗮𝗴𝗲: cmd delete <category/file>\n│ 📝 𝗘𝘅𝗮𝗺𝗽𝗹𝗲: cmd delete general/test.js\n╰────────⦿'
+                            text: '❌ ERROR\nMessage: Command path required\n\n💡 Usage: cmd delete <category/file>\n📝 Example: cmd delete general/test.js'
                         }, { quoted: message });
                         return;
                     }
@@ -294,7 +294,7 @@ export default {
 
                     if (!fs.existsSync(fullPath)) {
                         await sock.sendMessage(from, {
-                            text: `╭──⦿【 ❌ ERROR 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: File not found\n│\n│ 📂 𝗣𝗮𝘁𝗵: ${cmdPath}\n╰────────⦿`
+                            text: `❌ ERROR\nMessage: File not found\n\n📂 Path: ${cmdPath}`
                         }, { quoted: message });
                         return;
                     }
@@ -303,7 +303,7 @@ export default {
                     fs.unlinkSync(fullPath);
 
                     await sock.sendMessage(from, {
-                        text: `╭──⦿【 🗑️ DELETED 】\n│ 📄 𝗙𝗶𝗹𝗲: ${fileName}\n│ 📂 𝗣𝗮𝘁𝗵: ${cmdPath}\n╰────────⦿\n\n╭──⦿【 ⚡ STATUS 】\n│ 🔄 Restart bot to apply\n╰────────⦿\n\n╭─────────────⦿\n│💫 | [ Ilom Bot 🍀 ]\n╰────────────⦿`
+                        text: `🗑️ DELETED\n📄 File: ${fileName}\n📂 Path: ${cmdPath}\n\n⚡ STATUS\n🔄 Restart bot to apply\n\n💫 Ilom Bot 🍀`
                     }, { quoted: message });
                     break;
                 }
@@ -312,7 +312,7 @@ export default {
                 case 'refresh': {
                     if (!args[1]) {
                         await sock.sendMessage(from, {
-                            text: '╭──⦿【 ❌ ERROR 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: Command name required\n│\n│ 💡 𝗨𝘀𝗮𝗴𝗲: cmd reload <name>\n│ 📝 𝗘𝘅𝗮𝗺𝗽𝗹𝗲: cmd reload ping\n╰────────⦿'
+                            text: '❌ ERROR\nMessage: Command name required\n\n💡 Usage: cmd reload <name>\n📝 Example: cmd reload ping'
                         }, { quoted: message });
                         return;
                     }
@@ -332,7 +332,7 @@ export default {
                                 if (module.default.name === cmdName || module.default.aliases?.includes(cmdName)) {
                                     found = true;
                                     await sock.sendMessage(from, {
-                                        text: `╭──⦿【 🔄 RELOADED 】\n│ 📄 𝗖𝗼𝗺𝗺𝗮𝗻𝗱: ${cmdName}\n│ 📁 𝗖𝗮𝘁𝗲𝗴𝗼𝗿𝘆: ${category}\n│ 📂 𝗙𝗶𝗹𝗲: ${file}\n╰────────⦿\n\n╭──⦿【 ⚡ STATUS 】\n│ ✨ Ready to use!\n╰────────⦿\n\n╭─────────────⦿\n│💫 | [ Ilom Bot 🍀 ]\n╰────────────⦿`
+                                        text: `🔄 RELOADED\n📄 Command: ${cmdName}\n📁 Category: ${category}\n📂 File: ${file}\n\n⚡ STATUS\n✨ Ready to use!\n\n💫 Ilom Bot 🍀`
                                     }, { quoted: message });
                                     return;
                                 }
@@ -344,7 +344,7 @@ export default {
 
                     if (!found) {
                         await sock.sendMessage(from, {
-                            text: `╭──⦿【 ❌ ERROR 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: Command not found\n│\n│ 🔍 𝗡𝗮𝗺𝗲: ${cmdName}\n╰────────⦿`
+                            text: `❌ ERROR\nMessage: Command not found\n\n🔍 Name: ${cmdName}`
                         }, { quoted: message });
                     }
                     break;
@@ -354,7 +354,7 @@ export default {
                 case 'details': {
                     if (!args[1]) {
                         await sock.sendMessage(from, {
-                            text: '╭──⦿【 ❌ ERROR 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: Command name required\n│\n│ 💡 𝗨𝘀𝗮𝗴𝗲: cmd info <name>\n│ 📝 𝗘𝘅𝗮𝗺𝗽𝗹𝗲: cmd info ping\n╰────────⦿'
+                            text: '❌ ERROR\nMessage: Command name required\n\n💡 Usage: cmd info <name>\n📝 Example: cmd info ping'
                         }, { quoted: message });
                         return;
                     }
@@ -375,21 +375,21 @@ export default {
                                 
                                 if (cmd.name === cmdName || cmd.aliases?.includes(cmdName)) {
                                     found = true;
-                                    let info = `╭──⦿【 ℹ️ COMMAND INFO 】\n`;
-                                    info += `│ 📝 𝗡𝗮𝗺𝗲: ${cmd.name}\n`;
-                                    info += `│ 🏷️ 𝗔𝗹𝗶𝗮𝘀𝗲𝘀: ${cmd.aliases?.join(', ') || 'None'}\n`;
-                                    info += `│ 📁 𝗖𝗮𝘁𝗲𝗴𝗼𝗿𝘆: ${category}\n`;
-                                    info += `│ 📄 𝗙𝗶𝗹𝗲: ${file}\n`;
-                                    info += `│ 📖 𝗗𝗲𝘀𝗰: ${cmd.description || 'No description'}\n`;
-                                    info += `│ 💡 𝗨𝘀𝗮𝗴𝗲: ${prefix}${cmd.usage || cmd.name}\n`;
-                                    info += `│ ⏱️ 𝗖𝗼𝗼𝗹𝗱𝗼𝘄𝗻: ${cmd.cooldown || 0}s\n`;
-                                    info += `│ 🔒 𝗣𝗲𝗿𝗺𝗶𝘀𝘀𝗶𝗼𝗻𝘀: ${cmd.permissions?.join(', ') || 'All'}\n`;
-                                    info += `│ 💎 𝗣𝗿𝗲𝗺𝗶𝘂𝗺: ${cmd.premium ? 'Yes' : 'No'}\n`;
-                                    info += `│ 👁️ 𝗛𝗶𝗱𝗱𝗲𝗻: ${cmd.hidden ? 'Yes' : 'No'}\n`;
+                                    let info = `ℹ️ COMMAND INFO\n`;
+                                    info += `📝 Name: ${cmd.name}\n`;
+                                    info += `🏷️ Aliases: ${cmd.aliases?.join(', ') || 'None'}\n`;
+                                    info += `📁 Category: ${category}\n`;
+                                    info += `📄 File: ${file}\n`;
+                                    info += `📖 Desc: ${cmd.description || 'No description'}\n`;
+                                    info += `💡 Usage: ${prefix}${cmd.usage || cmd.name}\n`;
+                                    info += `⏱️ Cooldown: ${cmd.cooldown || 0}s\n`;
+                                    info += `🔒 Permissions: ${cmd.permissions?.join(', ') || 'All'}\n`;
+                                    info += `💎 Premium: ${cmd.premium ? 'Yes' : 'No'}\n`;
+                                    info += `👁️ Hidden: ${cmd.hidden ? 'Yes' : 'No'}\n`;
                                     if (cmd.example) {
-                                        info += `│\n│ 📝 𝗘𝘅𝗮𝗺𝗽𝗹𝗲:\n${cmd.example.split('\n').map(line => `│    ${line}`).join('\n')}\n`;
+                                        info += `\n📝 Example:\n${cmd.example.split('\n').map(line => `   ${line}`).join('\n')}\n`;
                                     }
-                                    info += '╰────────⦿\n\n╭─────────────⦿\n│💫 | [ Ilom Bot 🍀 ]\n╰────────────⦿';
+                                    info += `\n💫 Ilom Bot 🍀`;
 
                                     await sock.sendMessage(from, { text: info }, { quoted: message });
                                     return;
@@ -402,14 +402,14 @@ export default {
 
                     if (!found) {
                         await sock.sendMessage(from, {
-                            text: `╭──⦿【 ❌ ERROR 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: Command not found\n│\n│ 🔍 𝗡𝗮𝗺𝗲: ${cmdName}\n╰────────⦿`
+                            text: `❌ ERROR\nMessage: Command not found\n\n🔍 Name: ${cmdName}`
                         }, { quoted: message });
                     }
                     break;
                 }
 
                 default: {
-                    const helpText = `╭──⦿【 🛠️ CMD MANAGEMENT 】\n│\n│ 📋 𝗔𝘃𝗮𝗶𝗹𝗮𝗯𝗹𝗲 𝗔𝗰𝘁𝗶𝗼𝗻𝘀:\n│\n│ 📂 list [category] - List commands\n│ 🔍 find <name> - Search commands\n│ 📥 get <path> - Download command\n│ 📦 install <url> [category] - Install from URL\n│ 📤 upload [category] - Upload from file\n│ 🗑️ delete <path> - Remove command\n│ 🔄 reload <name> - Reload command\n│ ℹ️ info <name> - Show details\n│\n│ 📝 𝗘𝘅𝗮𝗺𝗽𝗹𝗲𝘀:\n│ • ${prefix}cmd list fun\n│ • ${prefix}cmd find ping\n│ • ${prefix}cmd get general/ping.js\n│ • ${prefix}cmd info help\n│ • ${prefix}cmd reload menu\n│\n╰────────⦿\n\n╭─────────────⦿\n│💫 | [ Ilom Bot 🍀 ]\n╰────────────⦿`;
+                    const helpText = `🛠️ CMD MANAGEMENT\n\n📋 Available Actions:\n\n📂 list [category] - List commands\n🔍 find <name> - Search commands\n📥 get <path> - Download command\n📦 install <url> [category] - Install from URL\n📤 upload [category] - Upload from file\n🗑️ delete <path> - Remove command\n🔄 reload <name> - Reload command\nℹ️ info <name> - Show details\n\n📝 Examples:\n• ${prefix}cmd list fun\n• ${prefix}cmd find ping\n• ${prefix}cmd get general/ping.js\n• ${prefix}cmd info help\n• ${prefix}cmd reload menu\n\n💫 Ilom Bot 🍀`;
                     
                     await sock.sendMessage(from, { text: helpText }, { quoted: message });
                     break;
@@ -419,7 +419,7 @@ export default {
         } catch (error) {
             console.error('CMD command error:', error);
             await sock.sendMessage(from, {
-                text: `╭──⦿【 ❌ SYSTEM ERROR 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: ${error.message}\n│\n│ ⚠️ Command system error\n│ 🔄 Please try again\n╰────────⦿`
+                text: `❌ SYSTEM ERROR\nMessage: ${error.message}\n\n⚠️ Command system error\n🔄 Please try again`
             }, { quoted: message });
         }
     }
