@@ -24,7 +24,7 @@ export default {
     ownerOnly: true,
     supportsReply: false,
     supportsChat: false,
-    supportsReact: false,
+    supportsReact: true,
     supportsButtons: false,
 
     async execute({ sock, message, args, command, user, group, from, sender, isGroup, isGroupAdmin, isBotAdmin, prefix }) {
@@ -195,20 +195,65 @@ export default {
 
                     const targetPath = path.join(commandsDir, targetCategory, fileName);
 
-                    if (fs.existsSync(targetPath)) {
+                    if (!fs.existsSync(targetPath)) {
+                        fs.writeFileSync(targetPath, content);
+
+                        const fileSize = (content.length / 1024).toFixed(2);
+
                         await sock.sendMessage(from, {
-                            text: `⚠️ WARNING\nMessage: File already exists\n\n📄 File: ${fileName}\n📁 Category: ${targetCategory}\n\n💡 Delete it first or rename`
+                            text: `✅ INSTALLED\n📄 File: ${fileName}\n📁 Category: ${targetCategory}\n📂 Path: ${targetCategory}/${fileName}\n💾 Size: ${fileSize} KB\n\n⚡ STATUS\n🔄 Restart bot to load\n\n💫 Ilom Bot 🍀`
                         }, { quoted: message });
-                        return;
+                    } else {
+                        const confirmationText = `⚠️ WARNING\nMessage: File already exists\n\n📄 File: ${fileName}\n📁 Category: ${targetCategory}\n\n💡 React ❤️ to replace`;
+                        
+                        const sentMsg = await sock.sendMessage(from, { text: confirmationText }, { quoted: message });
+                        const confirmationKey = sentMsg.key;
+                        
+                        let replaced = false;
+                        
+                        const listener = (item) => {
+                            if (item.type !== 'notify') return;
+                            const m = item.messages[0];
+                            if (
+                                m.key.remoteJid === from &&
+                                !m.key.fromMe &&
+                                m.message?.reactionMessage &&
+                                m.message.reactionMessage.key.remoteJid === from &&
+                                m.message.reactionMessage.key.id === confirmationKey.id &&
+                                m.message.reactionMessage.text === '❤️'
+                            ) {
+                                if (replaced) return;
+                                replaced = true;
+                                // Replace file
+                                (async () => {
+                                    try {
+                                        fs.writeFileSync(targetPath, content);
+                                        
+                                        const fileSize = (content.length / 1024).toFixed(2);
+                                        
+                                        await sock.sendMessage(from, {
+                                            text: `✅ INSTALLED (Replaced)\n📄 File: ${fileName}\n📁 Category: ${targetCategory}\n📂 Path: ${targetCategory}/${fileName}\n💾 Size: ${fileSize} KB\n\n⚡ STATUS\n🔄 Restart bot to load\n\n💫 Ilom Bot 🍀`
+                                        }, { quoted: sentMsg });
+                                    } catch (error) {
+                                        await sock.sendMessage(from, {
+                                            text: `❌ ERROR\nMessage: Replace failed\n\n⚠️ Error: ${error.message}`
+                                        }, { quoted: sentMsg });
+                                    } finally {
+                                        sock.ev.removeListener('messages.upsert', listener);
+                                    }
+                                })();
+                            }
+                        };
+                        
+                        sock.ev.on('messages.upsert', listener);
+                        
+                        setTimeout(() => {
+                            if (!replaced) {
+                                sock.ev.removeListener('messages.upsert', listener);
+                                // sock.sendMessage(from, { text: '❌ Confirmation timed out.' }, { quoted: sentMsg });
+                            }
+                        }, 60000);
                     }
-
-                    fs.writeFileSync(targetPath, content);
-
-                    const fileSize = (content.length / 1024).toFixed(2);
-
-                    await sock.sendMessage(from, {
-                        text: `✅ INSTALLED\n📄 File: ${fileName}\n📁 Category: ${targetCategory}\n📂 Path: ${targetCategory}/${fileName}\n💾 Size: ${fileSize} KB\n\n⚡ STATUS\n🔄 Restart bot to load\n\n💫 Ilom Bot 🍀`
-                    }, { quoted: message });
                     break;
                 }
 
@@ -243,38 +288,112 @@ export default {
                     }
 
                     const targetPath = path.join(commandsDir, targetCategory, fileName);
+                    const quotedMessageObj = message.message.extendedTextMessage.contextInfo.quotedMessage;
 
-                    if (fs.existsSync(targetPath)) {
+                    // Extract stanzaId safely
+                    const contextInfo = message.message.extendedTextMessage?.contextInfo;
+                    let stanzaId = null;
+                    if (contextInfo && contextInfo.stanzaId) {
+                        stanzaId = contextInfo.stanzaId;
+                    } else {
                         await sock.sendMessage(from, {
-                            text: `⚠️ WARNING\nMessage: File already exists\n\n📄 File: ${fileName}\n📁 Category: ${targetCategory}\n\n💡 Delete it first or rename`
+                            text: `❌ ERROR\nMessage: Cannot access quoted message ID\n\n⚠️ Please ensure you're replying to a valid file message`
                         }, { quoted: message });
                         return;
                     }
 
-                    try {
-                        const { downloadMediaMessage } = await import('@whiskeysockets/baileys');
-                        const quotedMessage = message.message.extendedTextMessage.contextInfo.quotedMessage;
-                        
-                        const buffer = await downloadMediaMessage(
-                            { 
-                                message: quotedMessage,
-                                key: message.message.extendedTextMessage.contextInfo.stanzaId || message.key
-                            }, 
-                            'buffer', 
-                            {}
-                        );
-                        
-                        fs.writeFileSync(targetPath, buffer);
+                    const quotedKey = {
+                        remoteJid: from,
+                        id: stanzaId,
+                        fromMe: false,
+                        ...(isGroup && { participant: sender })
+                    };
 
-                        const fileSize = (buffer.length / 1024).toFixed(2);
+                    if (!fs.existsSync(targetPath)) {
+                        try {
+                            const { downloadMediaMessage } = await import('@whiskeysockets/baileys');
+                            
+                            const buffer = await downloadMediaMessage(
+                                { 
+                                    message: quotedMessageObj,
+                                    key: quotedKey
+                                }, 
+                                'buffer', 
+                                {}
+                            );
+                            
+                            fs.writeFileSync(targetPath, buffer);
 
-                        await sock.sendMessage(from, {
-                            text: `✅ UPLOADED\n📄 File: ${fileName}\n📁 Category: ${targetCategory}\n📂 Path: ${targetCategory}/${fileName}\n💾 Size: ${fileSize} KB\n\n⚡ STATUS\n🔄 Restart bot to load\n\n💫 Ilom Bot 🍀`
-                        }, { quoted: message });
-                    } catch (error) {
-                        await sock.sendMessage(from, {
-                            text: `❌ ERROR\nMessage: Upload failed\n\n⚠️ Error: ${error.message}`
-                        }, { quoted: message });
+                            const fileSize = (buffer.length / 1024).toFixed(2);
+
+                            await sock.sendMessage(from, {
+                                text: `✅ UPLOADED\n📄 File: ${fileName}\n📁 Category: ${targetCategory}\n📂 Path: ${targetCategory}/${fileName}\n💾 Size: ${fileSize} KB\n\n⚡ STATUS\n🔄 Restart bot to load\n\n💫 Ilom Bot 🍀`
+                            }, { quoted: message });
+                        } catch (error) {
+                            await sock.sendMessage(from, {
+                                text: `❌ ERROR\nMessage: Upload failed\n\n⚠️ Error: ${error.message}`
+                            }, { quoted: message });
+                        }
+                    } else {
+                        const confirmationText = `⚠️ WARNING\nMessage: File already exists\n\n📄 File: ${fileName}\n📁 Category: ${targetCategory}\n\n💡 React ❤️ to replace`;
+                        
+                        const sentMsg = await sock.sendMessage(from, { text: confirmationText }, { quoted: message });
+                        const confirmationKey = sentMsg.key;
+                        
+                        let replaced = false;
+                        
+                        const listener = (item) => {
+                            if (item.type !== 'notify') return;
+                            const m = item.messages[0];
+                            if (
+                                m.key.remoteJid === from &&
+                                !m.key.fromMe &&
+                                m.message?.reactionMessage &&
+                                m.message.reactionMessage.key.remoteJid === from &&
+                                m.message.reactionMessage.key.id === confirmationKey.id &&
+                                m.message.reactionMessage.text === '❤️'
+                            ) {
+                                if (replaced) return;
+                                replaced = true;
+                                // Download and replace
+                                (async () => {
+                                    try {
+                                        const { downloadMediaMessage } = await import('@whiskeysockets/baileys');
+                                        const buffer = await downloadMediaMessage(
+                                            { 
+                                                message: quotedMessageObj,
+                                                key: quotedKey
+                                            }, 
+                                            'buffer', 
+                                            {}
+                                        );
+                                        
+                                        fs.writeFileSync(targetPath, buffer);
+                                        
+                                        const fileSize = (buffer.length / 1024).toFixed(2);
+                                        
+                                        await sock.sendMessage(from, {
+                                            text: `✅ UPLOADED (Replaced)\n📄 File: ${fileName}\n📁 Category: ${targetCategory}\n📂 Path: ${targetCategory}/${fileName}\n💾 Size: ${fileSize} KB\n\n⚡ STATUS\n🔄 Restart bot to load\n\n💫 Ilom Bot 🍀`
+                                        }, { quoted: sentMsg });
+                                    } catch (error) {
+                                        await sock.sendMessage(from, {
+                                            text: `❌ ERROR\nMessage: Replace failed\n\n⚠️ Error: ${error.message}`
+                                        }, { quoted: sentMsg });
+                                    } finally {
+                                        sock.ev.removeListener('messages.upsert', listener);
+                                    }
+                                })();
+                            }
+                        };
+                        
+                        sock.ev.on('messages.upsert', listener);
+                        
+                        setTimeout(() => {
+                            if (!replaced) {
+                                sock.ev.removeListener('messages.upsert', listener);
+                                // sock.sendMessage(from, { text: '❌ Confirmation timed out.' }, { quoted: sentMsg });
+                            }
+                        }, 60000);
                     }
                     break;
                 }
