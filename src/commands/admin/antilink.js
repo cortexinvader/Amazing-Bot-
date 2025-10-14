@@ -18,13 +18,19 @@ export default {
         if (!isGroup) {
             return await sock.sendMessage(from, {
                 text: '❌ *Group Only*\n\nThis command can only be used in groups.'
-            });
+            }, { quoted: message });
+        }
+
+        if (!isGroupAdmin) {
+            return await sock.sendMessage(from, {
+                text: '❌ *Admin Only*\n\nYou need to be a group admin to use this command.'
+            }, { quoted: message });
         }
 
         if (!isBotAdmin) {
             return await sock.sendMessage(from, {
                 text: '❌ *Bot Not Admin*\n\nI need to be an admin to manage antilink protection.'
-            });
+            }, { quoted: message });
         }
 
         try {
@@ -34,7 +40,7 @@ export default {
             if (!action) {
                 return await sock.sendMessage(from, {
                     text: `🔗 *Antilink Status*\n\n*Current:* ${currentStatus ? 'Enabled ✅' : 'Disabled ❌'}\n\n*Usage:* ${config.prefix}antilink [on/off]`
-                });
+                }, { quoted: message });
             }
 
             let newStatus;
@@ -45,7 +51,7 @@ export default {
             } else {
                 return await sock.sendMessage(from, {
                     text: '❌ *Invalid Option*\n\nUse: on/off, enable/disable, or 1/0'
-                });
+                }, { quoted: message });
             }
 
             await updateGroup(from, {
@@ -59,13 +65,12 @@ export default {
 
             await sock.sendMessage(from, {
                 text: `🔗 *Antilink Protection*\n\n*Status:* ${statusText}\n\n${actionText}`
-            });
+            }, { quoted: message });
 
         } catch (error) {
-            console.error('Antilink command error:', error);
             await sock.sendMessage(from, {
                 text: '❌ *Error*\n\nFailed to update antilink settings.'
-            });
+            }, { quoted: message });
         }
     }
 };

@@ -11,20 +11,26 @@ export default {
         if (!isGroup) {
             return await sock.sendMessage(from, {
                 text: '❌ *Group Only*\n\nThis command can only be used in groups.'
-            });
+            }, { quoted: message });
+        }
+
+        if (!isGroupAdmin) {
+            return await sock.sendMessage(from, {
+                text: '❌ *Admin Only*\n\nYou need to be a group admin to use this command.'
+            }, { quoted: message });
         }
 
         if (!isBotAdmin) {
             return await sock.sendMessage(from, {
                 text: '❌ *Bot Not Admin*\n\nI need to be an admin to delete messages.'
-            });
+            }, { quoted: message });
         }
 
         const quotedMessage = message.message?.extendedTextMessage?.contextInfo?.quotedMessage;
         if (!quotedMessage) {
             return await sock.sendMessage(from, {
                 text: '❌ *No Message*\n\nReply to the message you want to delete.'
-            });
+            }, { quoted: message });
         }
 
         try {
@@ -42,13 +48,12 @@ export default {
 
             await sock.sendMessage(from, {
                 text: '✅ *Message Deleted*\n\nThe selected message has been deleted.'
-            });
+            }, { quoted: message });
 
         } catch (error) {
-            console.error('Delete command error:', error);
             await sock.sendMessage(from, {
                 text: '❌ *Error*\n\nFailed to delete the message. Make sure I have admin permissions.'
-            });
+            }, { quoted: message });
         }
     }
 };

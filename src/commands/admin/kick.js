@@ -11,11 +11,18 @@ export default {
     groupOnly: true,
     adminOnly: true,
 
-    async execute({ sock, message, args, from, isGroup, isBotAdmin }) {
+    async execute({ sock, message, args, from, isGroup, isGroupAdmin, isBotAdmin }) {
         if (!isGroup) {
             return sock.sendMessage(from, {
                 text: formatResponse.error('GROUP ONLY',
                     'This command can only be used in groups')
+            }, { quoted: message });
+        }
+
+        if (!isGroupAdmin) {
+            return sock.sendMessage(from, {
+                text: formatResponse.error('ADMIN ONLY',
+                    'You need to be a group admin to use this command')
             }, { quoted: message });
         }
 

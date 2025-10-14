@@ -13,7 +13,13 @@ export default {
     cooldown: 5,
     permissions: ['admin'],
 
-    async execute({ sock, message, args, from, sender, isGroup }) {
+    async execute({ sock, message, args, from, sender, isGroup, isGroupAdmin }) {
+        if (!isGroupAdmin) {
+            return sock.sendMessage(from, {
+                text: '❌ *Admin Only*\n\nYou need to be a group admin to use this command.'
+            }, { quoted: message });
+        }
+
         let targetUser;
         let reason = 'No reason provided';
         
@@ -34,19 +40,19 @@ export default {
         if (!targetUser) {
             return sock.sendMessage(from, {
                 text: `❌ *Usage Error*\n\nPlease specify a user to ban:\n• Reply to their message\n• Mention them: @user\n• Use their number: ${config.prefix}ban 1234567890`
-            });
+            }, { quoted: message });
         }
 
         if (config.ownerNumbers.includes(targetUser)) {
             return sock.sendMessage(from, {
                 text: '❌ *Error*\n\nCannot ban the bot owner!'
-            });
+            }, { quoted: message });
         }
 
         if (targetUser === sender) {
             return sock.sendMessage(from, {
                 text: '❌ *Error*\n\nYou cannot ban yourself!'
-            });
+            }, { quoted: message });
         }
 
         try {
@@ -71,12 +77,12 @@ export default {
                 contextInfo: {
                     mentionedJid: [targetUser, sender]
                 }
-            });
+            }, { quoted: message });
 
         } catch (error) {
             await sock.sendMessage(from, {
                 text: '❌ *Error*\n\nFailed to ban user. Please try again.'
-            });
+            }, { quoted: message });
         }
     }
 };
