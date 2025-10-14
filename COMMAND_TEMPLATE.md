@@ -273,7 +273,117 @@ export default {
 };
 ```
 
-### 5. Button Support (supportsButtons: true)
+### 5. Reaction Handler (supportsReact: true)
+
+Allow users to react to messages for confirmation with automatic category detection:
+
+```javascript
+import fs from 'fs-extra';
+import path from 'path';
+
+export default {
+    name: 'file',
+    category: 'owner',
+    description: 'Create or replace command file with reaction confirmation',
+    usage: 'file <category/filename.js> | <content>',
+    ownerOnly: true,
+    supportsReact: true,
+    
+    async execute({ sock, message, args, from, sender }) {
+        const fullText = args.join(' ');
+        const [filePath, ...contentParts] = fullText.split('|');
+        const fileContent = contentParts.join('|').trim();
+        const cleanPath = filePath.trim();
+        
+        const validCategories = ['admin', 'ai', 'downloader', 'economy', 'fun', 'games', 'general', 'media', 'owner', 'utility'];
+        let category = '';
+        let filename = '';
+        
+        if (cleanPath.includes('/')) {
+            const parts = cleanPath.split('/');
+            category = parts[0].toLowerCase();
+            filename = parts[parts.length - 1];
+        } else {
+            filename = cleanPath;
+        }
+        
+        if (category && !validCategories.includes(category)) {
+            return await sock.sendMessage(from, {
+                text: `❌ *Invalid Category*\n\n"${category}" is not valid.\n\n*Valid:* ${validCategories.join(', ')}`
+            }, { quoted: message });
+        }
+        
+        if (!filename.endsWith('.js')) filename += '.js';
+        
+        const finalPath = category 
+            ? path.join(process.cwd(), 'src', 'commands', category, filename)
+            : path.join(process.cwd(), cleanPath);
+        
+        const displayPath = category 
+            ? `src/commands/${category}/${filename}`
+            : cleanPath;
+        
+        const fileExists = await fs.pathExists(finalPath);
+        
+        if (fileExists) {
+            const confirmMsg = await sock.sendMessage(from, {
+                text: `⚠️ *File Already Exists*\n\n*Path:* ${displayPath}\n*Category:* ${category}\n\nReact:\n✅ - Replace\n❌ - Cancel`
+            }, { quoted: message });
+            
+            await sock.sendMessage(from, {
+                react: { text: '✅', key: confirmMsg.key }
+            });
+            await sock.sendMessage(from, {
+                react: { text: '❌', key: confirmMsg.key }
+            });
+            
+            this.setupReactionHandler(sock, from, confirmMsg.key.id, sender, finalPath, fileContent, displayPath, category);
+        } else {
+            await fs.ensureDir(path.dirname(finalPath));
+            await fs.writeFile(finalPath, fileContent, 'utf8');
+            
+            await sock.sendMessage(from, {
+                text: `✅ *File Created*\n\n*Path:* ${displayPath}\n*Category:* ${category}\n*Size:* ${fileContent.length} bytes`,
+                mentions: [sender]
+            }, { quoted: message });
+        }
+    },
+    
+    setupReactionHandler(sock, from, messageId, sender, filePath, fileContent, displayPath, category) {
+        const reactionTimeout = setTimeout(() => {
+            if (global.reactHandlers?.[messageId]) {
+                delete global.reactHandlers[messageId];
+            }
+        }, 60000);
+        
+        if (!global.reactHandlers) global.reactHandlers = {};
+        
+        global.reactHandlers[messageId] = {
+            command: this.name,
+            timeout: reactionTimeout,
+            handler: async (reactionEmoji, reactSender) => {
+                if (reactSender !== sender) return;
+                clearTimeout(reactionTimeout);
+                
+                if (reactionEmoji === '✅') {
+                    await fs.writeFile(filePath, fileContent, 'utf8');
+                    await sock.sendMessage(from, {
+                        text: `✅ *File Replaced*\n\n*Path:* ${displayPath}\n*Category:* ${category}`
+                    });
+                } else if (reactionEmoji === '❌') {
+                    await sock.sendMessage(from, {
+                        text: `❌ *Cancelled*\n\nFile not modified.`
+                    });
+                }
+                
+                delete global.reactHandlers[messageId];
+            }
+        };
+    }
+};
+```
+
+### 6. Button Support (supportsButtons: true)
 
 Send interactive buttons:
 
@@ -299,7 +409,7 @@ export default {
 };
 ```
 
-### 6. Database Integration
+### 7. Database Integration
 
 Work with user and group data:
 
@@ -333,7 +443,7 @@ export default {
 };
 ```
 
-### 7. External API Integration
+### 8. External API Integration
 
 Fetch data from external services:
 
@@ -382,7 +492,7 @@ export default {
 };
 ```
 
-### 8. Media Processing
+### 9. Media Processing
 
 Handle images, videos, and stickers:
 
