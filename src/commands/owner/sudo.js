@@ -1,173 +1,127 @@
-import { exec } from 'child_process';
-import util from 'util';
-import os from 'os';
 import config from '../../config.js';
-
-const execPromise = util.promisify(exec);
+import fs from 'fs';
+import path from 'path';
 
 export default {
     name: 'sudo',
-    aliases: ['root', 'admin'],
+    aliases: ['addadmin', 'makeadmin'],
     category: 'owner',
-    description: 'Execute privileged shell commands with elevated permissions',
-    usage: 'sudo <command>',
-    example: 'sudo npm install -g pm2\nsudo systemctl status\nsudo cat /etc/hosts',
+    description: 'Add or remove bot admin users',
+    usage: 'sudo add/remove [@user]',
     cooldown: 0,
     permissions: ['owner'],
     ownerOnly: true,
-    minArgs: 1,
 
     async execute({ sock, message, args, from, sender }) {
-        const command = args.join(' ');
-        
-        const highRiskCommands = [
-            'rm -rf /', 'rm -rf *', 'rm -rf ~', 'rm -rf .',
-            'mkfs', 'dd if=/dev/zero', 'dd if=/dev/random',
-            ':(){:|:&};:', 'fork bomb', '>()',
-            'shutdown', 'reboot', 'init 0', 'init 6',
-            'halt', 'poweroff', 'systemctl poweroff',
-            'systemctl reboot', 'passwd', 'userdel',
-            'deluser', 'killall -9', 'kill -9 1'
-        ];
-        
-        const isHighRisk = highRiskCommands.some(cmd => 
-            command.toLowerCase().includes(cmd.toLowerCase())
-        );
-        
-        if (isHighRisk) {
-            return sock.sendMessage(from, {
-                text: `🚫 *HIGH RISK COMMAND BLOCKED*
-
-*Command:* \`sudo ${command}\`
-
-*Risk Level:* CRITICAL ⚠️
-
-*Reason:* This command could cause system damage, data loss, or service interruption.
-
-*Actions Blocked:*
-• System destruction
-• Service shutdown
-• User account manipulation
-• Fork bombs
-• Disk operations
-
-_For safety, high-risk commands are permanently blocked. Use alternative safe methods._`
-            }, { quoted: message });
-        }
-
-        const moderateRiskCommands = [
-            'apt remove', 'apt purge', 'apt autoremove',
-            'yum remove', 'pacman -R', 'npm uninstall -g',
-            'systemctl stop', 'systemctl disable',
-            'chmod 000', 'chown root', 'iptables -F'
-        ];
-        
-        const isModerateRisk = moderateRiskCommands.some(cmd => 
-            command.toLowerCase().includes(cmd.toLowerCase())
-        );
-
-        if (isModerateRisk) {
-            await sock.sendMessage(from, {
-                text: `⚠️ *MODERATE RISK COMMAND DETECTED*
-
-*Command:* \`sudo ${command}\`
-
-*Risk Level:* MODERATE ⚠️
-
-*Warning:* This command may modify system configuration or remove packages.
-
-_Proceeding with execution... Monitor output carefully._`
-            }, { quoted: message });
-        }
-
-        await sock.sendMessage(from, {
-            text: `🔐 *Executing Privileged Command*
-
-\`\`\`bash
-# ${command}
-\`\`\`
-
-*User:* ${os.userInfo().username}
-*Host:* ${os.hostname()}
-*Platform:* ${process.platform}
-
-⏳ _Executing with elevated permissions..._`
-        }, { quoted: message });
-
         try {
-            const sudoCommand = process.platform === 'win32' 
-                ? command 
-                : command;
+            const action = args[0]?.toLowerCase();
+            const mentionedUsers = message.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+            const quotedUser = message.message?.extendedTextMessage?.contextInfo?.participant;
 
-            const { stdout, stderr } = await execPromise(sudoCommand, {
-                timeout: 120000,
-                maxBuffer: 1024 * 1024 * 10,
-                cwd: process.cwd(),
-                shell: '/bin/bash',
-                env: {
-                    ...process.env,
-                    SUDO_USER: os.userInfo().username,
-                    SUDO_COMMAND: command
+            let targetJid;
+            if (quotedUser) {
+                targetJid = quotedUser;
+            } else if (mentionedUsers.length > 0) {
+                targetJid = mentionedUsers[0];
+            } else {
+                return await sock.sendMessage(from, {
+                    text: '❌ *No User Specified*\n\nReply to a message or mention a user.\n\n*Usage:*\n• .sudo add @user\n• .sudo remove @user\n• .sudo list'
+                }, { quoted: message });
+            }
+
+            if (!action || (action !== 'add' && action !== 'remove' && action !== 'list')) {
+                return await sock.sendMessage(from, {
+                    text: '❌ *Invalid Action*\n\nAvailable actions:\n• add - Add bot admin\n• remove - Remove bot admin\n• list - View all admins\n\n*Usage:* .sudo add @user'
+                }, { quoted: message });
+            }
+
+            if (action === 'list') {
+                const adminList = config.sudoers || [];
+                if (adminList.length === 0) {
+                    return await sock.sendMessage(from, {
+                        text: '📋 *Bot Admin List*\n\nNo bot admins configured.\n\nUse `.sudo add @user` to add admins.'
+                    }, { quoted: message });
                 }
-            });
 
-            const output = stdout || stderr || 'Command executed successfully (no output)';
-            const truncated = output.length > 3500 
-                ? output.substring(0, 3500) + '\n\n...[Output truncated. Total length: ' + output.length + ' chars]' 
-                : output;
+                let listText = '📋 *Bot Admin List*\n\n';
+                adminList.forEach((admin, index) => {
+                    const number = admin.replace('@s.whatsapp.net', '');
+                    listText += `${index + 1}. @${number}\n`;
+                });
+                listText += `\n*Total:* ${adminList.length} admins`;
 
-            const statusEmoji = stderr && !stdout ? '⚠️' : '✅';
-            const statusText = stderr && !stdout ? 'Completed with warnings' : 'Success';
+                return await sock.sendMessage(from, {
+                    text: listText,
+                    mentions: adminList
+                }, { quoted: message });
+            }
 
-            await sock.sendMessage(from, {
-                text: `${statusEmoji} *Privileged Command Executed*
+            const targetNumber = targetJid.split('@')[0];
 
-*Command:*
-\`\`\`bash
-# ${command}
-\`\`\`
+            if (action === 'add') {
+                if (config.sudoers.includes(targetJid)) {
+                    return await sock.sendMessage(from, {
+                        text: `ℹ️ *Already Admin*\n\n@${targetNumber} is already a bot admin.`,
+                        mentions: [targetJid]
+                    }, { quoted: message });
+                }
 
-*Output:*
-\`\`\`
-${truncated}
-\`\`\`
+                config.sudoers.push(targetJid);
 
-*Status:* ${statusText}
-*User:* ${os.userInfo().username}
-*Time:* ${new Date().toLocaleString()}
-*Platform:* ${process.platform} (${process.arch})`
-            }, { quoted: message });
+                const configPath = path.join(process.cwd(), 'src', 'config.js');
+                const configContent = fs.readFileSync(configPath, 'utf8');
+                const updatedConfig = configContent.replace(
+                    /sudoers:\s*\[([^\]]*)\]/,
+                    `sudoers: [${config.sudoers.map(s => `'${s}'`).join(', ')}]`
+                );
+                fs.writeFileSync(configPath, updatedConfig, 'utf8');
+
+                await sock.sendMessage(from, {
+                    text: `✅ *Bot Admin Added*\n\n*User:* @${targetNumber}\n*Added by:* @${sender.split('@')[0]}\n*Date:* ${new Date().toLocaleString()}\n\n@${targetNumber} now has bot admin privileges and can use owner commands.`,
+                    mentions: [targetJid, sender]
+                }, { quoted: message });
+
+                try {
+                    await sock.sendMessage(targetJid, {
+                        text: `👑 *You Are Now Bot Admin*\n\n*Added by:* @${sender.split('@')[0]}\n*Date:* ${new Date().toLocaleString()}\n\nYou now have bot admin privileges. Use them responsibly!`,
+                        mentions: [sender]
+                    });
+                } catch (e) {}
+
+            } else if (action === 'remove') {
+                if (!config.sudoers.includes(targetJid)) {
+                    return await sock.sendMessage(from, {
+                        text: `ℹ️ *Not Admin*\n\n@${targetNumber} is not a bot admin.`,
+                        mentions: [targetJid]
+                    }, { quoted: message });
+                }
+
+                config.sudoers = config.sudoers.filter(s => s !== targetJid);
+
+                const configPath = path.join(process.cwd(), 'src', 'config.js');
+                const configContent = fs.readFileSync(configPath, 'utf8');
+                const updatedConfig = configContent.replace(
+                    /sudoers:\s*\[([^\]]*)\]/,
+                    `sudoers: [${config.sudoers.map(s => `'${s}'`).join(', ')}]`
+                );
+                fs.writeFileSync(configPath, updatedConfig, 'utf8');
+
+                await sock.sendMessage(from, {
+                    text: `✅ *Bot Admin Removed*\n\n*User:* @${targetNumber}\n*Removed by:* @${sender.split('@')[0]}\n*Date:* ${new Date().toLocaleString()}\n\n@${targetNumber} no longer has bot admin privileges.`,
+                    mentions: [targetJid, sender]
+                }, { quoted: message });
+
+                try {
+                    await sock.sendMessage(targetJid, {
+                        text: `⚠️ *Bot Admin Removed*\n\n*Removed by:* @${sender.split('@')[0]}\n*Date:* ${new Date().toLocaleString()}\n\nYour bot admin privileges have been revoked.`,
+                        mentions: [sender]
+                    });
+                } catch (e) {}
+            }
 
         } catch (error) {
-            const errorOutput = error.stdout || error.stderr || error.message;
-            const truncated = errorOutput.length > 3000 
-                ? errorOutput.substring(0, 3000) + '\n\n...[Error truncated]' 
-                : errorOutput;
-
             await sock.sendMessage(from, {
-                text: `❌ *Privileged Command Failed*
-
-*Command:*
-\`\`\`bash
-# ${command}
-\`\`\`
-
-*Error:*
-\`\`\`
-${truncated}
-\`\`\`
-
-*Exit Code:* ${error.code || 'Unknown'}
-*Signal:* ${error.signal || 'None'}
-*Status:* Failed ❌
-
-*Possible Reasons:*
-• Insufficient permissions
-• Command not found
-• Invalid syntax
-• Service not available
-
-_Try running without sudo or check command syntax._`
+                text: '❌ *Error*\n\nFailed to update bot admin list. Please try again.'
             }, { quoted: message });
         }
     }

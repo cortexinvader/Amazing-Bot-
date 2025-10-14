@@ -11,13 +11,19 @@ export default {
         if (!isGroup) {
             return await sock.sendMessage(from, {
                 text: '❌ *Group Only*\n\nThis command can only be used in groups.'
-            });
+            }, { quoted: message });
+        }
+
+        if (!isGroupAdmin) {
+            return await sock.sendMessage(from, {
+                text: '❌ *Admin Only*\n\nYou need to be a group admin to use this command.'
+            }, { quoted: message });
         }
 
         if (!isBotAdmin) {
             return await sock.sendMessage(from, {
                 text: '❌ *Bot Not Admin*\n\nI need to be an admin to change group description.'
-            });
+            }, { quoted: message });
         }
 
         try {
@@ -25,13 +31,13 @@ export default {
             if (!newDescription) {
                 return await sock.sendMessage(from, {
                     text: '❌ *No Description*\n\nPlease provide a new description.\n\n*Usage:* .setdesc Your new group description here'
-                });
+                }, { quoted: message });
             }
 
             if (newDescription.length > 512) {
                 return await sock.sendMessage(from, {
                     text: '❌ *Too Long*\n\nGroup description must be 512 characters or less.'
-                });
+                }, { quoted: message });
             }
 
             await sock.groupUpdateDescription(from, newDescription);
@@ -40,13 +46,12 @@ export default {
             await sock.sendMessage(from, {
                 text: `📝 *Group Description Updated*\n\n*New Description:*\n${newDescription}\n\n*Changed by:* @${sender.split('@')[0]}`,
                 mentions: [sender]
-            });
+            }, { quoted: message });
 
         } catch (error) {
-            console.error('Set description command error:', error);
             await sock.sendMessage(from, {
                 text: '❌ *Error*\n\nFailed to update group description. Make sure I have admin permissions.'
-            });
+            }, { quoted: message });
         }
     }
 };

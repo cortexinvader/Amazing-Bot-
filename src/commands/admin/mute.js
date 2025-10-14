@@ -12,6 +12,12 @@ export default {
     permissions: ['admin'],
 
     async execute({ sock, message, args, from, user, isGroup, isGroupAdmin }) {
+        if (!isGroupAdmin) {
+            return await sock.sendMessage(from, {
+                text: '❌ *Admin Only*\n\nYou need to be a group admin to use this command.'
+            }, { quoted: message });
+        }
+
         try {
             const quotedUser = message.message?.extendedTextMessage?.contextInfo?.participant;
             const mentionedUsers = message.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
@@ -24,14 +30,14 @@ export default {
             } else {
                 return await sock.sendMessage(from, {
                     text: '❌ *No Target*\n\nReply to a message or mention a user to mute.\n\n*Usage:* .mute [@user] [duration] [reason]'
-                });
+                }, { quoted: message });
             }
 
             const sender = message.key.participant || from;
             if (targetJid === sender) {
                 return await sock.sendMessage(from, {
                     text: '❌ *Invalid Action*\n\nYou cannot mute yourself.'
-                });
+                }, { quoted: message });
             }
 
             const duration = args[1] || '1h';
@@ -65,13 +71,12 @@ export default {
             await sock.sendMessage(from, {
                 text: `🔇 *User Muted*\n\n*Target:* @${targetNumber}\n*Duration:* ${duration}\n*Until:* ${muteUntil.toLocaleString()}\n*Reason:* ${reason}\n*Muted by:* @${sender.split('@')[0]}\n\nUser cannot use bot commands until mute expires.`,
                 mentions: [targetJid, sender]
-            });
+            }, { quoted: message });
 
         } catch (error) {
-            console.error('Mute command error:', error);
             await sock.sendMessage(from, {
                 text: '❌ *Error*\n\nFailed to mute user. Please try again.'
-            });
+            }, { quoted: message });
         }
     }
 };

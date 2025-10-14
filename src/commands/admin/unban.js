@@ -12,6 +12,12 @@ export default {
     permissions: ['admin'],
 
     async execute({ sock, message, args, from, user, isGroup, isGroupAdmin }) {
+        if (!isGroupAdmin) {
+            return await sock.sendMessage(from, {
+                text: '❌ *Admin Only*\n\nYou need to be a group admin to use this command.'
+            }, { quoted: message });
+        }
+
         try {
             const quotedUser = message.message?.extendedTextMessage?.contextInfo?.participant;
             const mentionedUsers = message.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
@@ -26,7 +32,7 @@ export default {
             } else {
                 return await sock.sendMessage(from, {
                     text: '❌ *Invalid Target*\n\nReply to a message, mention a user, or provide their number.\n\n*Usage:* .unban [@user]'
-                });
+                }, { quoted: message });
             }
 
             await updateUser(targetJid, {
@@ -44,7 +50,7 @@ export default {
             await sock.sendMessage(from, {
                 text: `✅ *User Unbanned*\n\n*Target:* +${targetNumber}\n*Unbanned by:* @${sender.split('@')[0]}\n*Date:* ${new Date().toLocaleString()}\n\nUser can now use bot commands again.`,
                 mentions: [sender]
-            });
+            }, { quoted: message });
 
             try {
                 await sock.sendMessage(targetJid, {
@@ -52,14 +58,12 @@ export default {
                     mentions: [sender]
                 });
             } catch (e) {
-                // User might have blocked bot or privacy settings
             }
 
         } catch (error) {
-            console.error('Unban command error:', error);
             await sock.sendMessage(from, {
                 text: '❌ *Error*\n\nFailed to unban user. Please try again.'
-            });
+            }, { quoted: message });
         }
     }
 };
