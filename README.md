@@ -982,7 +982,7 @@ Chat & Support
 </a>
 </td>
 <td align="center" width="25%">
-<a href="https://t.me/your-channel">
+<a href="https://wa.me/2347075663318">
 <img src="https://img.shields.io/badge/Telegram-Channel-26A5E4?style=for-the-badge&logo=telegram&logoColor=white" alt="Telegram"><br>
 <b>📢 Telegram Channel</b><br>
 Updates & News
