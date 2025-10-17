@@ -43,8 +43,6 @@ export default {
         const userId = sender.split('@')[0];
         const userLevel = Math.floor((user.xp ?? 0) / 1000) + 1;
 
-        const dragonBallImage = await this.getRandomDragonBallImage();
-        
         const categoryMap = {
             'admin': { emoji: '🛡️', title: 'ADMIN', count: 0 },
             'ai': { emoji: '🤖', title: 'AI', count: 0 },
@@ -167,59 +165,36 @@ export default {
 ✨ Join our community: ${prefix}support
 🌟 Stay powerful, Saiyan Warrior!`;
 
-        const supportGroup = config.supportGroup || process.env.SUPPORT_GROUP || 'https://chat.whatsapp.com/YOUR_GROUP_LINK';
+        const supportGroup = config.supportGroup || process.env.SUPPORT_GROUP || 'https://github.com/NexusCoders-cyber/Amazing-Bot-';
+        const repoUrl = config.botRepository || 'https://github.com/NexusCoders-cyber/Amazing-Bot-';
         
-        const buttons = [
-            {
-                buttonId: `${prefix}owner`,
-                buttonText: { displayText: '👨‍💻 Owner' },
-                type: 1
-            },
-            {
-                buttonId: `${prefix}support`,
-                buttonText: { displayText: '🆘 Support Group' },
-                type: 1
-            },
-            {
-                buttonId: `${prefix}stats`,
-                buttonText: { displayText: '📊 Bot Stats' },
-                type: 1
-            }
-        ];
+        menuText += `\n\n╭━━━━━⦿「 🔗 LINKS 」⦿━━━━━╮
+│
+│  📦 Repository:
+│  ${repoUrl}
+│
+│  💬 Support Group:
+│  ${supportGroup}
+│
+╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯`;
 
+        const imagePath = './src/assets/images/logo.png';
+        const fs = await import('fs-extra');
+        
         try {
-            await sock.sendMessage(from, {
-                image: { url: dragonBallImage },
-                caption: menuText,
-                footer: `© ${config.botName} - Tap buttons for quick access`,
-                buttons: buttons,
-                headerType: 4,
-                contextInfo: {
-                    externalAdReply: {
-                        title: `🐉 ${config.botName} - Ultimate Menu`,
-                        body: `Total Commands: ${totalCommands} | Power Level: ${userLevel}`,
-                        thumbnailUrl: dragonBallImage,
-                        sourceUrl: supportGroup,
-                        mediaType: 1,
-                        renderLargerThumbnail: true
-                    }
-                }
-            }, { quoted: message });
+            if (await fs.pathExists(imagePath)) {
+                await sock.sendMessage(from, {
+                    image: { url: imagePath },
+                    caption: menuText
+                }, { quoted: message });
+            } else {
+                await sock.sendMessage(from, {
+                    text: menuText
+                }, { quoted: message });
+            }
         } catch (error) {
-            console.error('Error sending menu with buttons:', error);
             await sock.sendMessage(from, {
-                image: { url: dragonBallImage },
-                caption: menuText,
-                contextInfo: {
-                    externalAdReply: {
-                        title: `🐉 ${config.botName} - Ultimate Menu`,
-                        body: `Total Commands: ${totalCommands} | Power Level: ${userLevel}`,
-                        thumbnailUrl: dragonBallImage,
-                        sourceUrl: supportGroup,
-                        mediaType: 1,
-                        renderLargerThumbnail: true
-                    }
-                }
+                text: menuText
             }, { quoted: message });
         }
     },
@@ -321,66 +296,24 @@ export default {
 
 📊 Total: ${commands.length} commands in ${cat.title}`;
 
-        const dragonBallImage = await this.getRandomDragonBallImage();
+        const imagePath = './src/assets/images/logo.png';
+        const fs = await import('fs-extra');
         
         try {
-            await sock.sendMessage(from, {
-                image: { url: dragonBallImage },
-                caption: commandList,
-                contextInfo: {
-                    externalAdReply: {
-                        title: cat.title,
-                        body: cat.description,
-                        thumbnailUrl: dragonBallImage,
-                        sourceUrl: config.botRepository,
-                        mediaType: 1,
-                        renderLargerThumbnail: true
-                    }
-                }
-            }, { quoted: message });
-        } catch (error) {
-            console.error('Error sending category menu with image:', error);
-            await sock.sendMessage(from, {
-                text: commandList,
-                contextInfo: {
-                    externalAdReply: {
-                        title: cat.title,
-                        body: cat.description,
-                        thumbnailUrl: dragonBallImage,
-                        sourceUrl: config.botRepository,
-                        mediaType: 1,
-                        renderLargerThumbnail: true
-                    }
-                }
-            }, { quoted: message });
-        }
-    },
-
-    async getRandomDragonBallImage() {
-        const animeApis = [
-            'https://api.waifu.pics/sfw/waifu',
-            'https://api.waifu.pics/sfw/neko',
-            'https://nekos.best/api/v2/neko',
-            'https://nekos.best/api/v2/waifu',
-            'https://api.nekosapi.com/v3/images/random?rating=safe&limit=1'
-        ];
-        
-        try {
-            const randomApi = animeApis[Math.floor(Math.random() * animeApis.length)];
-            const response = await fetch(randomApi);
-            const data = await response.json();
-            
-            if (randomApi.includes('waifu.pics')) {
-                return data.url || config.botThumbnail || 'https://i.ibb.co/2M7rtLk/ilom.jpg';
-            } else if (randomApi.includes('nekos.best')) {
-                return data.results?.[0]?.url || config.botThumbnail || 'https://i.ibb.co/2M7rtLk/ilom.jpg';
-            } else if (randomApi.includes('nekosapi')) {
-                return data.items?.[0]?.image_url || config.botThumbnail || 'https://i.ibb.co/2M7rtLk/ilom.jpg';
+            if (await fs.pathExists(imagePath)) {
+                await sock.sendMessage(from, {
+                    image: { url: imagePath },
+                    caption: commandList
+                }, { quoted: message });
+            } else {
+                await sock.sendMessage(from, {
+                    text: commandList
+                }, { quoted: message });
             }
         } catch (error) {
-            console.error('Error fetching anime image:', error);
+            await sock.sendMessage(from, {
+                text: commandList
+            }, { quoted: message });
         }
-        
-        return config.botThumbnail || 'https://i.ibb.co/2M7rtLk/ilom.jpg';
     }
 };

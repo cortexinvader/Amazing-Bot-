@@ -54,17 +54,7 @@ export default {
             // Send dog image
             await sock.sendMessage(from, {
                 image: { url: imageUrl },
-                caption: `🐶 *Cute Dog*!\n📸 Source: DogAPI\n\n💡 Use \`${prefix}randomdog\` for another pup!`,
-                contextInfo: {
-                    externalAdReply: {
-                        title: 'Random Dog',
-                        body: 'Powered by DogAPI',
-                        thumbnailUrl: imageUrl,
-                        mediaType: 1,
-                        mediaUrl: imageUrl,
-                        sourceUrl: 'https://dog.ceo'
-                    }
-                }
+                caption: `🐶 *Cute Dog*!\n📸 Source: DogAPI\n\n💡 Use \`${prefix}randomdog\` for another pup!`
             }, { quoted: message });
 
         } catch (error) {

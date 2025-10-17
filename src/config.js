@@ -9,9 +9,7 @@ const config = {
     botWebsite: process.env.BOT_WEBSITE || 'https://ilom.tech',
 
     prefix: process.env.PREFIX || '.',
-    secondaryPrefix: process.env.SECONDARY_PREFIX || '!',
-    noPrefixEnabled: process.env.NO_PREFIX_ENABLED === 'true',
-    privateNoPrefixEnabled: process.env.PRIVATE_NO_PREFIX_ENABLED === 'true',
+    groupPrefix: process.env.GROUP_PREFIX || '.',
 
     ownerNumbers: (process.env.OWNER_NUMBERS || 'YOUR_PHONE_NUMBER').split(',').map(num => 
         num.includes('@') ? num : `${num.trim()}@s.whatsapp.net`
@@ -20,9 +18,10 @@ const config = {
 
     publicMode: process.env.PUBLIC_MODE === 'true',
     selfMode: process.env.SELF_MODE === 'true',
-    markOnline: process.env.MARK_ONLINE !== 'false',
-    readMessages: process.env.READ_MESSAGES === 'true',
+    autoOnline: process.env.AUTO_ONLINE !== 'false',
+    autoRead: process.env.AUTO_READ === 'true',
     autoTyping: process.env.AUTO_TYPING === 'true',
+    autoRecording: process.env.AUTO_RECORDING === 'true',
 
     database: {
         url: process.env.MONGODB_URL || process.env.DATABASE_URL || 'mongodb://localhost:27017/ilombot',

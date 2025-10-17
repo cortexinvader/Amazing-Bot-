@@ -59,17 +59,7 @@ export default {
 
             await sock.sendMessage(from, {
                 image: imageBuffer,
-                caption: infoText,
-                contextInfo: {
-                    externalAdReply: {
-                        title: `${config.botName} - Bot Info`,
-                        body: `v${config.botVersion} | Uptime: ${uptimeStr}`,
-                        thumbnailUrl: config.botThumbnail,
-                        sourceUrl: config.botRepository,
-                        mediaType: 1,
-                        renderLargerThumbnail: true
-                    }
-                }
+                caption: infoText
             }, { quoted: message });
         } catch (error) {
             console.error('Canvas error:', error);

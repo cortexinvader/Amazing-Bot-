@@ -56,14 +56,6 @@ export default {
                 image: { url: imageUrl },
                 caption: `🎀 *Your Waifu*!\n📸 Source: Waifu.pics\n\n💡 Use \`${prefix}waifu\` for another one!`,
                 contextInfo: {
-                    externalAdReply: {
-                        title: 'Random Waifu',
-                        body: 'Powered by Waifu.pics',
-                        thumbnailUrl: imageUrl,
-                        mediaType: 1,
-                        mediaUrl: imageUrl,
-                        sourceUrl: 'https://waifu.pics'
-                    }
                 }
             }, { quoted: message });
 

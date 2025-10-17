@@ -58,14 +58,6 @@ export default {
                 image: imageBuffer,
                 caption: quoteText,
                 contextInfo: {
-                    externalAdReply: {
-                        title: '✨ Daily Inspiration',
-                        body: quote.author,
-                        thumbnailUrl: config.botThumbnail,
-                        sourceUrl: config.botWebsite,
-                        mediaType: 1,
-                        renderLargerThumbnail: true
-                    }
                 }
             }, { quoted: message });
         } catch (error) {

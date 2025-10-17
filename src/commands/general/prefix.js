@@ -1,34 +1,68 @@
 import config from '../../config.js';
-
-
+import { getGroup, updateGroup } from '../../models/Group.js';
 
 export default {
     name: 'prefix',
-    aliases: ['pre'],
+    aliases: ['setprefix', 'changeprefix'],
     category: 'general',
-    description: 'Display the bot prefix',
-    usage: 'prefix',
-    cooldown: 2,
+    description: 'View or change the bot prefix',
+    usage: 'prefix [new_prefix]',
+    cooldown: 5,
     permissions: ['user'],
 
-    async execute({ sock, message, from, prefix }) {
-        const response = `╭─「 *BOT PREFIX* 」
-│ 🎯 *Current Prefix:* ${config.prefix}
-│ 🔄 *Secondary Prefix:* ${config.secondaryPrefix}
+    async execute({ sock, message, from, args, isGroup, isGroupAdmin, sender, commandHandler }) {
+        const currentPrefix = isGroup ? 
+            (await getGroup(from))?.settings?.prefix || config.groupPrefix : 
+            config.prefix;
+
+        if (!args[0]) {
+            const response = `╭─「 *BOT PREFIX* 」
+│ 🎯 *Current Prefix:* ${currentPrefix}
 │ 
 │ 💡 *How to use:*
-│ • Type ${config.prefix}[command] 
-│ • Example: ${config.prefix}help
-│ • Example: ${config.prefix}ping
+│ • Type ${currentPrefix}[command] 
+│ • Example: ${currentPrefix}help
+│ • Example: ${currentPrefix}menu
 │ 
-│ 📝 *Available Prefixes:*
-│ • ${config.prefix} (Primary)
-│ • ${config.secondaryPrefix} (Secondary)
-│ • ! / . # > < (Alternative)
+│ ⚙️ *Change Prefix:*
+│ • ${currentPrefix}prefix [new_prefix]
+│ • Example: ${currentPrefix}prefix !
+│ • (Admin only in groups)
 ╰────────────────
 
-*${config.botName} is ready to serve!* 🚀`;
+*${config.botName} is ready!* 🚀`;
 
-        await sock.sendMessage(from, { text: response });
+            return sock.sendMessage(from, { text: response }, { quoted: message });
+        }
+
+        if (isGroup && !isGroupAdmin && !commandHandler.isOwner(sender)) {
+            return sock.sendMessage(from, {
+                text: `❌ Only group admins can change the prefix!`
+            }, { quoted: message });
+        }
+
+        if (!isGroup && !commandHandler.isOwner(sender)) {
+            return sock.sendMessage(from, {
+                text: `❌ Only the owner can change the prefix!`
+            }, { quoted: message });
+        }
+
+        const newPrefix = args[0];
+
+        if (newPrefix.length > 3) {
+            return sock.sendMessage(from, {
+                text: `❌ Prefix must be 1-3 characters long!`
+            }, { quoted: message });
+        }
+
+        if (isGroup) {
+            await updateGroup(from, {
+                'settings.prefix': newPrefix
+            });
+        }
+
+        return sock.sendMessage(from, {
+            text: `✅ *Prefix Updated!*\n\nNew prefix: ${newPrefix}\n\nExample: ${newPrefix}menu`
+        }, { quoted: message });
     }
 };

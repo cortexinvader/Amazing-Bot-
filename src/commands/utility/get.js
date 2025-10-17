@@ -178,14 +178,6 @@ export default {
                     image: { url: imageUrl },
                     caption: `🖼️ *Detected Image from Response*:\n🔗 ${imageUrl}`,
                     contextInfo: {
-                        externalAdReply: {
-                            title: 'API Response Image',
-                            body: 'Extracted from fetched data',
-                            thumbnailUrl: imageUrl,
-                            mediaType: 1,
-                            mediaUrl: imageUrl,
-                            sourceUrl: url
-                        }
                     }
                 }, { quoted: message });
             }

@@ -53,17 +53,7 @@ export default {
 
             await sock.sendMessage(from, {
                 image: imageBuffer,
-                caption: factText,
-                contextInfo: {
-                    externalAdReply: {
-                        title: '🧠 Fun Fact',
-                        body: 'Learn something new!',
-                        thumbnailUrl: config.botThumbnail,
-                        sourceUrl: config.botWebsite,
-                        mediaType: 1,
-                        renderLargerThumbnail: true
-                    }
-                }
+                caption: factText
             }, { quoted: message });
         } catch (error) {
             console.error('Canvas error:', error);

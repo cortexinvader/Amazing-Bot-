@@ -34,17 +34,7 @@ export default {
 💡 Click the link above to join our community!`;
 
         await sock.sendMessage(from, {
-            text: supportText,
-            contextInfo: {
-                externalAdReply: {
-                    title: `${config.botName} Support`,
-                    body: 'Join our support group for help',
-                    thumbnailUrl: config.botThumbnail,
-                    sourceUrl: supportGroup,
-                    mediaType: 1,
-                    renderLargerThumbnail: true
-                }
-            }
-        });
+            text: supportText
+        }, { quoted: message });
     }
 };

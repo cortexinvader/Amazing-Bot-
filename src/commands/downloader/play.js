@@ -111,9 +111,6 @@ export default {
                 mimetype: 'audio/mpeg',
                 fileName: `${finalTitle}.mp3`,
                 contextInfo: {
-                    externalAdReply: {
-                        title: finalTitle,
-                        body: `🎵 ${author} | ⏱ ${duration}`,
                         thumbnailUrl: thumbnail,
                         mediaType: 2,
                         mediaUrl: urlYt,

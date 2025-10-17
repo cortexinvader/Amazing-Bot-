@@ -54,17 +54,7 @@ export default {
             // Send cat image
             await sock.sendMessage(from, {
                 image: { url: imageUrl },
-                caption: `😺 *Cute Cat*!\n📸 Source: TheCatAPI\n\n💡 Use \`${prefix}randomcat\` for another kitty!`,
-                contextInfo: {
-                    externalAdReply: {
-                        title: 'Random Cat',
-                        body: 'Powered by TheCatAPI',
-                        thumbnailUrl: imageUrl,
-                        mediaType: 1,
-                        mediaUrl: imageUrl,
-                        sourceUrl: 'https://thecatapi.com'
-                    }
-                }
+                caption: `😺 *Cute Cat*!\n📸 Source: TheCatAPI\n\n💡 Use \`${prefix}randomcat\` for another kitty!`
             }, { quoted: message });
 
         } catch (error) {

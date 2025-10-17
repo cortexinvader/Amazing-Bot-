@@ -50,17 +50,7 @@ export default {
 
             await sock.sendMessage(from, {
                 image: imageBuffer,
-                caption: ownerText,
-                contextInfo: {
-                    externalAdReply: {
-                        title: `${ownerName} - Bot Developer`,
-                        body: 'Official Bot Creator & Developer',
-                        thumbnailUrl: config.botThumbnail,
-                        sourceUrl: config.botWebsite,
-                        mediaType: 1,
-                        renderLargerThumbnail: true
-                    }
-                }
+                caption: ownerText
             }, { quoted: message });
 
             if (config.ownerNumbers?.[0]) {
