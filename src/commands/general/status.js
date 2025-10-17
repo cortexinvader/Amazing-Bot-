@@ -1,4 +1,4 @@
-import { createCanvas } from 'canvas';
+import { createCanvas } from '@napi-rs/canvas';
 import os from 'os';
 import moment from 'moment';
 import config from '../../config.js';

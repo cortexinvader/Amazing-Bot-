@@ -110,13 +110,6 @@ export default {
                 audio: { url: audioUrl },
                 mimetype: 'audio/mpeg',
                 fileName: `${finalTitle}.mp3`,
-                contextInfo: {
-                        thumbnailUrl: thumbnail,
-                        mediaType: 2,
-                        mediaUrl: urlYt,
-                        sourceUrl: urlYt
-                    }
-                },
                 caption: `✅ *Song Downloaded*\n📝 *Title*: ${finalTitle}\n👤 *Artist*: ${author}\n⏱ *Duration*: ${duration}\n📦 *Format*: MP3`
             }, { quoted: message });
 

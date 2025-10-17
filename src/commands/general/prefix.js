@@ -59,10 +59,12 @@ export default {
             await updateGroup(from, {
                 'settings.prefix': newPrefix
             });
+        } else {
+            config.prefix = newPrefix;
         }
 
         return sock.sendMessage(from, {
-            text: `✅ *Prefix Updated!*\n\nNew prefix: ${newPrefix}\n\nExample: ${newPrefix}menu`
+            text: `✅ *Prefix Updated!*\n\nNew prefix: ${newPrefix}\n\nExample: ${newPrefix}menu${!isGroup ? '\n✨ Global prefix changed successfully!' : ''}`
         }, { quoted: message });
     }
 };

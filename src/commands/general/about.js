@@ -1,6 +1,6 @@
 import config from '../../config.js';
 import { commandHandler } from '../../handlers/commandHandler.js';
-import { createCanvas, loadImage } from 'canvas';
+import { createCanvas, loadImage } from '@napi-rs/canvas';
 import moment from 'moment';
 import os from 'os';
 import axios from 'axios';
