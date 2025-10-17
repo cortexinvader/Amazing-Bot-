@@ -165,52 +165,73 @@ export default {
 };
 ```
 
-### 3. Reply Handler (supportsReply: true)
+### 3. Reply Handler (onReply Method)
 
-Allow users to reply to command output:
+Allow users to reply to command output using the onReply method:
 
 ```javascript
+const activeQuizzes = new Map();
+
 export default {
     name: 'quiz',
-    supportsReply: true,
+    category: 'games',
+    description: 'Answer quiz questions',
     
-    async execute({ sock, message, from, sender }) {
-        const sentMsg = await sock.sendMessage(from, {
-            text: '❓ What is 2 + 2?\n\n💡 Reply to this message with your answer!'
-        }, { quoted: message });
-        
-        if (sentMsg) {
-            this.setupReplyHandler(sock, from, sentMsg.key.id, sender);
+    async execute({ sock, message, from, sender, prefix }) {
+        if (activeQuizzes.has(from)) {
+            return sock.sendMessage(from, {
+                text: `❌ A quiz is already active!`
+            }, { quoted: message });
         }
+
+        const question = {
+            text: "What is 2 + 2?",
+            answer: 4
+        };
+        
+        activeQuizzes.set(from, {
+            question,
+            sender,
+            startTime: Date.now()
+        });
+
+        await sock.sendMessage(from, {
+            text: `🎯 *QUIZ TIME!*\n\n${question.text}\n\n💡 Reply with your answer!`
+        }, { quoted: message });
+
+        setTimeout(() => {
+            if (activeQuizzes.has(from)) {
+                activeQuizzes.delete(from);
+                sock.sendMessage(from, {
+                    text: `⏰ Time's up!`
+                }, { quoted: message });
+            }
+        }, 30000);
     },
     
-    setupReplyHandler(sock, from, messageId, sender) {
-        const replyTimeout = setTimeout(() => {
-            if (global.replyHandlers) {
-                delete global.replyHandlers[messageId];
-            }
-        }, 60000);
+    async onReply({ sock, message, from, sender, text }) {
+        const quizData = activeQuizzes.get(from);
         
-        if (!global.replyHandlers) {
-            global.replyHandlers = {};
+        if (!quizData) return false;
+        
+        if (sender !== quizData.sender) {
+            await sock.sendMessage(from, {
+                text: `❌ Only the quiz starter can answer!`
+            }, { quoted: message });
+            return true;
         }
-        
-        global.replyHandlers[messageId] = {
-            command: this.name,
-            timeout: replyTimeout,
-            handler: async (replyText, replyMessage) => {
-                const answer = replyText.trim();
-                const isCorrect = answer === '4';
-                
-                await sock.sendMessage(from, {
-                    text: isCorrect ? '✅ Correct! +100 points' : '❌ Wrong! The answer is 4',
-                    mentions: [sender]
-                }, { quoted: replyMessage });
-                
-                clearTimeout(replyTimeout);
-                delete global.replyHandlers[messageId];
-            }
-        };
+
+        activeQuizzes.delete(from);
+
+        const userAnswer = parseInt(text.trim());
+        const isCorrect = userAnswer === quizData.question.answer;
+
+        await sock.sendMessage(from, {
+            text: isCorrect ? '✅ Correct!' : '❌ Wrong!',
+            mentions: [sender]
+        }, { quoted: message });
+
+        return true;
     }
 };
 ```
