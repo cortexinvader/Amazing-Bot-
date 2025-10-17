@@ -2,9 +2,11 @@ import { createCanvas } from '@napi-rs/canvas';
 import axios from 'axios';
 import config from '../../config.js';
 
+const activeQuizzes = new Map();
+
 export default {
     name: 'utme',
-    aliases: ['jamb', 'exam', 'quiz'],
+    aliases: ['jamb', 'exam'],
     category: 'games',
     description: 'Practice UTME/JAMB exam questions with interactive quiz',
     usage: 'utme <subject>',
@@ -18,10 +20,6 @@ export default {
     premium: false,
     hidden: false,
     ownerOnly: false,
-    supportsReply: true,
-    supportsChat: false,
-    supportsReact: true,
-    supportsButtons: false,
 
     subjects: {
         'mathematics': 'Mathematics',
@@ -88,14 +86,24 @@ export default {
 
             await sock.sendMessage(from, { delete: statusMsg.key });
 
-            const sentMsg = await sock.sendMessage(from, {
+            await sock.sendMessage(from, {
                 image: canvas,
                 caption: '╭──⦿【 📚 UTME QUIZ 】\n│ 📖 𝗦𝘂𝗯𝗷𝗲𝗰𝘁: ' + subjectName + '\n│ ❓ 𝗤𝘂𝗲𝘀𝘁𝗶𝗼𝗻: Ready!\n│\n│ 💡 𝗛𝗼𝘄 𝘁𝗼 𝗮𝗻𝘀𝘄𝗲𝗿:\n│ Reply to this message with your answer\n│ Example: A, B, C, or D\n╰────────⦿\n\n╭─────────────⦿\n│💫 | [ ' + config.botName + ' 🍀 ]\n╰────────────⦿'
             }, { quoted: message });
 
-            if (sentMsg) {
-                this.setupAnswerHandler(sock, from, sentMsg.key.id, correctAnswer, questionData, subjectName, sender);
-            }
+            activeQuizzes.set(from, {
+                correctAnswer,
+                questionData,
+                subjectName,
+                sender,
+                startTime: Date.now()
+            });
+
+            setTimeout(() => {
+                if (activeQuizzes.has(from)) {
+                    activeQuizzes.delete(from);
+                }
+            }, 120000);
 
             await sock.sendMessage(from, {
                 react: { text: '✅', key: message.key }
@@ -230,55 +238,49 @@ export default {
         return canvas.toBuffer('image/png');
     },
 
-    setupAnswerHandler(sock, from, messageId, correctAnswer, questionData, subjectName, userId) {
-        const replyTimeout = setTimeout(() => {
-            if (global.utmeHandlers) {
-                delete global.utmeHandlers[messageId];
-            }
-        }, 120000);
-
-        if (!global.utmeHandlers) {
-            global.utmeHandlers = {};
+    async onReply({ sock, message, from, sender, text }) {
+        const quizData = activeQuizzes.get(from);
+        
+        if (!quizData) return false;
+        
+        if (sender !== quizData.sender) {
+            await sock.sendMessage(from, {
+                text: '╭──⦿【 ⚠️ NOT YOUR QUIZ 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: Only the quiz starter can answer\n╰────────⦿'
+            }, { quoted: message });
+            return true;
         }
 
-        global.utmeHandlers[messageId] = {
-            correctAnswer: correctAnswer,
-            questionData: questionData,
-            subjectName: subjectName,
-            userId: userId,
-            timeout: replyTimeout,
-            handler: async (userAnswer, replyMessage) => {
-                const answer = userAnswer.toUpperCase().trim();
+        const answer = text.toUpperCase().trim();
 
-                if (!['A', 'B', 'C', 'D'].includes(answer)) {
-                    await sock.sendMessage(from, {
-                        text: '╭──⦿【 ⚠️ INVALID 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: Invalid answer format\n│\n│ 💡 𝗩𝗮𝗹𝗶𝗱 𝗮𝗻𝘀𝘄𝗲𝗿𝘀: A, B, C, or D\n╰────────⦿'
-                    }, { quoted: replyMessage });
-                    return;
-                }
+        if (!['A', 'B', 'C', 'D'].includes(answer)) {
+            await sock.sendMessage(from, {
+                text: '╭──⦿【 ⚠️ INVALID 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: Invalid answer format\n│\n│ 💡 𝗩𝗮𝗹𝗶𝗱 𝗮𝗻𝘀𝘄𝗲𝗿𝘀: A, B, C, or D\n╰────────⦿'
+            }, { quoted: message });
+            return true;
+        }
 
-                const isCorrect = answer === correctAnswer.toUpperCase();
-                const resultCanvas = await this.createResultCanvas(isCorrect, correctAnswer, questionData, subjectName);
+        activeQuizzes.delete(from);
 
-                let resultText = '╭──⦿【 ' + (isCorrect ? '✅ CORRECT' : '❌ WRONG') + ' 】\n';
-                resultText += '│ 📖 𝗦𝘂𝗯𝗷𝗲𝗰𝘁: ' + subjectName + '\n';
-                resultText += '│ 💡 𝗬𝗼𝘂𝗿 𝗔𝗻𝘀𝘄𝗲𝗿: ' + answer + '\n';
-                resultText += '│ ✅ 𝗖𝗼𝗿𝗿𝗲𝗰𝘁 𝗔𝗻𝘀𝘄𝗲𝗿: ' + correctAnswer.toUpperCase() + '\n';
-                if (questionData.solution) {
-                    resultText += '│\n│ 📝 𝗘𝘅𝗽𝗹𝗮𝗻𝗮𝘁𝗶𝗼𝗻:\n│ ' + questionData.solution + '\n';
-                }
-                resultText += '╰────────⦿\n\n';
-                resultText += '╭─────────────⦿\n│💫 | [ ' + config.botName + ' 🍀 ]\n╰────────────⦿';
+        const isCorrect = answer === quizData.correctAnswer.toUpperCase();
+        const resultCanvas = await this.createResultCanvas(isCorrect, quizData.correctAnswer, quizData.questionData, quizData.subjectName);
 
-                await sock.sendMessage(from, {
-                    image: resultCanvas,
-                    caption: resultText
-                }, { quoted: replyMessage });
+        let resultText = '╭──⦿【 ' + (isCorrect ? '✅ CORRECT' : '❌ WRONG') + ' 】\n';
+        resultText += '│ 📖 𝗦𝘂𝗯𝗷𝗲𝗰𝘁: ' + quizData.subjectName + '\n';
+        resultText += '│ 💡 𝗬𝗼𝘂𝗿 𝗔𝗻𝘀𝘄𝗲𝗿: ' + answer + '\n';
+        resultText += '│ ✅ 𝗖𝗼𝗿𝗿𝗲𝗰𝘁 𝗔𝗻𝘀𝘄𝗲𝗿: ' + quizData.correctAnswer.toUpperCase() + '\n';
+        if (quizData.questionData.solution) {
+            resultText += '│\n│ 📝 𝗘𝘅𝗽𝗹𝗮𝗻𝗮𝘁𝗶𝗼𝗻:\n│ ' + quizData.questionData.solution + '\n';
+        }
+        resultText += '╰────────⦿\n\n';
+        resultText += '╭─────────────⦿\n│💫 | [ ' + config.botName + ' 🍀 ]\n╰────────────⦿';
 
-                clearTimeout(replyTimeout);
-                delete global.utmeHandlers[messageId];
-            }
-        };
+        await sock.sendMessage(from, {
+            image: resultCanvas,
+            caption: resultText,
+            mentions: [sender]
+        }, { quoted: message });
+
+        return true;
     },
 
     async createResultCanvas(isCorrect, correctAnswer, questionData, subjectName) {
