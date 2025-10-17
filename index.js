@@ -29,6 +29,7 @@ import { startScheduler } from './src/utils/scheduler.js';
 import { initializeCache } from './src/utils/cache.js';
 import { startWebServer } from './src/utils/webServer.js';
 import qrService from './src/services/qrService.js';
+import Settings from './src/models/Settings.js';
 
 const msgRetryCounterCache = new NodeCache({ stdTTL: 600, checkperiod: 60 });
 const app = express();
@@ -603,6 +604,19 @@ async function createConfigurationFiles() {
     }
 }
 
+async function loadSavedSettings() {
+    try {
+        const prefixSetting = await Settings.findOne({ key: 'prefix' }).catch(() => null);
+        
+        if (prefixSetting && prefixSetting.value) {
+            config.prefix = prefixSetting.value;
+            logger.info(`✅ Loaded saved prefix: ${config.prefix}`);
+        }
+    } catch (error) {
+        logger.warn('Could not load saved settings (database may not be connected)');
+    }
+}
+
 async function initializeBot() {
     try {
         await displayStartupBanner();
@@ -627,6 +641,9 @@ async function initializeBot() {
         
         logger.info('Connecting to database...');
         await connectToDatabase();
+        
+        logger.info('Loading saved settings...');
+        await loadSavedSettings();
         
         logger.info('Processing session credentials...');
         await processSessionCredentials();

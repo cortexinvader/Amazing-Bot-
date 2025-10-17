@@ -1,5 +1,6 @@
 import config from '../../config.js';
 import { getGroup, updateGroup } from '../../models/Group.js';
+import Settings from '../../models/Settings.js';
 
 export default {
     name: 'prefix',
@@ -61,10 +62,23 @@ export default {
             });
         } else {
             config.prefix = newPrefix;
+            
+            await Settings.findOneAndUpdate(
+                { key: 'prefix' },
+                { 
+                    key: 'prefix',
+                    value: newPrefix,
+                    type: 'string',
+                    description: 'Bot command prefix',
+                    category: 'general',
+                    editable: true
+                },
+                { upsert: true, new: true }
+            ).catch(() => {});
         }
 
         return sock.sendMessage(from, {
-            text: `✅ *Prefix Updated!*\n\nNew prefix: ${newPrefix}\n\nExample: ${newPrefix}menu${!isGroup ? '\n✨ Global prefix changed successfully!' : ''}`
+            text: `✅ *Prefix Updated!*\n\nNew prefix: ${newPrefix}\n\nExample: ${newPrefix}menu${!isGroup ? '\n✨ Global prefix saved to database!' : ''}`
         }, { quoted: message });
     }
 };
