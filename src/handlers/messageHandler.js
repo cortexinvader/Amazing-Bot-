@@ -16,6 +16,7 @@ import handleLevelUp from '../events/levelUp.js';
 import handleGroupJoin from '../events/groupJoin.js';
 import handleGroupLeave from '../events/groupLeave.js';
 import handleGroupUpdate from '../events/groupUpdate.js';
+import { trackMessage } from '../commands/utility/profile.js';
 
 class MessageHandler {
     constructor() {
@@ -317,6 +318,8 @@ class MessageHandler {
 
             let group = null;
             if (isGroup) {
+                trackMessage(sender, from, false);
+
                 group = await getGroup(from);
                 if (!group) {
                     try {
@@ -440,6 +443,8 @@ class MessageHandler {
                 const deletedBy = participant || remoteJid;
                 
                 if (isGroup) {
+                    trackMessage(deletedBy, remoteJid, true);
+
                     const group = await getGroup(remoteJid);
                     if (group?.settings?.antiDelete) {
                         const cachedMessage = cache.get(`message_${id}`);
@@ -508,6 +513,8 @@ class MessageHandler {
     async handleMemberJoin(sock, groupId, participant, group, metadata) {
         try {
             logger.info(`Member joined: ${participant} in ${groupId}`);
+            
+            trackMessage(participant, groupId, false);
             
             let user = await getUser(participant);
             if (!user) {
