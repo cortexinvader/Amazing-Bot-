@@ -1,17 +1,18 @@
-import { createCanvas } from '@napi-rs/canvas';
+import { createCanvas } from 'canvas';
 import axios from 'axios';
 import config from '../../config.js';
 
-const activeQuizzes = new Map();
+const userScores = new Map();
+const userStreaks = new Map();
 
 export default {
     name: 'utme',
-    aliases: ['jamb', 'exam'],
+    aliases: ['jamb', 'exam', 'quiz'],
     category: 'games',
     description: 'Practice UTME/JAMB exam questions with interactive quiz',
     usage: 'utme <subject>',
     example: 'utme mathematics\nutme english\nutme physics',
-    cooldown: 3,
+    cooldown: 2,
     permissions: ['user'],
     args: false,
     minArgs: 0,
@@ -20,9 +21,14 @@ export default {
     premium: false,
     hidden: false,
     ownerOnly: false,
+    supportsReply: true,
+    supportsChat: false,
+    supportsReact: true,
+    supportsButtons: false,
 
     subjects: {
         'mathematics': 'Mathematics',
+        'further-math': 'Further Mathematics',
         'english': 'English Language',
         'physics': 'Physics',
         'chemistry': 'Chemistry',
@@ -38,118 +44,353 @@ export default {
         'civics': 'Civic Education',
         'agriculture': 'Agricultural Science',
         'computer': 'Computer Studies',
-        'history': 'History'
+        'history': 'History',
+        'french': 'French',
+        'igbo': 'Igbo',
+        'yoruba': 'Yoruba',
+        'hausa': 'Hausa',
+        'marketing': 'Marketing',
+        'insurance': 'Insurance',
+        'office-practice': 'Office Practice',
+        'typewriting': 'Typewriting',
+        'technical-drawing': 'Technical Drawing',
+        'fine-arts': 'Fine Arts',
+        'music': 'Music',
+        'physical-education': 'Physical Education',
+        'health-education': 'Health Education',
+        'home-economics': 'Home Economics',
+        'food-nutrition': 'Food and Nutrition'
     },
 
-    async execute({ sock, message, args, command, user, group, from, sender, isGroup, isGroupAdmin, isBotAdmin, prefix }) {
+    departments: {
+        '🏥 Medical Sciences': {
+            'Medicine & Surgery': ['biology', 'chemistry', 'physics'],
+            'Pharmacy': ['biology', 'chemistry', 'physics'],
+            'Nursing': ['biology', 'chemistry', 'physics'],
+            'Physiotherapy': ['biology', 'chemistry', 'physics']
+        },
+        '⚙️ Engineering & Tech': {
+            'Engineering': ['mathematics', 'physics', 'chemistry'],
+            'Computer Science': ['mathematics', 'physics', 'english'],
+            'Architecture': ['mathematics', 'physics', 'technical-drawing']
+        },
+        '💼 Social Sciences': {
+            'Accounting': ['accounting', 'economics', 'mathematics'],
+            'Economics': ['economics', 'mathematics', 'government'],
+            'Law': ['english', 'literature', 'government'],
+            'Mass Communication': ['english', 'literature', 'government']
+        },
+        '📚 Arts & Humanities': {
+            'English': ['english', 'literature', 'government'],
+            'History': ['history', 'government', 'literature'],
+            'Theatre Arts': ['literature', 'english', 'music']
+        },
+        '🌾 Agriculture & Sciences': {
+            'Agriculture': ['agriculture', 'chemistry', 'biology'],
+            'Food Science': ['chemistry', 'biology', 'agriculture'],
+            'Geography': ['geography', 'mathematics', 'economics']
+        },
+        '🎓 Education & Others': {
+            'Physical Education': ['physical-education', 'biology', 'health-education'],
+            'Home Economics': ['home-economics', 'chemistry', 'biology']
+        }
+    },
+
+    async execute({ sock, message, args, from, sender, prefix }) {
         try {
             if (args.length === 0) {
-                return this.showSubjects({ sock, message, from, prefix });
+                return this.showSubjects({ sock, message, from, prefix, sender });
             }
 
-            const subject = args[0].toLowerCase();
+            const input = args[0].toLowerCase();
+
+            if (input === 'score' || input === 'stats') {
+                return this.showStats({ sock, message, from, sender });
+            }
+
+            if (input === 'reset') {
+                userScores.delete(sender);
+                userStreaks.delete(sender);
+                return await sock.sendMessage(from, {
+                    text: '🔄 Stats Reset\n\nYour score and streak have been reset to zero.'
+                }, { quoted: message });
+            }
+
+            const subject = input;
             const subjectName = this.subjects[subject];
 
             if (!subjectName) {
-                return this.showSubjects({ sock, message, from, prefix });
+                return this.showSubjects({ sock, message, from, prefix, sender });
             }
 
-            await sock.sendMessage(from, {
-                react: { text: '📚', key: message.key }
-            });
-
-            const statusMsg = await sock.sendMessage(from, {
-                text: '╭──⦿【 📚 LOADING 】\n│ 📖 𝗦𝘂𝗯𝗷𝗲𝗰𝘁: ' + subjectName + '\n│ ⏳ 𝗦𝘁𝗮𝘁𝘂𝘀: Fetching question...\n╰────────⦿'
-            }, { quoted: message });
-
-            const apiUrl = 'https://questions.aloc.com.ng/api/v2/q/1?subject=' + subject;
-            const response = await axios.get(apiUrl, {
-                headers: {
-                    'Accept': 'application/json',
-                    'AccessToken': 'QB-1e5c5f1553ccd8cd9e11'
-                },
-                timeout: 15000
-            });
-
-            if (!response.data || !response.data.data || response.data.data.length === 0) {
-                await sock.sendMessage(from, { delete: statusMsg.key });
-                await sock.sendMessage(from, {
-                    text: '╭──⦿【 ❌ ERROR 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: No questions found\n│\n│ 📖 𝗦𝘂𝗯𝗷𝗲𝗰𝘁: ' + subjectName + '\n│ 💡 𝗧𝗶𝗽: Try another subject\n╰────────⦿'
-                }, { quoted: message });
-                return;
-            }
-
-            const questionData = response.data.data[0];
-            const correctAnswer = questionData.answer;
-
-            const canvas = await this.createQuestionCanvas(questionData, subjectName);
-
-            await sock.sendMessage(from, { delete: statusMsg.key });
-
-            await sock.sendMessage(from, {
-                image: canvas,
-                caption: '╭──⦿【 📚 UTME QUIZ 】\n│ 📖 𝗦𝘂𝗯𝗷𝗲𝗰𝘁: ' + subjectName + '\n│ ❓ 𝗤𝘂𝗲𝘀𝘁𝗶𝗼𝗻: Ready!\n│\n│ 💡 𝗛𝗼𝘄 𝘁𝗼 𝗮𝗻𝘀𝘄𝗲𝗿:\n│ Reply to this message with your answer\n│ Example: A, B, C, or D\n╰────────⦿\n\n╭─────────────⦿\n│💫 | [ ' + config.botName + ' 🍀 ]\n╰────────────⦿'
-            }, { quoted: message });
-
-            activeQuizzes.set(from, {
-                correctAnswer,
-                questionData,
-                subjectName,
-                sender,
-                startTime: Date.now()
-            });
-
-            setTimeout(() => {
-                if (activeQuizzes.has(from)) {
-                    activeQuizzes.delete(from);
-                }
-            }, 120000);
-
-            await sock.sendMessage(from, {
-                react: { text: '✅', key: message.key }
-            });
+            await this.loadQuestion({ sock, message, from, sender, subject, subjectName, prefix });
 
         } catch (error) {
             console.error('UTME command error:', error);
             await sock.sendMessage(from, {
-                text: '╭──⦿【 ❌ ERROR 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: Failed to load question\n│\n│ ⚠️ 𝗗𝗲𝘁𝗮𝗶𝗹𝘀: ' + error.message + '\n│ 💡 𝗧𝗶𝗽: Try again later\n╰────────⦿'
+                text: '❌ Failed to load question\n\n⚠️ ' + error.message + '\n💡 Try again later'
             }, { quoted: message });
         }
     },
 
-    async showSubjects({ sock, message, from, prefix }) {
-        const subjectList = Object.keys(this.subjects);
-        let subjectsText = '╭──⦿【 📚 UTME SUBJECTS 】\n│\n';
-        
-        const categories = {
-            'Sciences': ['mathematics', 'physics', 'chemistry', 'biology'],
-            'Arts': ['literature', 'government', 'history', 'crk', 'irk'],
-            'Commercial': ['economics', 'commerce', 'accounting'],
-            'Social Sciences': ['geography', 'civics'],
-            'Others': ['english', 'agriculture', 'computer']
-        };
+    async loadQuestion({ sock, message, from, sender, subject, subjectName, prefix }) {
+        await sock.sendMessage(from, {
+            react: { text: '📚', key: message.key }
+        });
 
-        for (const [category, subjects] of Object.entries(categories)) {
-            subjectsText += '│ 📖 ' + category + ':\n';
-            subjects.forEach(sub => {
-                if (this.subjects[sub]) {
-                    subjectsText += '│   ✧ ' + prefix + 'utme ' + sub + '\n';
-                }
-            });
-            subjectsText += '│\n';
+        const statusMsg = await sock.sendMessage(from, {
+            text: '📚 Loading ' + subjectName + ' question...'
+        }, { quoted: message });
+
+        const apiUrl = 'https://questions.aloc.com.ng/api/v2/q/1?subject=' + subject;
+        const response = await axios.get(apiUrl, {
+            headers: {
+                'Accept': 'application/json',
+                'AccessToken': 'QB-1e5c5f1553ccd8cd9e11'
+            },
+            timeout: 15000
+        });
+
+        if (!response.data || !response.data.data || response.data.data.length === 0) {
+            await sock.sendMessage(from, { delete: statusMsg.key });
+            await sock.sendMessage(from, {
+                text: '❌ No questions found for ' + subjectName + '\n\n💡 Try another subject'
+            }, { quoted: message });
+            return;
         }
 
-        subjectsText += '╰────────⦿\n\n';
-        subjectsText += '💡 Example: ' + prefix + 'utme mathematics\n\n';
-        subjectsText += '╭─────────────⦿\n│💫 | [ ' + config.botName + ' 🍀 ]\n╰────────────⦿';
+        const questionData = response.data.data[0];
+        const correctAnswer = questionData.answer;
+
+        if (!userScores.has(sender)) {
+            userScores.set(sender, { total: 0, correct: 0, subjects: {} });
+        }
+        if (!userStreaks.has(sender)) {
+            userStreaks.set(sender, 0);
+        }
+
+        const userScore = userScores.get(sender);
+        if (!userScore.subjects[subject]) {
+            userScore.subjects[subject] = { total: 0, correct: 0 };
+        }
+
+        const canvas = await this.createQuestionCanvas(questionData, subjectName, sender);
+
+        await sock.sendMessage(from, { delete: statusMsg.key });
+
+        const stats = userScore.subjects[subject];
+        const percentage = stats.total > 0 ? Math.round((stats.correct / stats.total) * 100) : 0;
+        const streak = userStreaks.get(sender);
+
+        let caption = '📚 ' + subjectName + ' Quiz\n\n';
+        caption += '📊 Your Stats: ' + stats.correct + '/' + stats.total + ' (' + percentage + '%)\n';
+        if (streak > 0) {
+            caption += '🔥 Streak: ' + streak + '\n';
+        }
+        caption += '\n💡 Reply with: A, B, C, or D';
+
+        const sentMsg = await sock.sendMessage(from, {
+            image: canvas,
+            caption: caption
+        }, { quoted: message });
+
+        if (sentMsg && sentMsg.key) {
+            this.setupReplyHandler(sock, from, sentMsg.key.id, correctAnswer, questionData, subjectName, sender, subject, prefix);
+        }
+
+        await sock.sendMessage(from, {
+            react: { text: '✅', key: message.key }
+        });
+    },
+
+    async showStats({ sock, message, from, sender }) {
+        const userScore = userScores.get(sender);
+        const streak = userStreaks.get(sender) || 0;
+
+        if (!userScore || userScore.total === 0) {
+            return await sock.sendMessage(from, {
+                text: '📊 No Stats Yet\n\nStart practicing to see your statistics!'
+            }, { quoted: message });
+        }
+
+        const overallPercentage = Math.round((userScore.correct / userScore.total) * 100);
+        let statsText = '📊 Your UTME Stats\n\n';
+        statsText += '🎯 Overall: ' + userScore.correct + '/' + userScore.total + ' (' + overallPercentage + '%)\n';
+        statsText += '🔥 Current Streak: ' + streak + '\n';
+        statsText += '⭐ Best Streak: ' + (userScore.bestStreak || 0) + '\n\n';
+        statsText += '📚 By Subject:\n\n';
+
+        const sortedSubjects = Object.entries(userScore.subjects)
+            .sort((a, b) => b[1].correct - a[1].correct)
+            .slice(0, 10);
+
+        sortedSubjects.forEach(([subject, stats]) => {
+            const percentage = Math.round((stats.correct / stats.total) * 100);
+            const subjectName = this.subjects[subject] || subject;
+            statsText += '  ' + subjectName + '\n';
+            statsText += '  ' + stats.correct + '/' + stats.total + ' (' + percentage + '%)\n\n';
+        });
+
+        await sock.sendMessage(from, {
+            text: statsText
+        }, { quoted: message });
+    },
+
+    async showSubjects({ sock, message, from, prefix, sender }) {
+        const userScore = userScores.get(sender);
+        const hasStats = userScore && userScore.total > 0;
+
+        let subjectsText = '📚 UTME SUBJECTS BY DEPARTMENT\n\n';
+        
+        for (const [category, depts] of Object.entries(this.departments)) {
+            subjectsText += category + '\n';
+            for (const [dept, subjects] of Object.entries(depts)) {
+                subjectsText += '  📌 ' + dept + '\n';
+                subjects.forEach(sub => {
+                    if (this.subjects[sub]) {
+                        subjectsText += '    ✧ ' + prefix + 'utme ' + sub + '\n';
+                    }
+                });
+            }
+            subjectsText += '\n';
+        }
+
+        subjectsText += '💡 Example: ' + prefix + 'utme mathematics\n';
+        if (hasStats) {
+            subjectsText += '📊 View stats: ' + prefix + 'utme score\n';
+        }
+        subjectsText += '🔄 Reset stats: ' + prefix + 'utme reset';
 
         await sock.sendMessage(from, {
             text: subjectsText
         }, { quoted: message });
     },
 
-    async createQuestionCanvas(questionData, subjectName) {
-        const canvas = createCanvas(1200, 800);
+    setupReplyHandler(sock, from, messageId, correctAnswer, questionData, subjectName, sender, subject, prefix) {
+        const replyTimeout = setTimeout(() => {
+            if (global.replyHandlers) {
+                delete global.replyHandlers[messageId];
+            }
+        }, 120000);
+
+        if (!global.replyHandlers) {
+            global.replyHandlers = {};
+        }
+
+        global.replyHandlers[messageId] = {
+            command: this.name,
+            timeout: replyTimeout,
+            handler: async (replyText, replyMessage) => {
+                const input = replyText.toUpperCase().trim();
+
+                if (input === 'NEXT' || input === 'N') {
+                    clearTimeout(replyTimeout);
+                    delete global.replyHandlers[messageId];
+                    
+                    return await this.loadQuestion({
+                        sock,
+                        message: replyMessage,
+                        from,
+                        sender,
+                        subject,
+                        subjectName,
+                        prefix
+                    });
+                }
+
+                if (input === 'STOP' || input === 'END' || input === 'QUIT') {
+                    clearTimeout(replyTimeout);
+                    delete global.replyHandlers[messageId];
+                    
+                    const userScore = userScores.get(sender);
+                    const stats = userScore?.subjects[subject];
+                    
+                    if (stats && stats.total > 0) {
+                        const percentage = Math.round((stats.correct / stats.total) * 100);
+                        return await sock.sendMessage(from, {
+                            text: '✋ Quiz Stopped\n\n📊 Session Stats:\n' + stats.correct + '/' + stats.total + ' (' + percentage + '%)\n\n💡 Use ' + prefix + 'utme ' + subject + ' to continue!'
+                        }, { quoted: replyMessage });
+                    }
+                    
+                    return await sock.sendMessage(from, {
+                        text: '✋ Quiz stopped. Use ' + prefix + 'utme to start again!'
+                    }, { quoted: replyMessage });
+                }
+
+                const answer = input;
+
+                if (!['A', 'B', 'C', 'D'].includes(answer)) {
+                    return await sock.sendMessage(from, {
+                        text: '⚠️ Invalid answer\n\nReply with:\n• A, B, C, or D to answer\n• NEXT for next question\n• STOP to end quiz'
+                    }, { quoted: replyMessage });
+                }
+
+                const isCorrect = answer === correctAnswer.toUpperCase();
+                
+                const userScore = userScores.get(sender);
+                userScore.total++;
+                userScore.subjects[subject].total++;
+                
+                if (isCorrect) {
+                    userScore.correct++;
+                    userScore.subjects[subject].correct++;
+                    
+                    const currentStreak = userStreaks.get(sender) + 1;
+                    userStreaks.set(sender, currentStreak);
+                    
+                    if (!userScore.bestStreak || currentStreak > userScore.bestStreak) {
+                        userScore.bestStreak = currentStreak;
+                    }
+                } else {
+                    userStreaks.set(sender, 0);
+                }
+                
+                const resultCanvas = await this.createResultCanvas(
+                    isCorrect, 
+                    correctAnswer, 
+                    questionData, 
+                    subjectName,
+                    sender
+                );
+
+                const stats = userScore.subjects[subject];
+                const percentage = Math.round((stats.correct / stats.total) * 100);
+                const streak = userStreaks.get(sender);
+
+                let resultText = (isCorrect ? '✅ CORRECT!' : '❌ WRONG!') + '\n\n';
+                resultText += '📖 Subject: ' + subjectName + '\n';
+                resultText += '💡 Your Answer: ' + answer + '\n';
+                resultText += '✅ Correct Answer: ' + correctAnswer.toUpperCase() + '\n';
+                resultText += '\n📊 Score: ' + stats.correct + '/' + stats.total + ' (' + percentage + '%)';
+                
+                if (streak > 0) {
+                    resultText += '\n🔥 Streak: ' + streak;
+                }
+                
+                if (questionData.solution) {
+                    const shortSolution = questionData.solution.substring(0, 120);
+                    resultText += '\n\n💭 ' + shortSolution + (questionData.solution.length > 120 ? '...' : '');
+                }
+                
+                resultText += '\n\n💡 Reply NEXT for another question';
+
+                await sock.sendMessage(from, {
+                    image: resultCanvas,
+                    caption: resultText,
+                    mentions: [sender]
+                }, { quoted: replyMessage });
+
+                await sock.sendMessage(from, {
+                    react: { text: isCorrect ? '✅' : '❌', key: replyMessage.key }
+                });
+
+                this.setupReplyHandler(sock, from, messageId, correctAnswer, questionData, subjectName, sender, subject, prefix);
+            }
+        };
+    },
+
+    async createQuestionCanvas(questionData, subjectName, sender) {
+        const canvas = createCanvas(1200, 850);
         const ctx = canvas.getContext('2d');
 
         const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
@@ -181,30 +422,42 @@ export default {
         ctx.textAlign = 'center';
         ctx.fillText('📚 UTME QUIZ', canvas.width / 2, 110);
 
-        ctx.font = 'bold 35px Arial';
+        ctx.font = 'bold 32px Arial';
         ctx.fillStyle = '#00ff88';
         ctx.fillText(subjectName, canvas.width / 2, 160);
 
+        const userScore = userScores.get(sender);
+        if (userScore) {
+            const streak = userStreaks.get(sender);
+            ctx.font = '24px Arial';
+            ctx.fillStyle = '#ffd700';
+            let statsText = 'Score: ' + userScore.correct + '/' + userScore.total;
+            if (streak > 0) {
+                statsText += ' | Streak: ' + streak + ' 🔥';
+            }
+            ctx.fillText(statsText, canvas.width / 2, 195);
+        }
+
         ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
-        this.roundRect(ctx, 80, 190, canvas.width - 160, 520, 20);
+        this.roundRect(ctx, 80, 220, canvas.width - 160, 530, 20);
         ctx.fill();
 
-        ctx.font = 'bold 28px Arial';
+        ctx.font = 'bold 26px Arial';
         ctx.fillStyle = '#ffffff';
         ctx.textAlign = 'left';
-        ctx.fillText('❓ QUESTION:', 100, 235);
+        ctx.fillText('Question:', 100, 260);
 
         const questionText = questionData.question;
-        ctx.font = '26px Arial';
+        ctx.font = '24px Arial';
         ctx.fillStyle = '#e0e0e0';
         const wrappedQuestion = this.wrapText(ctx, questionText, canvas.width - 200);
-        let questionY = 275;
-        wrappedQuestion.forEach(line => {
+        let questionY = 295;
+        wrappedQuestion.slice(0, 3).forEach(line => {
             ctx.fillText(line, 100, questionY);
-            questionY += 35;
+            questionY += 32;
         });
 
-        const optionsY = questionY + 30;
+        const optionsY = questionY + 25;
         const options = [
             { label: 'A', text: questionData.option.a, color: '#00ff88' },
             { label: 'B', text: questionData.option.b, color: '#ffd700' },
@@ -213,78 +466,34 @@ export default {
         ];
 
         let currentY = optionsY;
-        options.forEach((opt, index) => {
+        options.forEach((opt) => {
             ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
-            this.roundRect(ctx, 100, currentY, canvas.width - 220, 70, 10);
+            this.roundRect(ctx, 100, currentY, canvas.width - 220, 65, 10);
             ctx.fill();
 
-            ctx.font = 'bold 32px Arial';
+            ctx.font = 'bold 30px Arial';
             ctx.fillStyle = opt.color;
-            ctx.fillText(opt.label + '.', 120, currentY + 45);
+            ctx.fillText(opt.label + '.', 120, currentY + 42);
 
-            ctx.font = '24px Arial';
+            ctx.font = '22px Arial';
             ctx.fillStyle = '#ffffff';
             const wrappedOption = this.wrapText(ctx, opt.text, canvas.width - 340);
-            ctx.fillText(wrappedOption[0], 170, currentY + 45);
+            const displayText = wrappedOption[0].substring(0, 80) + (wrappedOption[0].length > 80 ? '...' : '');
+            ctx.fillText(displayText, 170, currentY + 42);
 
-            currentY += 90;
+            currentY += 80;
         });
 
-        ctx.font = '22px Arial';
+        ctx.font = '20px Arial';
         ctx.fillStyle = '#a0a0a0';
         ctx.textAlign = 'center';
-        ctx.fillText('Reply with your answer: A, B, C, or D', canvas.width / 2, canvas.height - 50);
+        ctx.fillText('Reply: A, B, C, D | NEXT for next question | STOP to end', canvas.width / 2, canvas.height - 50);
 
         return canvas.toBuffer('image/png');
     },
 
-    async onReply({ sock, message, from, sender, text }) {
-        const quizData = activeQuizzes.get(from);
-        
-        if (!quizData) return false;
-        
-        if (sender !== quizData.sender) {
-            await sock.sendMessage(from, {
-                text: '╭──⦿【 ⚠️ NOT YOUR QUIZ 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: Only the quiz starter can answer\n╰────────⦿'
-            }, { quoted: message });
-            return true;
-        }
-
-        const answer = text.toUpperCase().trim();
-
-        if (!['A', 'B', 'C', 'D'].includes(answer)) {
-            await sock.sendMessage(from, {
-                text: '╭──⦿【 ⚠️ INVALID 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: Invalid answer format\n│\n│ 💡 𝗩𝗮𝗹𝗶𝗱 𝗮𝗻𝘀𝘄𝗲𝗿𝘀: A, B, C, or D\n╰────────⦿'
-            }, { quoted: message });
-            return true;
-        }
-
-        activeQuizzes.delete(from);
-
-        const isCorrect = answer === quizData.correctAnswer.toUpperCase();
-        const resultCanvas = await this.createResultCanvas(isCorrect, quizData.correctAnswer, quizData.questionData, quizData.subjectName);
-
-        let resultText = '╭──⦿【 ' + (isCorrect ? '✅ CORRECT' : '❌ WRONG') + ' 】\n';
-        resultText += '│ 📖 𝗦𝘂𝗯𝗷𝗲𝗰𝘁: ' + quizData.subjectName + '\n';
-        resultText += '│ 💡 𝗬𝗼𝘂𝗿 𝗔𝗻𝘀𝘄𝗲𝗿: ' + answer + '\n';
-        resultText += '│ ✅ 𝗖𝗼𝗿𝗿𝗲𝗰𝘁 𝗔𝗻𝘀𝘄𝗲𝗿: ' + quizData.correctAnswer.toUpperCase() + '\n';
-        if (quizData.questionData.solution) {
-            resultText += '│\n│ 📝 𝗘𝘅𝗽𝗹𝗮𝗻𝗮𝘁𝗶𝗼𝗻:\n│ ' + quizData.questionData.solution + '\n';
-        }
-        resultText += '╰────────⦿\n\n';
-        resultText += '╭─────────────⦿\n│💫 | [ ' + config.botName + ' 🍀 ]\n╰────────────⦿';
-
-        await sock.sendMessage(from, {
-            image: resultCanvas,
-            caption: resultText,
-            mentions: [sender]
-        }, { quoted: message });
-
-        return true;
-    },
-
-    async createResultCanvas(isCorrect, correctAnswer, questionData, subjectName) {
-        const canvas = createCanvas(1200, 700);
+    async createResultCanvas(isCorrect, correctAnswer, questionData, subjectName, sender) {
+        const canvas = createCanvas(1200, 650);
         const ctx = canvas.getContext('2d');
 
         const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
@@ -307,46 +516,48 @@ export default {
         this.roundRect(ctx, 40, 40, canvas.width - 80, canvas.height - 80, 25);
         ctx.fill();
 
-        ctx.font = 'bold 80px Arial';
+        ctx.font = 'bold 70px Arial';
         ctx.fillStyle = '#ffffff';
         ctx.textAlign = 'center';
-        ctx.fillText(isCorrect ? '✅ CORRECT!' : '❌ WRONG!', canvas.width / 2, 130);
-
-        ctx.font = 'bold 35px Arial';
-        ctx.fillStyle = '#ffd700';
-        ctx.fillText(subjectName, canvas.width / 2, 190);
-
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
-        this.roundRect(ctx, 80, 230, canvas.width - 160, 120, 15);
-        ctx.fill();
+        ctx.fillText(isCorrect ? '✅ CORRECT!' : '❌ WRONG!', canvas.width / 2, 120);
 
         ctx.font = 'bold 32px Arial';
+        ctx.fillStyle = '#ffd700';
+        ctx.fillText(subjectName, canvas.width / 2, 175);
+
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+        this.roundRect(ctx, 80, 215, canvas.width - 160, 110, 15);
+        ctx.fill();
+
+        ctx.font = 'bold 28px Arial';
         ctx.fillStyle = '#ffffff';
         ctx.textAlign = 'left';
-        ctx.fillText('✅ Correct Answer: ' + correctAnswer.toUpperCase(), 100, 280);
+        ctx.fillText('✅ Correct Answer: ' + correctAnswer.toUpperCase(), 100, 260);
 
-        ctx.font = '28px Arial';
+        ctx.font = '24px Arial';
         ctx.fillStyle = '#e0e0e0';
         const correctOption = questionData.option[correctAnswer.toLowerCase()];
         const wrappedCorrect = this.wrapText(ctx, correctOption, canvas.width - 200);
-        ctx.fillText(wrappedCorrect[0], 100, 325);
+        const displayCorrect = wrappedCorrect[0].substring(0, 90) + (wrappedCorrect[0].length > 90 ? '...' : '');
+        ctx.fillText(displayCorrect, 100, 300);
 
         if (questionData.solution) {
             ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
-            this.roundRect(ctx, 80, 380, canvas.width - 160, 230, 15);
+            this.roundRect(ctx, 80, 355, canvas.width - 160, 200, 15);
             ctx.fill();
 
-            ctx.font = 'bold 32px Arial';
+            ctx.font = 'bold 28px Arial';
             ctx.fillStyle = '#00ff88';
-            ctx.fillText('📝 Explanation:', 100, 425);
+            ctx.fillText('💡 Explanation:', 100, 395);
 
-            ctx.font = '24px Arial';
+            ctx.font = '22px Arial';
             ctx.fillStyle = '#ffffff';
             const wrappedSolution = this.wrapText(ctx, questionData.solution, canvas.width - 200);
-            let solutionY = 465;
-            wrappedSolution.slice(0, 5).forEach(line => {
-                ctx.fillText(line, 100, solutionY);
-                solutionY += 32;
+            let solutionY = 430;
+            wrappedSolution.slice(0, 4).forEach(line => {
+                const displayLine = line.substring(0, 100) + (line.length > 100 ? '...' : '');
+                ctx.fillText(displayLine, 100, solutionY);
+                solutionY += 30;
             });
         }
 
