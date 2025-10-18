@@ -1,4 +1,4 @@
-import { createCanvas } from 'canvas';
+import { createCanvas } from '@napi-rs/canvas';
 import axios from 'axios';
 import config from '../../config.js';
 

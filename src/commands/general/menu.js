@@ -12,7 +12,7 @@ export default {
     usage: 'menu [category]',
     cooldown: 3,
     permissions: ['user'],
-    supportsButtons: true,
+    supportsButtons: false,
 
     async execute({ sock, message, args, from, prefix, sender }) {
         const category = args[0]?.toLowerCase();

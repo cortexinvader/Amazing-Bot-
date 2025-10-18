@@ -155,16 +155,41 @@ class CommandHandler {
             return userPhone === ownerPhone;
         });
     }
+    
+    isSudo(jid) {
+        if (!jid) return false;
+        const userPhone = this.extractPhone(jid);
+        return config.sudoers.some(sudoNum => {
+            const sudoPhone = this.extractPhone(sudoNum);
+            return userPhone === sudoPhone;
+        });
+    }
 
     async isGroupAdmin(sock, groupId, participantJid) {
         try {
+            if (!groupId || !participantJid) return false;
+            
             const groupMetadata = await sock.groupMetadata(groupId);
-            const participant = groupMetadata.participants.find(p => 
-                p.id === participantJid || 
-                p.lid === participantJid ||
-                this.extractPhone(p.id) === this.extractPhone(participantJid)
-            );
-            return participant?.admin === 'admin' || participant?.admin === 'superadmin';
+            if (!groupMetadata || !groupMetadata.participants) return false;
+            
+            const participantPhone = this.extractPhone(participantJid);
+            
+            const participant = groupMetadata.participants.find(p => {
+                if (p.id === participantJid) return true;
+                if (p.lid === participantJid) return true;
+                
+                const pPhone = this.extractPhone(p.id);
+                const pLidPhone = p.lid ? this.extractPhone(p.lid) : null;
+                
+                if (pPhone === participantPhone) return true;
+                if (pLidPhone === participantPhone) return true;
+                
+                return false;
+            });
+            
+            if (!participant) return false;
+            
+            return participant.admin === 'admin' || participant.admin === 'superadmin';
         } catch (error) {
             logger.error('Error checking group admin status:', error);
             return false;
@@ -173,9 +198,29 @@ class CommandHandler {
 
     async isBotAdmin(sock, groupId) {
         try {
+            if (!groupId || !sock || !sock.user) return false;
+            
             const groupMetadata = await sock.groupMetadata(groupId);
-            const botParticipant = groupMetadata.participants.find(p => p.id === sock.user.id);
-            return botParticipant?.admin === 'admin' || botParticipant?.admin === 'superadmin';
+            if (!groupMetadata || !groupMetadata.participants) return false;
+            
+            const botJid = sock.user.id;
+            const botPhone = this.extractPhone(botJid);
+            
+            const botParticipant = groupMetadata.participants.find(p => {
+                if (p.id === botJid) return true;
+                
+                const pPhone = this.extractPhone(p.id);
+                const pLidPhone = p.lid ? this.extractPhone(p.lid) : null;
+                
+                if (pPhone === botPhone) return true;
+                if (pLidPhone === botPhone) return true;
+                
+                return false;
+            });
+            
+            if (!botParticipant) return false;
+            
+            return botParticipant.admin === 'admin' || botParticipant.admin === 'superadmin';
         } catch (error) {
             logger.error('Error checking bot admin status:', error);
             return false;

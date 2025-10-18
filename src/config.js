@@ -15,6 +15,10 @@ const config = {
         num.includes('@') ? num : `${num.trim()}@s.whatsapp.net`
     ),
     ownerName: process.env.OWNER_NAME || 'Ilom',
+    
+    sudoers: (process.env.SUDO_NUMBERS || '').split(',')
+        .filter(num => num.trim())
+        .map(num => num.includes('@') ? num : `${num.trim()}@s.whatsapp.net`),
 
     publicMode: process.env.PUBLIC_MODE === 'true',
     selfMode: process.env.SELF_MODE === 'true',

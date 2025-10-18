@@ -1,13 +1,34 @@
 import config from '../../config.js';
-import fs from 'fs';
+import fs from 'fs-extra';
 import path from 'path';
+
+const SUDO_FILE = path.join(process.cwd(), 'cache', 'sudoers.json');
+
+async function loadSudoers() {
+    try {
+        await fs.ensureFile(SUDO_FILE);
+        const content = await fs.readFile(SUDO_FILE, 'utf8');
+        if (!content.trim()) return [];
+        const data = JSON.parse(content);
+        return data.sudoers || [];
+    } catch (error) {
+        return [];
+    }
+}
+
+async function saveSudoers(sudoers) {
+    await fs.ensureDir(path.dirname(SUDO_FILE));
+    await fs.writeFile(SUDO_FILE, JSON.stringify({ sudoers }, null, 2), 'utf8');
+    config.sudoers = sudoers;
+}
 
 export default {
     name: 'sudo',
-    aliases: ['addadmin', 'makeadmin'],
+    aliases: ['addadmin', 'makeadmin', 'botadmin'],
     category: 'owner',
-    description: 'Add or remove bot admin users',
-    usage: 'sudo add/remove [@user]',
+    description: 'Add or remove bot admin users (reply to message or mention user)',
+    usage: 'sudo add/remove [@user or reply]\nsudo list',
+    example: 'sudo add @user\nsudo remove (reply to user message)\nsudo list',
     cooldown: 0,
     permissions: ['owner'],
     ownerOnly: true,
@@ -15,113 +36,184 @@ export default {
     async execute({ sock, message, args, from, sender }) {
         try {
             const action = args[0]?.toLowerCase();
-            const mentionedUsers = message.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
-            const quotedUser = message.message?.extendedTextMessage?.contextInfo?.participant;
+            
+            if (!action || (action !== 'add' && action !== 'remove' && action !== 'list')) {
+                return await sock.sendMessage(from, {
+                    text: `❌ *Invalid Action*
 
-            let targetJid;
-            if (quotedUser) {
-                targetJid = quotedUser;
+Available actions:
+• add - Add bot admin (reply or mention)
+• remove - Remove bot admin (reply or mention)
+• list - View all bot admins
+
+*Usage:*
+• .sudo add @user
+• .sudo remove (reply to user)
+• .sudo list`
+                }, { quoted: message });
+            }
+
+            const sudoers = await loadSudoers();
+
+            if (action === 'list') {
+                if (sudoers.length === 0) {
+                    return await sock.sendMessage(from, {
+                        text: `📋 *Bot Admin List*
+
+No bot admins configured.
+
+Use \`.sudo add @user\` to add admins.
+
+*Note:* Bot owners have all admin privileges by default.`
+                    }, { quoted: message });
+                }
+
+                let listText = `📋 *Bot Admin List*
+
+`;
+                sudoers.forEach((admin, index) => {
+                    const number = admin.replace('@s.whatsapp.net', '').replace('@c.us', '');
+                    listText += `${index + 1}. @${number}\n`;
+                });
+                listText += `\n*Total:* ${sudoers.length} bot admin${sudoers.length > 1 ? 's' : ''}`;
+
+                return await sock.sendMessage(from, {
+                    text: listText,
+                    mentions: sudoers
+                }, { quoted: message });
+            }
+
+            const mentionedUsers = message.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+            const quotedMsg = message.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+            const quotedParticipant = message.message?.extendedTextMessage?.contextInfo?.participant;
+            
+            let targetJid = null;
+            
+            if (quotedMsg && quotedParticipant) {
+                targetJid = quotedParticipant;
             } else if (mentionedUsers.length > 0) {
                 targetJid = mentionedUsers[0];
             } else {
                 return await sock.sendMessage(from, {
-                    text: '❌ *No User Specified*\n\nReply to a message or mention a user.\n\n*Usage:*\n• .sudo add @user\n• .sudo remove @user\n• .sudo list'
-                }, { quoted: message });
-            }
+                    text: `❌ *No User Specified*
 
-            if (!action || (action !== 'add' && action !== 'remove' && action !== 'list')) {
-                return await sock.sendMessage(from, {
-                    text: '❌ *Invalid Action*\n\nAvailable actions:\n• add - Add bot admin\n• remove - Remove bot admin\n• list - View all admins\n\n*Usage:* .sudo add @user'
-                }, { quoted: message });
-            }
+Please specify a user by:
+• Replying to their message
+• Mentioning them with @
 
-            if (action === 'list') {
-                const adminList = config.sudoers || [];
-                if (adminList.length === 0) {
-                    return await sock.sendMessage(from, {
-                        text: '📋 *Bot Admin List*\n\nNo bot admins configured.\n\nUse `.sudo add @user` to add admins.'
-                    }, { quoted: message });
-                }
-
-                let listText = '📋 *Bot Admin List*\n\n';
-                adminList.forEach((admin, index) => {
-                    const number = admin.replace('@s.whatsapp.net', '');
-                    listText += `${index + 1}. @${number}\n`;
-                });
-                listText += `\n*Total:* ${adminList.length} admins`;
-
-                return await sock.sendMessage(from, {
-                    text: listText,
-                    mentions: adminList
+*Usage:*
+• .sudo add @user
+• .sudo remove (reply to user message)`
                 }, { quoted: message });
             }
 
             const targetNumber = targetJid.split('@')[0];
 
             if (action === 'add') {
-                if (config.sudoers.includes(targetJid)) {
+                if (sudoers.includes(targetJid)) {
                     return await sock.sendMessage(from, {
-                        text: `ℹ️ *Already Admin*\n\n@${targetNumber} is already a bot admin.`,
+                        text: `ℹ️ *Already Bot Admin*
+
+@${targetNumber} is already a bot admin.
+
+Use \`.sudo list\` to view all admins.`,
                         mentions: [targetJid]
                     }, { quoted: message });
                 }
 
-                config.sudoers.push(targetJid);
+                const isOwner = config.ownerNumbers.some(owner => {
+                    const ownerNum = owner.split('@')[0];
+                    return ownerNum === targetNumber;
+                });
 
-                const configPath = path.join(process.cwd(), 'src', 'config.js');
-                const configContent = fs.readFileSync(configPath, 'utf8');
-                const updatedConfig = configContent.replace(
-                    /sudoers:\s*\[([^\]]*)\]/,
-                    `sudoers: [${config.sudoers.map(s => `'${s}'`).join(', ')}]`
-                );
-                fs.writeFileSync(configPath, updatedConfig, 'utf8');
+                if (isOwner) {
+                    return await sock.sendMessage(from, {
+                        text: `ℹ️ *Already Owner*
+
+@${targetNumber} is the bot owner and has all privileges automatically.
+
+No need to add as bot admin.`,
+                        mentions: [targetJid]
+                    }, { quoted: message });
+                }
+
+                sudoers.push(targetJid);
+                await saveSudoers(sudoers);
 
                 await sock.sendMessage(from, {
-                    text: `✅ *Bot Admin Added*\n\n*User:* @${targetNumber}\n*Added by:* @${sender.split('@')[0]}\n*Date:* ${new Date().toLocaleString()}\n\n@${targetNumber} now has bot admin privileges and can use owner commands.`,
+                    text: `✅ *Bot Admin Added*
+
+*User:* @${targetNumber}
+*Added by:* @${sender.split('@')[0]}
+*Date:* ${new Date().toLocaleString()}
+
+@${targetNumber} now has bot admin privileges and can use owner commands.`,
                     mentions: [targetJid, sender]
                 }, { quoted: message });
 
                 try {
                     await sock.sendMessage(targetJid, {
-                        text: `👑 *You Are Now Bot Admin*\n\n*Added by:* @${sender.split('@')[0]}\n*Date:* ${new Date().toLocaleString()}\n\nYou now have bot admin privileges. Use them responsibly!`,
+                        text: `👑 *You Are Now Bot Admin*
+
+*Added by:* @${sender.split('@')[0]}
+*Date:* ${new Date().toLocaleString()}
+
+You now have bot admin privileges. Use them responsibly!
+
+Type \`.help owner\` to see available commands.`,
                         mentions: [sender]
                     });
                 } catch (e) {}
 
             } else if (action === 'remove') {
-                if (!config.sudoers.includes(targetJid)) {
+                if (!sudoers.includes(targetJid)) {
                     return await sock.sendMessage(from, {
-                        text: `ℹ️ *Not Admin*\n\n@${targetNumber} is not a bot admin.`,
+                        text: `ℹ️ *Not Bot Admin*
+
+@${targetNumber} is not a bot admin.
+
+Use \`.sudo list\` to view all admins.`,
                         mentions: [targetJid]
                     }, { quoted: message });
                 }
 
-                config.sudoers = config.sudoers.filter(s => s !== targetJid);
-
-                const configPath = path.join(process.cwd(), 'src', 'config.js');
-                const configContent = fs.readFileSync(configPath, 'utf8');
-                const updatedConfig = configContent.replace(
-                    /sudoers:\s*\[([^\]]*)\]/,
-                    `sudoers: [${config.sudoers.map(s => `'${s}'`).join(', ')}]`
-                );
-                fs.writeFileSync(configPath, updatedConfig, 'utf8');
+                const updatedSudoers = sudoers.filter(s => s !== targetJid);
+                await saveSudoers(updatedSudoers);
 
                 await sock.sendMessage(from, {
-                    text: `✅ *Bot Admin Removed*\n\n*User:* @${targetNumber}\n*Removed by:* @${sender.split('@')[0]}\n*Date:* ${new Date().toLocaleString()}\n\n@${targetNumber} no longer has bot admin privileges.`,
+                    text: `✅ *Bot Admin Removed*
+
+*User:* @${targetNumber}
+*Removed by:* @${sender.split('@')[0]}
+*Date:* ${new Date().toLocaleString()}
+
+@${targetNumber} no longer has bot admin privileges.`,
                     mentions: [targetJid, sender]
                 }, { quoted: message });
 
                 try {
                     await sock.sendMessage(targetJid, {
-                        text: `⚠️ *Bot Admin Removed*\n\n*Removed by:* @${sender.split('@')[0]}\n*Date:* ${new Date().toLocaleString()}\n\nYour bot admin privileges have been revoked.`,
+                        text: `⚠️ *Bot Admin Removed*
+
+*Removed by:* @${sender.split('@')[0]}
+*Date:* ${new Date().toLocaleString()}
+
+Your bot admin privileges have been revoked.`,
                         mentions: [sender]
                     });
                 } catch (e) {}
             }
 
         } catch (error) {
+            console.error('Sudo command error:', error);
             await sock.sendMessage(from, {
-                text: '❌ *Error*\n\nFailed to update bot admin list. Please try again.'
+                text: `❌ *Error*
+
+Failed to update bot admin list.
+
+*Error:* ${error.message}
+
+Please try again.`
             }, { quoted: message });
         }
     }
