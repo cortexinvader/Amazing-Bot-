@@ -268,14 +268,16 @@ export default {
 
     setupReplyHandler(sock, from, messageId, correctAnswer, questionData, subjectName, sender, subject, prefix) {
         const replyTimeout = setTimeout(() => {
-            if (global.replyHandlers) {
+            if (global.replyHandlers && global.replyHandlers[messageId]) {
                 delete global.replyHandlers[messageId];
             }
-        }, 120000);
+        }, 180000);
 
         if (!global.replyHandlers) {
             global.replyHandlers = {};
         }
+
+        const commandInstance = this;
 
         global.replyHandlers[messageId] = {
             command: this.name,
@@ -287,7 +289,7 @@ export default {
                     clearTimeout(replyTimeout);
                     delete global.replyHandlers[messageId];
                     
-                    return await this.loadQuestion({
+                    return await commandInstance.loadQuestion({
                         sock,
                         message: replyMessage,
                         from,
@@ -345,7 +347,7 @@ export default {
                     userStreaks.set(sender, 0);
                 }
                 
-                const resultCanvas = await this.createResultCanvas(
+                const resultCanvas = await commandInstance.createResultCanvas(
                     isCorrect, 
                     correctAnswer, 
                     questionData, 
@@ -374,7 +376,7 @@ export default {
                 
                 resultText += '\n\n💡 Reply NEXT for another question';
 
-                await sock.sendMessage(from, {
+                const resultMsg = await sock.sendMessage(from, {
                     image: resultCanvas,
                     caption: resultText,
                     mentions: [sender]
@@ -384,7 +386,9 @@ export default {
                     react: { text: isCorrect ? '✅' : '❌', key: replyMessage.key }
                 });
 
-                this.setupReplyHandler(sock, from, messageId, correctAnswer, questionData, subjectName, sender, subject, prefix);
+                if (resultMsg && resultMsg.key) {
+                    commandInstance.setupReplyHandler(sock, from, resultMsg.key.id, correctAnswer, questionData, subjectName, sender, subject, prefix);
+                }
             }
         };
     },
@@ -596,7 +600,7 @@ export default {
         ctx.lineTo(x + width, y + height - radius);
         ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
         ctx.lineTo(x + radius, y + height);
-        ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+        ctx.quadraticCurveTo(x, y, height, x, y + height - radius);
         ctx.lineTo(x, y + radius);
         ctx.quadraticCurveTo(x, y, x + radius, y);
         ctx.closePath();
