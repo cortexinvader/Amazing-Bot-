@@ -995,6 +995,310 @@ const infoText = `
 
 ---
 
+## ✨ Amazing Bot Command - Glowing Styling
+
+Create stunning visual effects with glowing text and gradient styling for your commands!
+
+### Glowing Text Command with Canvas
+
+This example creates a command with beautiful glowing neon-style text using canvas:
+
+```javascript
+import { createCanvas, GlobalFonts } from '@napi-rs/canvas';
+import fs from 'fs-extra';
+import path from 'path';
+
+export default {
+    name: 'amazingbot',
+    aliases: ['glow', 'neon', 'shine'],
+    category: 'fun',
+    description: '✨ Display Amazing Bot with glowing neon effects',
+    usage: '.amazingbot [text]',
+    example: '.amazingbot Hello World',
+    cooldown: 3,
+    
+    async execute({ sock, message, from, args, sender }) {
+        try {
+            const text = args.length > 0 ? args.join(' ') : 'AMAZING BOT';
+            
+            // Create canvas with dark background
+            const canvas = createCanvas(1200, 600);
+            const ctx = canvas.getContext('2d');
+            
+            // Dark background with subtle gradient
+            const bgGradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+            bgGradient.addColorStop(0, '#0a0a0a');
+            bgGradient.addColorStop(0.5, '#1a1a2e');
+            bgGradient.addColorStop(1, '#16213e');
+            ctx.fillStyle = bgGradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Add stars/particles effect
+            for (let i = 0; i < 100; i++) {
+                const x = Math.random() * canvas.width;
+                const y = Math.random() * canvas.height;
+                const radius = Math.random() * 2;
+                ctx.fillStyle = `rgba(255, 255, 255, ${Math.random() * 0.8})`;
+                ctx.beginPath();
+                ctx.arc(x, y, radius, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            
+            // Create multiple glowing layers for neon effect
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            
+            // Outer glow (largest)
+            ctx.font = 'bold 100px Arial';
+            ctx.shadowColor = '#ff00ff';
+            ctx.shadowBlur = 80;
+            ctx.fillStyle = '#ff00ff';
+            ctx.globalAlpha = 0.3;
+            ctx.fillText(text, centerX, centerY);
+            
+            // Middle glow
+            ctx.shadowColor = '#00ffff';
+            ctx.shadowBlur = 60;
+            ctx.fillStyle = '#00ffff';
+            ctx.globalAlpha = 0.5;
+            ctx.fillText(text, centerX, centerY);
+            
+            // Inner glow
+            ctx.shadowColor = '#ffffff';
+            ctx.shadowBlur = 40;
+            ctx.fillStyle = '#ffffff';
+            ctx.globalAlpha = 0.7;
+            ctx.fillText(text, centerX, centerY);
+            
+            // Main text with gradient
+            const textGradient = ctx.createLinearGradient(
+                centerX - 400, centerY - 50,
+                centerX + 400, centerY + 50
+            );
+            textGradient.addColorStop(0, '#ff00ff');
+            textGradient.addColorStop(0.33, '#00ffff');
+            textGradient.addColorStop(0.66, '#ffff00');
+            textGradient.addColorStop(1, '#ff00ff');
+            
+            ctx.globalAlpha = 1;
+            ctx.shadowBlur = 20;
+            ctx.fillStyle = textGradient;
+            ctx.fillText(text, centerX, centerY);
+            
+            // Add subtitle
+            ctx.font = 'bold 30px Arial';
+            ctx.shadowColor = '#00ffff';
+            ctx.shadowBlur = 15;
+            ctx.fillStyle = '#00ffff';
+            ctx.fillText('✨ Created by Ilom ✨', centerX, centerY + 100);
+            
+            // Add decorative elements
+            ctx.strokeStyle = '#ff00ff';
+            ctx.lineWidth = 3;
+            ctx.shadowBlur = 20;
+            ctx.beginPath();
+            ctx.moveTo(centerX - 500, centerY + 150);
+            ctx.lineTo(centerX + 500, centerY + 150);
+            ctx.stroke();
+            
+            // Export image
+            const buffer = canvas.toBuffer('image/png');
+            
+            await sock.sendMessage(from, {
+                image: buffer,
+                caption: `╭━━━⦿『 ✨ *AMAZING BOT* ✨ 』⦿━━━╮
+│
+│ 🌟 *Glowing Neon Style*
+│ 🎨 *Created with Canvas Magic*
+│ 💫 *Powered by Ilom Technology*
+│ 
+│ 👤 Requested by: @${sender.split('@')[0]}
+│
+╰━━━━━━━━━━━━━━━━━━━━━━━━╯`,
+                mentions: [sender]
+            }, { quoted: message });
+            
+        } catch (error) {
+            await sock.sendMessage(from, {
+                text: `❌ Failed to create glowing effect\n\n*Error:* ${error.message}`
+            }, { quoted: message });
+        }
+    }
+};
+```
+
+### Glowing Text-Only Style (No Canvas Required)
+
+For simpler implementations without canvas, use Unicode and formatting:
+
+```javascript
+export default {
+    name: 'glowtext',
+    aliases: ['gtext', 'shine'],
+    category: 'fun',
+    description: '✨ Display text with glowing ASCII style',
+    usage: '.glowtext [message]',
+    example: '.glowtext Amazing Bot',
+    cooldown: 2,
+    
+    async execute({ sock, message, from, args, sender }) {
+        const text = args.length > 0 ? args.join(' ') : 'AMAZING BOT';
+        
+        const glowingMessage = `
+╔═══════════════════════════════════════╗
+║                                       ║
+║   ✨ ░█▀▀█ ░█▀▄▀█ ░█▀▀█ ░█▀▀▀█ ░█    ║
+║   ✨ ░█▄▄█ ░█░█░█ ░█▄▄█ ░█▄▄▄█ ░█    ║
+║   ✨ ░█─░█ ░█──░█ ░█─░█ ░█▄▄▄█ ░█▄▄█ ║
+║                                       ║
+║          ⭐ ${text.toUpperCase()} ⭐           ║
+║                                       ║
+║   ════════════════════════════════    ║
+║   ╭─『 🌟 GLOWING STYLE 🌟 』─╮       ║
+║   │  💎 Amazing Features           │  ║
+║   │  ⚡ Lightning Fast             │  ║
+║   │  🎨 Beautiful Design            │  ║
+║   │  🔥 Powered by Ilom             │  ║
+║   ╰────────────────────────────────╯  ║
+║                                       ║
+║   👤 Created for: @${sender.split('@')[0].substring(0, 20).padEnd(20)}║
+║                                       ║
+╚═══════════════════════════════════════╝
+
+┌─────────────────────────────────────┐
+│  ✨✨✨  SHINE BRIGHT  ✨✨✨       │
+│   🌟  Like a Diamond  🌟              │
+└─────────────────────────────────────┘`;
+
+        await sock.sendMessage(from, {
+            text: glowingMessage,
+            mentions: [sender]
+        }, { quoted: message });
+    }
+};
+```
+
+### Animated Glowing Progress Bar
+
+Create a dynamic glowing progress bar effect:
+
+```javascript
+export default {
+    name: 'glowprogress',
+    aliases: ['gprogress', 'loading'],
+    category: 'fun',
+    description: '✨ Display glowing animated progress bar',
+    usage: '.glowprogress [task name]',
+    example: '.glowprogress Loading Magic',
+    cooldown: 3,
+    
+    async execute({ sock, message, from, args, sender }) {
+        const taskName = args.join(' ') || 'Processing';
+        
+        const frames = [
+            { percent: 0, bar: '░░░░░░░░░░░░░░░░░░░░', glow: '✨' },
+            { percent: 15, bar: '███░░░░░░░░░░░░░░░░░', glow: '✨💫' },
+            { percent: 30, bar: '██████░░░░░░░░░░░░░░', glow: '✨💫⭐' },
+            { percent: 50, bar: '██████████░░░░░░░░░░', glow: '✨💫⭐🌟' },
+            { percent: 70, bar: '██████████████░░░░░░', glow: '✨💫⭐🌟✨' },
+            { percent: 85, bar: '█████████████████░░░', glow: '✨💫⭐🌟✨💫' },
+            { percent: 100, bar: '████████████████████', glow: '✨💫⭐🌟✨💫⭐' }
+        ];
+        
+        let sentMsg = null;
+        
+        for (const frame of frames) {
+            const progressText = `
+╔═══════════════════════════════════════╗
+║  ✨ AMAZING BOT PROGRESS ✨            ║
+╠═══════════════════════════════════════╣
+║                                       ║
+║  🎯 Task: ${taskName.substring(0, 26).padEnd(26)} ║
+║                                       ║
+║  📊 Progress:                          ║
+║  ┌────────────────────────────────┐   ║
+║  │ ${frame.bar} │   ║
+║  └────────────────────────────────┘   ║
+║                                       ║
+║  ${frame.percent}% Complete ${frame.glow.padEnd(15)}║
+║                                       ║
+║  ${frame.percent === 100 ? '✅ Task Completed Successfully!' : '⏳ Please wait...'.padEnd(30)}       ║
+║                                       ║
+║  👤 User: @${sender.split('@')[0].substring(0, 24).padEnd(24)} ║
+║                                       ║
+╚═══════════════════════════════════════╝`;
+
+            if (sentMsg) {
+                await sock.sendMessage(from, {
+                    text: progressText,
+                    edit: sentMsg.key,
+                    mentions: [sender]
+                });
+                await new Promise(resolve => setTimeout(resolve, 800));
+            } else {
+                sentMsg = await sock.sendMessage(from, {
+                    text: progressText,
+                    mentions: [sender]
+                }, { quoted: message });
+                await new Promise(resolve => setTimeout(resolve, 800));
+            }
+        }
+        
+        // Final success message
+        const successText = `
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃  🎉🎉🎉  SUCCESS!  🎉🎉🎉            ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃                                     ┃
+┃  ✅ ${taskName.substring(0, 28).padEnd(28)} ┃
+┃  ✨ Completed with Excellence!       ┃
+┃  💎 Quality: Perfect                 ┃
+┃  ⚡ Speed: Lightning Fast            ┃
+┃                                     ┃
+┃  🌟 Powered by Amazing Bot           ┃
+┃  👨‍💻 Created by Ilom                  ┃
+┃                                     ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛`;
+
+        setTimeout(() => {
+            sock.sendMessage(from, {
+                text: successText
+            }, { quoted: message });
+        }, 1000);
+    }
+};
+```
+
+### Pro Tips for Glowing Effects
+
+**Canvas-based Glow:**
+- Use multiple shadow layers with decreasing blur
+- Apply gradient fills for color transitions
+- Combine different shadow colors for vibrant effects
+- Use `globalAlpha` to create depth
+
+**Text-based Glow:**
+- Use Unicode box drawing characters (╔═╗║╚╝)
+- Combine emojis for sparkle effects (✨💫⭐🌟)
+- Use spacing and padding for alignment
+- Create frames for animation effects
+
+**Color Combinations:**
+- Neon Pink + Cyan: `#ff00ff` + `#00ffff`
+- Electric Blue + Yellow: `#0080ff` + `#ffff00`
+- Purple + Gold: `#9b59b6` + `#f39c12`
+- Green + White: `#00ff00` + `#ffffff`
+
+**Performance Tips:**
+- Cache generated images when possible
+- Limit animation frames for smoother experience
+- Use cooldowns to prevent spam
+- Optimize canvas size based on content
+
+---
+
 ## 🔑 Key Updates
 
 1. **Canvas Graphics** - Create beautiful visual notifications
@@ -1005,6 +1309,7 @@ const infoText = `
 6. **Button Support** - Interactive button menus
 7. **Database Integration** - User and group data management
 8. **External APIs** - Fetch data from external services
+9. **Glowing Styling** - Create stunning neon and glowing text effects
 
 ---
 
