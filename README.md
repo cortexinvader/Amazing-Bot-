@@ -560,21 +560,27 @@ The bot now features a **stylish, user-personalized help menu** with:
 
 ```bash
 .kick @user          # Remove member from group
-.ban @user           # Ban user permanently
-.unban @user         # Remove ban
+.ban @user [reason]  # Ban user from using bot commands
+.unban @user         # Remove ban from user
 .promote @user       # Promote to admin (with canvas card)
 .demote @user        # Remove admin rights (with canvas card)
-.mute @user [time]   # Mute user temporarily
+.mute @user [time]   # Mute user temporarily (1h, 30m, 1d)
 .unmute @user        # Unmute user
-.warn @user          # Issue warning
-.unwarn @user        # Remove warning
-.tagall [message]    # Mention all members
-.hidetag [message]   # Hidden mention all
-.setdesc <text>      # Change description (with notification)
-.setname <text>      # Change group name (with notification)
-.groupinfo           # Get group details
-.antilink on/off     # Enable/disable link protection
+.warn @user [reason] # Issue warning (3 warnings = auto-ban)
+.unwarn @user [amt]  # Remove warnings
+.tagall [message]    # Mention all members with list
+.hidetag [message]   # Hidden mention all (notification only)
+.setdesc <text>      # Change group description
+.setname <text>      # Change group name
+.groupinfo           # Get detailed group info with picture
+.antilink on/off     # Toggle link protection
+.delete              # Delete a message (reply to it)
 ```
+
+**Note:** All admin commands require:
+- User to be a group admin
+- Bot to have admin privileges (where applicable)
+- Commands support both mentions and replies
 
 </details>
 

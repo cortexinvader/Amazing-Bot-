@@ -255,22 +255,23 @@ class CommandHandler {
         if (!senderJid) return false;
         
         const isOwner = this.isOwner(senderJid);
+        const isSudo = this.isSudo(senderJid);
         
-        logger.debug(`Permission check - Command: ${command.name}, Sender: ${senderJid}, Is Owner: ${isOwner}, Permissions: ${command.permissions.join(', ')}`);
+        logger.debug(`Permission check - Command: ${command.name}, Sender: ${senderJid}, Is Owner: ${isOwner}, Is Sudo: ${isSudo}, Permissions: ${command.permissions.join(', ')}`);
         
         for (const permission of command.permissions) {
             switch (permission) {
                 case 'owner':
-                    if (isOwner) return true;
+                    if (isOwner || isSudo) return true;
                     break;
                 case 'admin':
-                    if (isOwner || isGroupAdmin) return true;
+                    if (isOwner || isSudo || isGroupAdmin) return true;
                     break;
                 case 'premium':
-                    if ((user && user.isPremium) || isOwner) return true;
+                    if ((user && user.isPremium) || isOwner || isSudo) return true;
                     break;
                 case 'user':
-                    if (config.publicMode || isOwner) return true;
+                    if (config.publicMode || isOwner || isSudo) return true;
                     break;
                 case 'group':
                     if (group) return true;
@@ -279,7 +280,7 @@ class CommandHandler {
                     if (!group) return true;
                     break;
                 case 'botAdmin':
-                    if (isBotAdmin || isOwner) return true;
+                    if (isBotAdmin || isOwner || isSudo) return true;
                     break;
             }
         }
@@ -350,14 +351,17 @@ class CommandHandler {
                 return false;
             }
 
-            if (user.isBanned && !this.isOwner(sender)) {
+            const tempIsOwner = this.isOwner(sender);
+            const tempIsSudo = this.isSudo(sender);
+
+            if (user.isBanned && !tempIsOwner && !tempIsSudo) {
                 await sock.sendMessage(from, {
                     text: `❌ *You are banned from using this bot*\n\n*Reason:* ${user.banReason || 'No reason provided'}\n*Until:* ${user.banUntil || 'Permanent'}`
                 });
                 return true;
             }
             
-            if (isGroup && group && group.isBanned && !this.isOwner(sender)) {
+            if (isGroup && group && group.isBanned && !tempIsOwner && !tempIsSudo) {
                 await sock.sendMessage(from, {
                     text: `❌ *This group is banned from using bot commands*\n\n*Reason:* ${group.banReason || 'No reason provided'}`
                 });
@@ -402,21 +406,22 @@ class CommandHandler {
             }
             
             const isOwner = this.isOwner(actualSender);
+            const isSudo = this.isSudo(actualSender);
             
             if (config.selfMode && !isOwner) {
                 return false;
             }
             
-            if (!config.publicMode && !isOwner) {
+            if (!config.publicMode && !isOwner && !isSudo) {
                 await sock.sendMessage(from, {
-                    text: '🔒 *Bot is in private mode*\n\nOnly the owner can use commands right now.'
+                    text: '🔒 *Bot is in private mode*\n\nOnly the owner and bot admins can use commands right now.'
                 });
                 return true;
             }
             
-            if (command.ownerOnly && !isOwner) {
+            if (command.ownerOnly && !isOwner && !isSudo) {
                 await sock.sendMessage(from, {
-                    text: `❌ *Owner Only Command*\n\nThis command can only be used by the bot owner.\n\n*Category:* ${command.category.toUpperCase()}`
+                    text: `❌ *Owner/Bot Admin Only*\n\nThis command can only be used by the bot owner or bot admins.\n\n*Category:* ${command.category.toUpperCase()}`
                 });
                 return true;
             }
@@ -465,7 +470,7 @@ class CommandHandler {
                 return true;
             }
             
-            if (!isOwner) {
+            if (!isOwner && !isSudo) {
                 const rateLimitCheck = await rateLimiter.checkLimit(actualSender, commandName);
                 if (!rateLimitCheck.allowed) {
                     await sock.sendMessage(from, {
@@ -505,6 +510,7 @@ class CommandHandler {
                 isGroupAdmin,
                 isBotAdmin,
                 isOwner,
+                isSudo,
                 prefix: config.prefix
             });
             

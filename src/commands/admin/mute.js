@@ -1,20 +1,30 @@
-import { updateUser  } from '../../models/User.js';
-
-
+import { updateUser } from '../../models/User.js';
+import formatResponse from '../../utils/formatUtils.js';
 
 export default {
     name: 'mute',
     aliases: ['silence', 'muteuser'],
     category: 'admin',
     description: 'Mute a user from using bot commands',
-    usage: 'mute [@user] [duration] [reason]',
+    usage: 'mute @user OR reply to message [duration] [reason]',
+    example: 'mute @user 1h spamming',
     cooldown: 5,
     permissions: ['admin'],
+    groupOnly: true,
+    adminOnly: true,
 
-    async execute({ sock, message, args, from, user, isGroup, isGroupAdmin }) {
+    async execute({ sock, message, args, from, sender, isGroup, isGroupAdmin }) {
+        if (!isGroup) {
+            return await sock.sendMessage(from, {
+                text: formatResponse.error('GROUP ONLY',
+                    'This command can only be used in groups')
+            }, { quoted: message });
+        }
+
         if (!isGroupAdmin) {
             return await sock.sendMessage(from, {
-                text: '❌ *Admin Only*\n\nYou need to be a group admin to use this command.'
+                text: formatResponse.error('ADMIN ONLY',
+                    'You need to be a group admin to use this command')
             }, { quoted: message });
         }
 
@@ -23,25 +33,31 @@ export default {
             const mentionedUsers = message.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
             
             let targetJid;
+            let duration = '1h';
+            let reason = 'No reason provided';
+
             if (quotedUser) {
                 targetJid = quotedUser;
+                duration = args[0] || '1h';
+                reason = args.slice(1).join(' ') || reason;
             } else if (mentionedUsers.length > 0) {
                 targetJid = mentionedUsers[0];
+                duration = args[1] || '1h';
+                reason = args.slice(2).join(' ') || reason;
             } else {
                 return await sock.sendMessage(from, {
-                    text: '❌ *No Target*\n\nReply to a message or mention a user to mute.\n\n*Usage:* .mute [@user] [duration] [reason]'
+                    text: formatResponse.error('NO TARGET',
+                        'Reply to a message or mention a user to mute',
+                        'Usage: mute @user [duration] [reason]')
                 }, { quoted: message });
             }
 
-            const sender = message.key.participant || from;
             if (targetJid === sender) {
                 return await sock.sendMessage(from, {
-                    text: '❌ *Invalid Action*\n\nYou cannot mute yourself.'
+                    text: formatResponse.error('INVALID ACTION',
+                        'You cannot mute yourself')
                 }, { quoted: message });
             }
-
-            const duration = args[1] || '1h';
-            const reason = args.slice(2).join(' ') || 'No reason provided';
 
             let muteMs;
             if (duration.includes('s')) {
@@ -53,7 +69,7 @@ export default {
             } else if (duration.includes('d')) {
                 muteMs = parseInt(duration) * 24 * 60 * 60 * 1000;
             } else {
-                muteMs = 60 * 60 * 1000; // Default 1 hour
+                muteMs = 60 * 60 * 1000;
             }
 
             const muteUntil = new Date(Date.now() + muteMs);
@@ -69,13 +85,25 @@ export default {
 
             const targetNumber = targetJid.split('@')[0];
             await sock.sendMessage(from, {
-                text: `🔇 *User Muted*\n\n*Target:* @${targetNumber}\n*Duration:* ${duration}\n*Until:* ${muteUntil.toLocaleString()}\n*Reason:* ${reason}\n*Muted by:* @${sender.split('@')[0]}\n\nUser cannot use bot commands until mute expires.`,
+                text: `╭──⦿【 🔇 USER MUTED 】
+│
+│ 👤 𝗨𝘀𝗲𝗿: @${targetNumber}
+│ ⏱️ 𝗗𝘂𝗿𝗮𝘁𝗶𝗼𝗻: ${duration}
+│ ⏰ 𝗨𝗻𝘁𝗶𝗹: ${muteUntil.toLocaleString()}
+│ 📝 𝗥𝗲𝗮𝘀𝗼𝗻: ${reason}
+│ 👮 𝗠𝘂𝘁𝗲𝗱 𝗯𝘆: @${sender.split('@')[0]}
+│
+│ ⚠️ User cannot use bot commands until mute expires
+│
+╰────────────⦿`,
                 mentions: [targetJid, sender]
             }, { quoted: message });
 
         } catch (error) {
             await sock.sendMessage(from, {
-                text: '❌ *Error*\n\nFailed to mute user. Please try again.'
+                text: formatResponse.error('MUTE FAILED',
+                    'Failed to mute user',
+                    error.message)
             }, { quoted: message });
         }
     }

@@ -1,28 +1,38 @@
+import formatResponse from '../../utils/formatUtils.js';
+
 export default {
     name: 'setname',
     aliases: ['groupname', 'setgroupname'],
     category: 'admin',
     description: 'Change the group name',
     usage: 'setname [new name]',
+    example: 'setname Amazing Group Chat',
     cooldown: 10,
     permissions: ['admin'],
+    groupOnly: true,
+    adminOnly: true,
+    botAdminRequired: true,
 
-    async execute({ sock, message, args, from, user, isGroup, isGroupAdmin, isBotAdmin }) {
+    async execute({ sock, message, args, from, sender, isGroup, isGroupAdmin, isBotAdmin }) {
         if (!isGroup) {
             return await sock.sendMessage(from, {
-                text: '❌ *Group Only*\n\nThis command can only be used in groups.'
+                text: formatResponse.error('GROUP ONLY',
+                    'This command can only be used in groups')
             }, { quoted: message });
         }
 
         if (!isGroupAdmin) {
             return await sock.sendMessage(from, {
-                text: '❌ *Admin Only*\n\nYou need to be a group admin to use this command.'
+                text: formatResponse.error('ADMIN ONLY',
+                    'You need to be a group admin to use this command')
             }, { quoted: message });
         }
 
         if (!isBotAdmin) {
             return await sock.sendMessage(from, {
-                text: '❌ *Bot Not Admin*\n\nI need to be an admin to change group name.'
+                text: formatResponse.error('BOT NOT ADMIN',
+                    'I need admin privileges to change group name',
+                    'Make me an admin first')
             }, { quoted: message });
         }
 
@@ -30,13 +40,17 @@ export default {
             const newName = args.join(' ');
             if (!newName) {
                 return await sock.sendMessage(from, {
-                    text: '❌ *No Name*\n\nPlease provide a new group name.\n\n*Usage:* .setname Your New Group Name'
+                    text: formatResponse.error('NO NAME',
+                        'Please provide a new group name',
+                        'Usage: setname Your New Group Name')
                 }, { quoted: message });
             }
 
             if (newName.length > 25) {
                 return await sock.sendMessage(from, {
-                    text: '❌ *Too Long*\n\nGroup name must be 25 characters or less.'
+                    text: formatResponse.error('NAME TOO LONG',
+                        'Group name must be 25 characters or less',
+                        `Current length: ${newName.length}`)
                 }, { quoted: message });
             }
 
@@ -45,15 +59,23 @@ export default {
 
             await sock.groupUpdateSubject(from, newName);
 
-            const sender = message.key.participant || from;
             await sock.sendMessage(from, {
-                text: `📝 *Group Name Updated*\n\n*Old Name:* ${oldName}\n*New Name:* ${newName}\n\n*Changed by:* @${sender.split('@')[0]}`,
+                text: `╭──⦿【 📝 GROUP NAME UPDATED 】
+│
+│ 📛 𝗢𝗹𝗱 𝗡𝗮𝗺𝗲: ${oldName}
+│ 📛 𝗡𝗲𝘄 𝗡𝗮𝗺𝗲: ${newName}
+│ 👮 𝗖𝗵𝗮𝗻𝗴𝗲𝗱 𝗯𝘆: @${sender.split('@')[0]}
+│ 📅 𝗗𝗮𝘁𝗲: ${new Date().toLocaleDateString()}
+│
+╰────────────⦿`,
                 mentions: [sender]
             }, { quoted: message });
 
         } catch (error) {
             await sock.sendMessage(from, {
-                text: '❌ *Error*\n\nFailed to update group name. Make sure I have admin permissions.'
+                text: formatResponse.error('UPDATE FAILED',
+                    'Failed to update group name',
+                    'Make sure I have admin permissions')
             }, { quoted: message });
         }
     }

@@ -1,8 +1,6 @@
 import config from '../../config.js';
-import { updateGroup  } from '../../models/Group.js';
-
-
-
+import { updateGroup } from '../../models/Group.js';
+import formatResponse from '../../utils/formatUtils.js';
 
 export default {
     name: 'antilink',
@@ -10,26 +8,33 @@ export default {
     category: 'admin',
     description: 'Toggle antilink protection in the group',
     usage: 'antilink [on/off]',
+    example: 'antilink on',
     cooldown: 5,
     permissions: ['admin'],
-    args: false,
+    groupOnly: true,
+    adminOnly: true,
+    botAdminRequired: true,
 
-    async execute({ sock, message, args, from, user, group, isGroup, isGroupAdmin, isBotAdmin }) {
+    async execute({ sock, message, args, from, sender, group, isGroup, isGroupAdmin, isBotAdmin }) {
         if (!isGroup) {
             return await sock.sendMessage(from, {
-                text: '❌ *Group Only*\n\nThis command can only be used in groups.'
+                text: formatResponse.error('GROUP ONLY',
+                    'This command can only be used in groups')
             }, { quoted: message });
         }
 
         if (!isGroupAdmin) {
             return await sock.sendMessage(from, {
-                text: '❌ *Admin Only*\n\nYou need to be a group admin to use this command.'
+                text: formatResponse.error('ADMIN ONLY',
+                    'You need to be a group admin to use this command')
             }, { quoted: message });
         }
 
         if (!isBotAdmin) {
             return await sock.sendMessage(from, {
-                text: '❌ *Bot Not Admin*\n\nI need to be an admin to manage antilink protection.'
+                text: formatResponse.error('BOT NOT ADMIN',
+                    'I need admin privileges to manage antilink protection',
+                    'Make me an admin first')
             }, { quoted: message });
         }
 
@@ -39,18 +44,27 @@ export default {
 
             if (!action) {
                 return await sock.sendMessage(from, {
-                    text: `🔗 *Antilink Status*\n\n*Current:* ${currentStatus ? 'Enabled ✅' : 'Disabled ❌'}\n\n*Usage:* ${config.prefix}antilink [on/off]`
+                    text: `╭──⦿【 🔗 ANTILINK STATUS 】
+│
+│ 📊 𝗖𝘂𝗿𝗿𝗲𝗻𝘁 𝗦𝘁𝗮𝘁𝘂𝘀: ${currentStatus ? '✅ Enabled' : '❌ Disabled'}
+│
+│ 💡 𝗨𝘀𝗮𝗴𝗲: ${config.prefix}antilink [on/off]
+│ 📝 𝗘𝘅𝗮𝗺𝗽𝗹𝗲: ${config.prefix}antilink on
+│
+╰────────────⦿`
                 }, { quoted: message });
             }
 
             let newStatus;
-            if (action === 'on' || action === 'enable' || action === '1') {
+            if (action === 'on' || action === 'enable' || action === '1' || action === 'true') {
                 newStatus = true;
-            } else if (action === 'off' || action === 'disable' || action === '0') {
+            } else if (action === 'off' || action === 'disable' || action === '0' || action === 'false') {
                 newStatus = false;
             } else {
                 return await sock.sendMessage(from, {
-                    text: '❌ *Invalid Option*\n\nUse: on/off, enable/disable, or 1/0'
+                    text: formatResponse.error('INVALID OPTION',
+                        'Use: on/off, enable/disable, or 1/0',
+                        'Example: antilink on')
                 }, { quoted: message });
             }
 
@@ -58,18 +72,29 @@ export default {
                 $set: { 'settings.antiLink': newStatus }
             });
 
-            const statusText = newStatus ? 'Enabled ✅' : 'Disabled ❌';
+            const statusIcon = newStatus ? '✅' : '❌';
             const actionText = newStatus ? 
-                'Links will now be automatically deleted and users warned.' : 
-                'Links are now allowed in this group.';
+                'Links will be automatically deleted and users warned' : 
+                'Links are now allowed in this group';
 
             await sock.sendMessage(from, {
-                text: `🔗 *Antilink Protection*\n\n*Status:* ${statusText}\n\n${actionText}`
+                text: `╭──⦿【 🔗 ANTILINK ${newStatus ? 'ENABLED' : 'DISABLED'} 】
+│
+│ 📊 𝗦𝘁𝗮𝘁𝘂𝘀: ${statusIcon} ${newStatus ? 'Enabled' : 'Disabled'}
+│ 👮 𝗕𝘆: @${sender.split('@')[0]}
+│ 📅 𝗗𝗮𝘁𝗲: ${new Date().toLocaleDateString()}
+│
+│ 💡 ${actionText}
+│
+╰────────────⦿`,
+                mentions: [sender]
             }, { quoted: message });
 
         } catch (error) {
             await sock.sendMessage(from, {
-                text: '❌ *Error*\n\nFailed to update antilink settings.'
+                text: formatResponse.error('UPDATE FAILED',
+                    'Failed to update antilink settings',
+                    error.message)
             }, { quoted: message });
         }
     }
