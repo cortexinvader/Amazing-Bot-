@@ -289,8 +289,8 @@ async function handleConnectionEvents(sock, connectionUpdate) {
             await fs.remove(SESSION_PATH).catch(() => {});
             await fs.ensureDir(SESSION_PATH);
             await fs.ensureDir(path.join(SESSION_PATH, 'keys'));
-            logger.info('🔄 Reconnecting to generate new QR code...');
-            setTimeout(establishWhatsAppConnection, 3000);
+            logger.info('🔄 Please restart the bot to scan QR code');
+            process.exit(0);
         } else if (statusCode === DisconnectReason.connectionClosed) {
             logger.warn('⚠️  Connection closed, reconnecting....');
             setTimeout(establishWhatsAppConnection, 5000);
@@ -306,8 +306,8 @@ async function handleConnectionEvents(sock, connectionUpdate) {
             await fs.remove(SESSION_PATH).catch(() => {});
             await fs.ensureDir(SESSION_PATH);
             await fs.ensureDir(path.join(SESSION_PATH, 'keys'));
-            logger.info('🔄 Reconnecting to generate new QR code...');
-            setTimeout(establishWhatsAppConnection, 3000);
+            logger.info('🔄 Please restart the bot to scan QR code');
+            process.exit(0);
         } else if (statusCode === DisconnectReason.restartRequired) {
             logger.info('⚠️  Restart required, restarting....');
             setTimeout(establishWhatsAppConnection, 5000);
