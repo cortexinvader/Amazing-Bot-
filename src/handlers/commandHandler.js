@@ -46,10 +46,21 @@ class CommandHandler {
             for (const file of commandFiles) {
                 try {
                     const commandPath = path.join(categoryPath, file);
-                    const command = (await import(commandPath)).default;
+                    const commandModule = await import(commandPath);
+                    const command = commandModule.default;
                     
-                    if (!command.name || !command.execute) {
-                        logger.warn(`Command ${file} is missing name or execute function`);
+                    if (!command || typeof command !== 'object') {
+                        logger.warn(`Command ${file} has no default export or invalid export`);
+                        continue;
+                    }
+                    
+                    if (!command.name || typeof command.name !== 'string') {
+                        logger.warn(`Command ${file} is missing name property`);
+                        continue;
+                    }
+                    
+                    if (!command.execute || typeof command.execute !== 'function') {
+                        logger.warn(`Command ${file} is missing execute function`);
                         continue;
                     }
                     
@@ -58,7 +69,7 @@ class CommandHandler {
                     
                     this.commands.set(command.name, command);
                     
-                    if (command.aliases) {
+                    if (command.aliases && Array.isArray(command.aliases)) {
                         for (const alias of command.aliases) {
                             this.aliases.set(alias, command.name);
                         }
@@ -86,10 +97,18 @@ class CommandHandler {
         if (!command) return false;
         
         try {
-            const newCommand = (await import(command.filePath)).default;
+            delete require.cache[require.resolve(command.filePath)];
+            
+            const commandModule = await import(command.filePath + '?update=' + Date.now());
+            const newCommand = commandModule.default;
+            
+            if (!newCommand || !newCommand.name || !newCommand.execute) {
+                logger.warn(`Reloaded command ${commandName} is invalid`);
+                return false;
+            }
             
             this.commands.delete(command.name);
-            if (command.aliases) {
+            if (command.aliases && Array.isArray(command.aliases)) {
                 for (const alias of command.aliases) {
                     this.aliases.delete(alias);
                 }
@@ -99,7 +118,7 @@ class CommandHandler {
             newCommand.filePath = command.filePath;
             
             this.commands.set(newCommand.name, newCommand);
-            if (newCommand.aliases) {
+            if (newCommand.aliases && Array.isArray(newCommand.aliases)) {
                 for (const alias of newCommand.aliases) {
                     this.aliases.set(alias, newCommand.name);
                 }
@@ -120,7 +139,7 @@ class CommandHandler {
 
     getCommandsByCategory(category) {
         const categoryCommands = this.categories.get(category) || [];
-        return categoryCommands.map(name => this.commands.get(name));
+        return categoryCommands.map(name => this.commands.get(name)).filter(cmd => cmd);
     }
 
     getAllCategories() {
@@ -149,6 +168,7 @@ class CommandHandler {
 
     isOwner(jid) {
         if (!jid) return false;
+        if (!config.ownerNumbers || !Array.isArray(config.ownerNumbers)) return false;
         const userPhone = this.extractPhone(jid);
         return config.ownerNumbers.some(ownerNum => {
             const ownerPhone = this.extractPhone(ownerNum);
@@ -158,6 +178,7 @@ class CommandHandler {
     
     isSudo(jid) {
         if (!jid) return false;
+        if (!config.sudoers || !Array.isArray(config.sudoers)) return false;
         const userPhone = this.extractPhone(jid);
         return config.sudoers.some(sudoNum => {
             const sudoPhone = this.extractPhone(sudoNum);
@@ -230,7 +251,9 @@ class CommandHandler {
     async checkPermissions(command, user, group, isGroupAdmin, isBotAdmin, sender) {
         if (!command.permissions || command.permissions.length === 0) return true;
         
-        const senderJid = sender || user.jid;
+        const senderJid = sender || (user ? user.jid : null);
+        if (!senderJid) return false;
+        
         const isOwner = this.isOwner(senderJid);
         
         logger.debug(`Permission check - Command: ${command.name}, Sender: ${senderJid}, Is Owner: ${isOwner}, Permissions: ${command.permissions.join(', ')}`);
@@ -244,7 +267,7 @@ class CommandHandler {
                     if (isOwner || isGroupAdmin) return true;
                     break;
                 case 'premium':
-                    if (user.isPremium || isOwner) return true;
+                    if ((user && user.isPremium) || isOwner) return true;
                     break;
                 case 'user':
                     if (config.publicMode || isOwner) return true;
@@ -266,7 +289,7 @@ class CommandHandler {
 
     async checkCooldown(commandName, userId) {
         const command = this.getCommand(commandName);
-        if (!command?.cooldown) return true;
+        if (!command || !command.cooldown) return true;
         
         const cooldownKey = `${commandName}_${userId}`;
         const lastUsed = this.cooldowns.get(cooldownKey);
@@ -334,7 +357,7 @@ class CommandHandler {
                 return true;
             }
             
-            if (isGroup && group?.isBanned && !this.isOwner(sender)) {
+            if (isGroup && group && group.isBanned && !this.isOwner(sender)) {
                 await sock.sendMessage(from, {
                     text: `❌ *This group is banned from using bot commands*\n\n*Reason:* ${group.banReason || 'No reason provided'}`
                 });
@@ -488,8 +511,10 @@ class CommandHandler {
             const executionTime = Date.now() - startTime;
             
             const stats = this.commandStats.get(command.name);
-            stats.used++;
-            this.commandStats.set(command.name, stats);
+            if (stats) {
+                stats.used++;
+                this.commandStats.set(command.name, stats);
+            }
             
             await Promise.all([
                 logCommand(actualSender, commandName, from, isGroup, executionTime),
@@ -530,11 +555,12 @@ class CommandHandler {
 
     async getHelpMessage(category = null, user = null) {
         const isOwner = user && this.isOwner(user.jid);
-        const isPremium = user?.isPremium || isOwner;
+        const isPremium = (user && user.isPremium) || isOwner;
         
         if (category) {
             const commands = this.getCommandsByCategory(category)
                 .filter(cmd => {
+                    if (!cmd) return false;
                     if (cmd.hidden && !isOwner) return false;
                     if (cmd.premium && !isPremium) return false;
                     if (cmd.ownerOnly && !isOwner) return false;
@@ -561,6 +587,7 @@ class CommandHandler {
             .filter(cat => {
                 const commands = this.getCommandsByCategory(cat);
                 return commands.some(cmd => {
+                    if (!cmd) return false;
                     if (cmd.hidden && !isOwner) return false;
                     if (cmd.premium && !isPremium) return false;
                     if (cmd.ownerOnly && !isOwner) return false;
@@ -577,9 +604,9 @@ class CommandHandler {
         
         categories.forEach(category => {
             const commands = this.getCommandsByCategory(category)
-                .filter(cmd => !cmd.hidden || isOwner)
-                .filter(cmd => !cmd.premium || isPremium)
-                .filter(cmd => !cmd.ownerOnly || isOwner);
+                .filter(cmd => cmd && (!cmd.hidden || isOwner))
+                .filter(cmd => cmd && (!cmd.premium || isPremium))
+                .filter(cmd => cmd && (!cmd.ownerOnly || isOwner));
             
             if (commands.length > 0) {
                 helpText += `*${category.toUpperCase()}* (${commands.length})\n`;
@@ -603,11 +630,12 @@ class CommandHandler {
 
     async searchCommands(query, user = null) {
         const isOwner = user && this.isOwner(user.jid);
-        const isPremium = user?.isPremium || isOwner;
+        const isPremium = (user && user.isPremium) || isOwner;
         
         const results = [];
         
         for (const [name, command] of this.commands) {
+            if (!command) continue;
             if (command.hidden && !isOwner) continue;
             if (command.premium && !isPremium) continue;
             if (command.ownerOnly && !isOwner) continue;
