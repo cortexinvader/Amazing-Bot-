@@ -1,12 +1,8 @@
-import { getUser } from '../../models/User.js';
+import { getUser, updateUser } from '../../models/User.js';
 import config from '../../config.js';
 import { createCanvas, loadImage, GlobalFonts } from '@napi-rs/canvas';
 import path from 'path';
 import fs from 'fs-extra';
-
-const userMessageCounts = new Map();
-const userDeletedCounts = new Map();
-const userJoinDates = new Map();
 
 const FONT_PRIMARY = path.join(process.cwd(), 'src', 'assets', 'fonts', 'primary.ttf');
 const FONT_SECONDARY = path.join(process.cwd(), 'src', 'assets', 'fonts', 'secondary.ttf');
@@ -60,7 +56,7 @@ export default {
 
             const userData = await getUser(targetSender);
             const userName = userData?.name || message.pushName || 'Unknown User';
-            const phone = targetSender.split('@')[0];
+            const phone = targetSender.replace('@s.whatsapp.net', '').replace('@lid', '');
 
             let profilePic = null;
             try {
@@ -129,26 +125,17 @@ export default {
                 }
             } catch (e) {}
 
-            let messageCount = 0;
+            let messageCount = userData?.messageCount || 0;
             let deletedCount = 0;
-            let joinDate = 'Unknown';
+            let joinDate = userData?.createdAt ? new Date(userData.createdAt).toLocaleDateString('en-US', { 
+                year: 'numeric', 
+                month: 'short', 
+                day: 'numeric' 
+            }) : 'Unknown';
             let groupRole = 'Member';
             let roleEmoji = '👤';
 
             if (isGroup) {
-                const msgKey = `${targetSender}_${from}`;
-                messageCount = userMessageCounts.get(msgKey) || 0;
-                deletedCount = userDeletedCounts.get(msgKey) || 0;
-                
-                const joinTs = userJoinDates.get(msgKey);
-                if (joinTs) {
-                    const date = new Date(joinTs);
-                    joinDate = date.toLocaleDateString('en-US', { 
-                        year: 'numeric', 
-                        month: 'short', 
-                        day: 'numeric' 
-                    });
-                }
 
                 try {
                     const groupMetadata = await sock.groupMetadata(from);
@@ -172,12 +159,12 @@ export default {
                 } catch (e) {}
             }
 
-            const isBanned = userData?.isBanned || false;
+            const isBanned = userData?.banned || false;
             const isPremium = userData?.isPremium || false;
             const commandsUsed = userData?.commandsUsed || 0;
             const warnings = userData?.warnings || 0;
-            const level = userData?.level || 1;
-            const experience = userData?.experience || 0;
+            const level = Math.floor((userData?.xp || 0) / 1000) + 1;
+            const experience = userData?.xp || 0;
 
             await loadFonts();
 
@@ -329,34 +316,42 @@ export default {
     }
 };
 
-export function trackMessage(sender, from, isDeleted = false) {
-    const msgKey = `${sender}_${from}`;
-    
-    if (!userMessageCounts.has(msgKey)) {
-        userMessageCounts.set(msgKey, 0);
-        userJoinDates.set(msgKey, Date.now());
-    }
-    
-    if (isDeleted) {
-        const current = userDeletedCounts.get(msgKey) || 0;
-        userDeletedCounts.set(msgKey, current + 1);
-    } else {
-        const current = userMessageCounts.get(msgKey) || 0;
-        userMessageCounts.set(msgKey, current + 1);
+export async function trackMessage(sender, from, isDeleted = false) {
+    try {
+        const userData = await getUser(sender);
+        if (userData) {
+            await updateUser(sender, {
+                $inc: { messageCount: isDeleted ? 0 : 1 },
+                $set: { lastSeen: new Date() }
+            });
+        }
+    } catch (error) {
+        console.error('Error tracking message:', error);
     }
 }
 
-export function getMessageCount(sender, from) {
-    return userMessageCounts.get(`${sender}_${from}`) || 0;
+export async function getMessageCount(sender, from) {
+    try {
+        const userData = await getUser(sender);
+        return userData?.messageCount || 0;
+    } catch {
+        return 0;
+    }
 }
 
-export function getDeletedCount(sender, from) {
-    return userDeletedCounts.get(`${sender}_${from}`) || 0;
+export async function getDeletedCount(sender, from) {
+    return 0;
 }
 
-export function clearUserStats(sender, from) {
-    const msgKey = `${sender}_${from}`;
-    userMessageCounts.delete(msgKey);
-    userDeletedCounts.delete(msgKey);
-    userJoinDates.delete(msgKey);
+export async function clearUserStats(sender, from) {
+    try {
+        await updateUser(sender, {
+            $set: {
+                messageCount: 0,
+                commandsUsed: 0
+            }
+        });
+    } catch (error) {
+        console.error('Error clearing stats:', error);
+    }
 }

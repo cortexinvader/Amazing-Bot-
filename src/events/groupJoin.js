@@ -27,14 +27,25 @@ export default async function handleGroupJoin(sock, update) {
                     logger.debug(`No profile picture for ${participant}`);
                 }
                 
-                const userName = participant.split('@')[0];
+                const userName = participant.replace('@s.whatsapp.net', '').replace('@lid', '');
                 const userContact = groupMetadata.participants.find(p => p.id === participant);
                 const displayName = userContact?.notify || userName;
                 
                 const welcomeImage = await createWelcomeImage(displayName, groupName, memberCount, profilePicUrl);
                 
                 const welcomeMessage = group.settings?.welcome?.message || 
-                    `╭──⦿【 ✨ WELCOME 】\n│\n│ 👋 Welcome @${userName}!\n│\n│ 🎉 You are member #${memberCount}\n│ 📋 Please read group rules\n│ 🤝 Enjoy your stay in ${groupName}\n│\n╰────────────⦿`;
+                    `╭━━━━━⦿「 🎉 WELCOME 」⦿━━━━━╮
+│
+│  👋 𝗪𝗲𝗹𝗰𝗼𝗺𝗲 @${userName}!
+│
+│  🎊 You are member #${memberCount}
+│  🌟 Group: ${groupName}
+│  📋 Please read group rules
+│  🤝 Enjoy your stay!
+│
+╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯
+
+⚡ Type ${config.prefix || '.'}menu to see bot commands`;
                 
                 await sock.sendMessage(groupId, {
                     image: welcomeImage,

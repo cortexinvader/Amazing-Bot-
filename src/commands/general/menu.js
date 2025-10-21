@@ -178,33 +178,13 @@ export default {
 │
 ╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯`;
 
-        const buttons = [
-            { buttonId: `${prefix}menu games`, buttonText: { displayText: '🎮 Games' }, type: 1 },
-            { buttonId: `${prefix}menu utility`, buttonText: { displayText: '🔧 Utility' }, type: 1 },
-            { buttonId: `${prefix}ping`, buttonText: { displayText: '⚡ Test Bot' }, type: 1 }
-        ];
-
-        const imagePath = './src/assets/images/logo.png';
-        const fs = await import('fs-extra');
-        
         try {
-            if (await fs.pathExists(imagePath)) {
-                await sock.sendMessage(from, {
-                    image: { url: imagePath },
-                    caption: menuText,
-                    footer: `${config.botName} v${config.botVersion} | Made with ❤️ by ${config.ownerName}`,
-                    buttons: buttons,
-                    headerType: 4
-                }, { quoted: message });
-            } else {
-                await sock.sendMessage(from, {
-                    text: menuText,
-                    footer: `${config.botName} v${config.botVersion} | Made with ❤️ by ${config.ownerName}`,
-                    buttons: buttons,
-                    headerType: 1
-                }, { quoted: message });
-            }
+            await sock.sendMessage(from, {
+                text: menuText,
+                mentions: [sender]
+            }, { quoted: message });
         } catch (error) {
+            console.error('Menu send error:', error);
             await sock.sendMessage(from, {
                 text: menuText
             }, { quoted: message });
@@ -308,21 +288,12 @@ export default {
 
 📊 Total: ${commands.length} commands in ${cat.title}`;
 
-        const imagePath = './src/assets/images/logo.png';
-        const fs = await import('fs-extra');
-        
         try {
-            if (await fs.pathExists(imagePath)) {
-                await sock.sendMessage(from, {
-                    image: { url: imagePath },
-                    caption: commandList
-                }, { quoted: message });
-            } else {
-                await sock.sendMessage(from, {
-                    text: commandList
-                }, { quoted: message });
-            }
+            await sock.sendMessage(from, {
+                text: commandList
+            }, { quoted: message });
         } catch (error) {
+            console.error('Category menu error:', error);
             await sock.sendMessage(from, {
                 text: commandList
             }, { quoted: message });

@@ -107,8 +107,6 @@ export default {
             }
             aiCache.set(sender, history);
 
-            await sock.deleteMessage(from, statusMsg.key);
-
             const contextInfo = history.length > 2 ? `\n\nContext: ${Math.floor(history.length / 2)} messages` : '';
             
             let responseText = aiResponse + contextInfo + `\n\nReply to continue conversation\nUse ${prefix}ai clear to reset`;
