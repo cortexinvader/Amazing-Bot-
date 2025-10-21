@@ -1,4 +1,4 @@
-import mathjs from 'mathjs';
+import { evaluate } from 'mathjs';
 import config from '../../config.js';
 
 export default {
@@ -17,7 +17,7 @@ export default {
         const expression = args.join(' ');
 
         try {
-            const result = mathjs.evaluate(expression);
+            const result = evaluate(expression);
             const formatted = typeof result === 'number' ? result.toLocaleString() : result.toString();
 
             let expressionType = 'Basic';
