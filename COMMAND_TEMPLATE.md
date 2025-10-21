@@ -1,10 +1,20 @@
-# 📝 Command Template Guide
-
 <div align="center">
+
+# ✨ Amazing Bot 🧠 Command Template ✨
+### *Made by Ilom*
+
+<img src="https://readme-typing-svg.herokuapp.com?font=Fira+Code&size=32&duration=2800&pause=2000&color=A020F0&center=true&vCenter=true&width=940&lines=Create+Powerful+WhatsApp+Commands;Build+Amazing+Bot+Features;Unlock+Unlimited+Possibilities" alt="Typing Animation" />
+
+---
+
+[![Bot Version](https://img.shields.io/badge/Version-1.0.0-blueviolet?style=for-the-badge&logo=whatsapp)](https://github.com/NexusCoders-cyber/Amazing-Bot-)
+[![Made with Love](https://img.shields.io/badge/Made%20with-❤️-ff69b4?style=for-the-badge)](https://github.com/NexusCoders-cyber/Amazing-Bot-)
+[![Powered by Node.js](https://img.shields.io/badge/Node.js-43853D?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org)
+[![License](https://img.shields.io/badge/License-MIT-success?style=for-the-badge)](LICENSE)
 
 *Complete guide for creating custom commands in Amazing WhatsApp Bot*
 
-[Basic Structure](#-basic-command-structure) • [Properties](#-command-properties) • [Advanced Features](#-advanced-features) • [Examples](#-complete-examples) • [Best Practices](#-best-practices)
+[Basic Structure](#-basic-command-structure) • [Properties](#-command-properties) • [Advanced Features](#-advanced-features) • [Examples](#-complete-examples) • [Best Practices](#-best-practices) • [Button Support](#-button-support)
 
 </div>
 

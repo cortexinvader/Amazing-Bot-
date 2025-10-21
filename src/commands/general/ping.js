@@ -4,65 +4,44 @@ import moment from 'moment';
 
 export default {
     name: 'ping',
-    aliases: ['p', 'latency'],
+    aliases: ['p', 'latency', 'speed'],
     category: 'general',
-    description: 'Check bot response time and server latency',
+    description: 'Check bot response time and status',
     usage: 'ping',
     example: 'ping',
     cooldown: 3,
-    permissions: [],
-    args: false,
-    minArgs: 0,
-    maxArgs: 0,
-    typing: true,
-    premium: false,
-    hidden: false,
-    ownerOnly: false,
+    permissions: ['user'],
 
-    async execute({ sock, message, args, command, user, group, from, sender, isGroup, isGroupAdmin, isBotAdmin, prefix }) {
-        const startTime = Date.now();
+    async execute({ sock, message, from, isGroup }) {
+        const start = Date.now();
         
         const uptime = process.uptime();
         const hours = Math.floor(uptime / 3600);
         const minutes = Math.floor((uptime % 3600) / 60);
-        const seconds = Math.floor(uptime % 60);
-        const uptimeString = `${hours}h ${minutes}m ${seconds}s`;
         
         const memoryUsage = process.memoryUsage();
         const memoryMB = Math.round(memoryUsage.heapUsed / 1024 / 1024);
-        const totalMB = Math.round(memoryUsage.heapTotal / 1024 / 1024);
         
-        const endTime = Date.now();
-        const responseTime = endTime - startTime;
+        const latency = Date.now() - start;
+        const speedStatus = latency < 100 ? '⚡ Ultra Fast' : latency < 300 ? '🚀 Fast' : '📡 Normal';
         
-        const responseText = `╭──⦿【 🏓 PING STATUS 】
-│ ⚡ 𝗦𝗽𝗲𝗲𝗱: ${responseTime}ms
-│ 📡 𝗟𝗮𝘁𝗲𝗻𝗰𝘆: Ultra Fast
-│ 🔋 𝗦𝘁𝗮𝘁𝘂𝘀: Online & Active
-╰────────⦿
+        const response = `╭━━━⦿【 🏓 PING STATUS 】⦿━━━╮
+│
+│  ⚡ 𝗦𝗽𝗲𝗲𝗱: ${latency}ms
+│  📊 𝗦𝘁𝗮𝘁𝘂𝘀: ${speedStatus}
+│  ⏰ 𝗨𝗽𝘁𝗶𝗺𝗲: ${hours}h ${minutes}m
+│  🧠 𝗠𝗲𝗺𝗼𝗿𝘆: ${memoryMB}MB
+│  🤖 𝗕𝗼𝘁: ${config.botName}
+│  🔄 𝗠𝗼𝗱𝗲: ${config.publicMode ? 'PUBLIC 🌐' : 'PRIVATE 🔐'}
+│  ⏱️ 𝗧𝗶𝗺𝗲: ${moment().format('HH:mm:ss')}
+│  🌍 𝗖𝗵𝗮𝘁: ${isGroup ? 'Group 👥' : 'Private 💬'}
+│
+╰━━━━━━━━━━━━━━━━━━━━━━━━━━━╯
 
-╭──⦿【 💻 SYSTEM INFO 】
-│ ⏰ 𝗨𝗽𝘁𝗶𝗺𝗲: ${uptimeString}
-│ 🧠 𝗠𝗲𝗺𝗼𝗿𝘆: ${memoryMB}MB / ${totalMB}MB
-│ 🖥️ 𝗣𝗹𝗮𝘁𝗳𝗼𝗿𝗺: ${process.platform}
-│ 📦 𝗡𝗼𝗱𝗲: ${process.version}
-│ 🌐 𝗠𝗼𝗱𝗲: ${isGroup ? 'Group Chat' : 'Private Chat'}
-╰────────⦿
-
-╭──⦿【 🤖 BOT INFO 】
-│ 🎯 𝗡𝗮𝗺𝗲: ${config.botName}
-│ 📌 𝗩𝗲𝗿𝘀𝗶𝗼𝗻: ${constants.BOT_VERSION}
-│ 👨‍💻 𝗗𝗲𝘃: ${constants.BOT_AUTHOR}
-│ 🕐 𝗧𝗶𝗺𝗲: ${moment().format('HH:mm:ss')}
-│ 📅 𝗗𝗮𝘁𝗲: ${moment().format('DD/MM/YYYY')}
-╰────────⦿
-
-╭─────────────⦿
-│💫 | [ ${config.botName} 🍀 ]
-╰────────────⦿`;
+💫 ${config.botName} is running smoothly!`;
 
         await sock.sendMessage(from, {
-            text: responseText
+            text: response
         }, { quoted: message });
     }
 };

@@ -265,7 +265,7 @@ class CommandHandler {
                     if (isOwner || isSudo) return true;
                     break;
                 case 'admin':
-                    if (isOwner || isSudo || isGroupAdmin) return true;
+                    if (isOwner || isGroupAdmin) return true;
                     break;
                 case 'premium':
                     if ((user && user.isPremium) || isOwner || isSudo) return true;

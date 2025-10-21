@@ -12,7 +12,7 @@ export default {
     usage: 'menu [category]',
     cooldown: 3,
     permissions: ['user'],
-    supportsButtons: false,
+    supportsButtons: true,
 
     async execute({ sock, message, args, from, prefix, sender }) {
         const category = args[0]?.toLowerCase();
@@ -178,6 +178,12 @@ export default {
 │
 ╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯`;
 
+        const buttons = [
+            { buttonId: `${prefix}menu games`, buttonText: { displayText: '🎮 Games' }, type: 1 },
+            { buttonId: `${prefix}menu utility`, buttonText: { displayText: '🔧 Utility' }, type: 1 },
+            { buttonId: `${prefix}ping`, buttonText: { displayText: '⚡ Test Bot' }, type: 1 }
+        ];
+
         const imagePath = './src/assets/images/logo.png';
         const fs = await import('fs-extra');
         
@@ -185,11 +191,17 @@ export default {
             if (await fs.pathExists(imagePath)) {
                 await sock.sendMessage(from, {
                     image: { url: imagePath },
-                    caption: menuText
+                    caption: menuText,
+                    footer: `${config.botName} v${config.botVersion} | Made with ❤️ by ${config.ownerName}`,
+                    buttons: buttons,
+                    headerType: 4
                 }, { quoted: message });
             } else {
                 await sock.sendMessage(from, {
-                    text: menuText
+                    text: menuText,
+                    footer: `${config.botName} v${config.botVersion} | Made with ❤️ by ${config.ownerName}`,
+                    buttons: buttons,
+                    headerType: 1
                 }, { quoted: message });
             }
         } catch (error) {
