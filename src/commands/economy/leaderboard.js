@@ -22,7 +22,7 @@ export default {
             }
 
             const type = args[0]?.toLowerCase() || 'balance';
-            const page = parseInt(args[1]) || 1;
+            const page = Math.max(1, parseInt(args[1]) || 1);
             const limit = 10;
             const skip = (page - 1) * limit;
 
@@ -39,43 +39,60 @@ export default {
 
             setTimeout(async () => {
                 try {
-                    let sortField;
-                    switch (type) {
-                        case 'balance':
-                            sortField = 'economy.balance';
-                            break;
-                        case 'bank':
-                            sortField = 'economy.bank';
-                            break;
-                        case 'level':
-                            sortField = 'economy.level';
-                            break;
-                        case 'commands':
-                            sortField = 'statistics.commandsUsed';
-                            break;
-                        case 'total':
-                            sortField = 'economy.balance';
-                            break;
-                        default:
-                            sortField = 'economy.balance';
-                    }
-
-                    const leaderboardUsers = await User.getTopUsers(sortField, limit);
-                    
-                    let leaderboardData = leaderboardUsers.map(u => ({
-                        name: u.name || u.phone || 'User',
-                        balance: u.economy?.balance || 0,
-                        bank: u.economy?.bank || 0,
-                        level: u.economy?.level || 1,
-                        commands: u.statistics?.commandsUsed || 0,
-                        jid: u.jid
-                    }));
+                    let leaderboardUsers;
+                    let leaderboardData;
 
                     if (type === 'total') {
-                        leaderboardData = leaderboardData.map(u => ({
-                            ...u,
-                            total: u.balance + u.bank
-                        })).sort((a, b) => b.total - a.total);
+                        leaderboardUsers = await User.aggregate([
+                            { $match: { isBanned: false } },
+                            {
+                                $addFields: {
+                                    totalWealth: { $add: ['$economy.balance', '$economy.bank'] }
+                                }
+                            },
+                            { $sort: { totalWealth: -1 } },
+                            { $skip: skip },
+                            { $limit: limit }
+                        ]);
+                        
+                        leaderboardData = leaderboardUsers.map(u => ({
+                            name: u.name || u.phone || 'User',
+                            balance: u.economy?.balance || 0,
+                            bank: u.economy?.bank || 0,
+                            total: (u.economy?.balance || 0) + (u.economy?.bank || 0),
+                            level: u.economy?.level || 1,
+                            commands: u.statistics?.commandsUsed || 0,
+                            jid: u.jid
+                        }));
+                    } else {
+                        let sortField;
+                        switch (type) {
+                            case 'balance':
+                                sortField = 'economy.balance';
+                                break;
+                            case 'bank':
+                                sortField = 'economy.bank';
+                                break;
+                            case 'level':
+                                sortField = 'economy.level';
+                                break;
+                            case 'commands':
+                                sortField = 'statistics.commandsUsed';
+                                break;
+                            default:
+                                sortField = 'economy.balance';
+                        }
+
+                        leaderboardUsers = await User.getTopUsers(sortField, limit, skip);
+                        
+                        leaderboardData = leaderboardUsers.map(u => ({
+                            name: u.name || u.phone || 'User',
+                            balance: u.economy?.balance || 0,
+                            bank: u.economy?.bank || 0,
+                            level: u.economy?.level || 1,
+                            commands: u.statistics?.commandsUsed || 0,
+                            jid: u.jid
+                        }));
                     }
 
                     const allUsers = await User.find({ isBanned: false }).select('jid economy.balance economy.bank economy.level statistics.commandsUsed');

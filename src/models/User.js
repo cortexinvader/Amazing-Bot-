@@ -383,10 +383,10 @@ UserSchema.statics.findByPhone = function(phone) {
     return this.findOne({ phone: phone.replace('+', '') });
 };
 
-UserSchema.statics.getTopUsers = function(field = 'economy.balance', limit = 10) {
+UserSchema.statics.getTopUsers = function(field = 'economy.balance', limit = 10, skip = 0) {
     const sortObj = {};
     sortObj[field] = -1;
-    return this.find({ isBanned: false }).sort(sortObj).limit(limit);
+    return this.find({ isBanned: false }).sort(sortObj).skip(skip).limit(limit);
 };
 
 UserSchema.pre('save', function(next) {
