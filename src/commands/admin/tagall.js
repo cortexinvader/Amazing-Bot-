@@ -8,6 +8,8 @@ export default {
     usage: 'tagall [message] OR reply to message',
     cooldown: 15,
     permissions: ['admin'],
+    groupOnly: true,
+    adminOnly: true,
 
     async execute({ sock, message, args, from, isGroup, isGroupAdmin }) {
         if (!isGroup) {

@@ -8,6 +8,9 @@ export default {
     usage: 'demote @user OR reply to message',
     cooldown: 5,
     permissions: ['admin'],
+    groupOnly: true,
+    adminOnly: true,
+    botAdminRequired: true,
 
     async execute({ sock, message, args, from, isGroup, isGroupAdmin, isBotAdmin }) {
         if (!isGroup) {

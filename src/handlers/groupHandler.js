@@ -1,4 +1,6 @@
 import logger from '../utils/logger.js';
+import handleGroupJoin from '../events/groupJoin.js';
+import handleGroupLeave from '../events/groupLeave.js';
 
 class GroupHandler {
     constructor() {
@@ -48,6 +50,11 @@ class GroupHandler {
     async handleMemberJoin(sock, groupId, participant) {
         try {
             logger.info(`New member joined ${groupId}: ${participant}`);
+            await handleGroupJoin(sock, {
+                id: groupId,
+                participants: [participant],
+                action: 'add'
+            });
         } catch (error) {
             logger.error('Error handling member join:', error);
         }
@@ -56,6 +63,11 @@ class GroupHandler {
     async handleMemberLeave(sock, groupId, participant) {
         try {
             logger.info(`Member left ${groupId}: ${participant}`);
+            await handleGroupLeave(sock, {
+                id: groupId,
+                participants: [participant],
+                action: 'remove'
+            });
         } catch (error) {
             logger.error('Error handling member leave:', error);
         }

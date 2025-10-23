@@ -2,27 +2,90 @@ import { createCanvas, loadImage, GlobalFonts } from '@napi-rs/canvas';
 import fs from 'fs-extra';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import axios from 'axios';
 import config from '../config.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const assetsPath = path.join(__dirname, '..', 'assets');
 const fontsPath = path.join(assetsPath, 'fonts');
+const cachePath = path.join(process.cwd(), 'cache', 'fonts');
 const imagesPath = path.join(assetsPath, 'images');
 
-try {
-    const primaryFont = path.join(fontsPath, 'primary.ttf');
-    const secondaryFont = path.join(fontsPath, 'secondary.ttf');
-    
-    if (fs.existsSync(primaryFont)) {
-        GlobalFonts.registerFromPath(primaryFont, 'Primary');
+async function downloadGoogleFont(fontName, outputPath) {
+    try {
+        const apiKey = process.env.GOOGLE_FONTS_API_KEY || '';
+        const fontNameUrl = fontName.replace(/\s+/g, '+');
+        
+        const cssUrl = `https://fonts.googleapis.com/css2?family=${fontNameUrl}:wght@400;700&display=swap`;
+        const cssResponse = await axios.get(cssUrl, {
+            headers: { 'User-Agent': 'Mozilla/5.0' }
+        });
+        
+        const fontUrlMatch = cssResponse.data.match(/url\((https:\/\/fonts\.gstatic\.com\/[^\)]+)\)/);
+        if (!fontUrlMatch) {
+            throw new Error(`Font URL not found for ${fontName}`);
+        }
+        
+        const fontUrl = fontUrlMatch[1];
+        const fontResponse = await axios.get(fontUrl, { responseType: 'arraybuffer' });
+        
+        await fs.ensureDir(path.dirname(outputPath));
+        await fs.writeFile(outputPath, fontResponse.data);
+        
+        console.log(`Downloaded Google Font: ${fontName}`);
+        return true;
+    } catch (error) {
+        console.warn(`Failed to download Google Font ${fontName}:`, error.message);
+        return false;
     }
-    if (fs.existsSync(secondaryFont)) {
-        GlobalFonts.registerFromPath(secondaryFont, 'Secondary');
-    }
-} catch (error) {
-    console.warn('Custom fonts not loaded, using default fonts');
 }
+
+async function loadFonts() {
+    try {
+        await fs.ensureDir(fontsPath);
+        await fs.ensureDir(cachePath);
+        
+        const primaryFont = path.join(fontsPath, 'primary.ttf');
+        const secondaryFont = path.join(fontsPath, 'secondary.ttf');
+        
+        if (fs.existsSync(primaryFont)) {
+            GlobalFonts.registerFromPath(primaryFont, 'Primary');
+            console.log('Loaded local primary font');
+        } else {
+            const cachedPrimary = path.join(cachePath, 'primary.ttf');
+            if (fs.existsSync(cachedPrimary)) {
+                GlobalFonts.registerFromPath(cachedPrimary, 'Primary');
+                console.log('Loaded cached primary font');
+            } else {
+                const downloaded = await downloadGoogleFont('Poppins', cachedPrimary);
+                if (downloaded) {
+                    GlobalFonts.registerFromPath(cachedPrimary, 'Primary');
+                }
+            }
+        }
+        
+        if (fs.existsSync(secondaryFont)) {
+            GlobalFonts.registerFromPath(secondaryFont, 'Secondary');
+            console.log('Loaded local secondary font');
+        } else {
+            const cachedSecondary = path.join(cachePath, 'secondary.ttf');
+            if (fs.existsSync(cachedSecondary)) {
+                GlobalFonts.registerFromPath(cachedSecondary, 'Secondary');
+                console.log('Loaded cached secondary font');
+            } else {
+                const downloaded = await downloadGoogleFont('Roboto', cachedSecondary);
+                if (downloaded) {
+                    GlobalFonts.registerFromPath(cachedSecondary, 'Secondary');
+                }
+            }
+        }
+    } catch (error) {
+        console.warn('Custom fonts not loaded, using default fonts:', error.message);
+    }
+}
+
+await loadFonts();
 
 export async function createWelcomeImage(username, groupName, memberCount, profilePicUrl) {
     const canvas = createCanvas(1200, 600);

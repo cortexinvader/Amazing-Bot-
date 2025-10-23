@@ -37,42 +37,49 @@ export default {
                 text: `📊 *Loading ${type} leaderboard...*\n\n🔍 Analyzing user data\n📈 Ranking top performers\n⏱️ Please wait...`
             });
 
-            // Mock leaderboard data since we can't access real database
-            const generateMockLeaderboard = (type) => {
-                const users = [
-                    { name: 'EconomyKing', balance: 150000, bank: 200000, level: 25, commands: 1250 },
-                    { name: 'MoneyMaster', balance: 125000, bank: 180000, level: 22, commands: 980 },
-                    { name: 'CashCrafter', balance: 100000, bank: 150000, level: 20, commands: 856 },
-                    { name: 'RichRuler', balance: 95000, bank: 140000, level: 19, commands: 743 },
-                    { name: 'WealthWinner', balance: 85000, bank: 130000, level: 18, commands: 690 },
-                    { name: 'ProfitPro', balance: 75000, bank: 120000, level: 17, commands: 634 },
-                    { name: 'BusinessBoss', balance: 65000, bank: 110000, level: 16, commands: 578 },
-                    { name: 'InvestorIvy', balance: 55000, bank: 100000, level: 15, commands: 523 },
-                    { name: 'TraderTom', balance: 45000, bank: 90000, level: 14, commands: 467 },
-                    { name: 'SaverSam', balance: 35000, bank: 80000, level: 13, commands: 412 }
-                ];
-
-                switch (type) {
-                    case 'balance':
-                        return users.sort((a, b) => b.balance - a.balance);
-                    case 'bank':
-                        return users.sort((a, b) => b.bank - a.bank);
-                    case 'total':
-                        return users.map(u => ({ ...u, total: u.balance + u.bank }))
-                                   .sort((a, b) => b.total - a.total);
-                    case 'level':
-                        return users.sort((a, b) => b.level - a.level);
-                    case 'commands':
-                        return users.sort((a, b) => b.commands - a.commands);
-                    default:
-                        return users;
-                }
-            };
-
             setTimeout(async () => {
                 try {
-                    const leaderboardData = generateMockLeaderboard(type);
-                    const currentUserRank = Math.floor(Math.random() * 50) + 1; // Mock user rank
+                    let sortField;
+                    switch (type) {
+                        case 'balance':
+                            sortField = 'economy.balance';
+                            break;
+                        case 'bank':
+                            sortField = 'economy.bank';
+                            break;
+                        case 'level':
+                            sortField = 'economy.level';
+                            break;
+                        case 'commands':
+                            sortField = 'statistics.commandsUsed';
+                            break;
+                        case 'total':
+                            sortField = 'economy.balance';
+                            break;
+                        default:
+                            sortField = 'economy.balance';
+                    }
+
+                    const leaderboardUsers = await User.getTopUsers(sortField, limit);
+                    
+                    let leaderboardData = leaderboardUsers.map(u => ({
+                        name: u.name || u.phone || 'User',
+                        balance: u.economy?.balance || 0,
+                        bank: u.economy?.bank || 0,
+                        level: u.economy?.level || 1,
+                        commands: u.statistics?.commandsUsed || 0,
+                        jid: u.jid
+                    }));
+
+                    if (type === 'total') {
+                        leaderboardData = leaderboardData.map(u => ({
+                            ...u,
+                            total: u.balance + u.bank
+                        })).sort((a, b) => b.total - a.total);
+                    }
+
+                    const allUsers = await User.find({ isBanned: false }).select('jid economy.balance economy.bank economy.level statistics.commandsUsed');
+                    const currentUserRank = allUsers.findIndex(u => u.jid === user.jid) + 1 || Math.floor(allUsers.length / 2);
 
                     let leaderboardText = `🏆 *${type.toUpperCase()} LEADERBOARD* - Page ${page}\n\n`;
 

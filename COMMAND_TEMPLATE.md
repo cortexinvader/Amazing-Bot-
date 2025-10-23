@@ -78,21 +78,28 @@ export default {
 | `usage` | String | `name` | How to use the command |
 | `example` | String | `name` | Example usage |
 | `cooldown` | Number | `3` | Seconds before user can use command again |
-| `permissions` | Array | `['user']` | Required permissions |
+| `permissions` | Array | `['user']` | Required permissions (owner, admin, premium, user) |
 | `args` | Boolean | `false` | Whether command requires arguments |
 | `minArgs` | Number | `0` | Minimum number of arguments required |
 | `maxArgs` | Number | `Infinity` | Maximum number of arguments allowed |
 | `typing` | Boolean | `true` | Show typing indicator when executing |
 | `premium` | Boolean | `false` | Only premium users can use |
 | `hidden` | Boolean | `false` | Hide from help menu |
-| `ownerOnly` | Boolean | `false` | Only bot owner can use |
-| `adminOnly` | Boolean | `false` | Only group admins can use |
-| `groupOnly` | Boolean | `false` | Only works in groups |
-| `botAdminRequired` | Boolean | `false` | Bot needs admin rights |
+| `ownerOnly` | Boolean | `false` | Only bot owner/sudo users can use (recommended for owner category) |
+| `adminOnly` | Boolean | `false` | Only group admins can use (recommended for admin category) |
+| `groupOnly` | Boolean | `false` | Only works in groups (required for admin commands) |
+| `botAdminRequired` | Boolean | `false` | Bot needs admin rights (required for promote/demote/kick) |
 | `supportsReply` | Boolean | `false` | Enable reply handler |
 | `supportsChat` | Boolean | `false` | Enable chat context |
 | `supportsReact` | Boolean | `false` | Enable reaction handler |
 | `supportsButtons` | Boolean | `false` | Command can send buttons |
+
+### Important Notes on Permission Flags
+
+- **Owner Commands**: Always set `ownerOnly: true`. Sudo users (bot admins) automatically get access to owner commands.
+- **Admin Commands**: Always set `groupOnly: true` and `adminOnly: true`. Add `botAdminRequired: true` if the command requires bot to have admin privileges (like kick, promote, demote).
+- **Database Integration**: Economy commands use User model methods like `addBalance()`, `addXP()`, etc. for database operations.
+- **Google Fonts**: canvasUtils now supports Google Fonts API fallback if local fonts are missing. Fonts are cached in `cache/fonts/`.
 
 ### Execute Function Parameters
 

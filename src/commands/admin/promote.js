@@ -8,8 +8,11 @@ export default {
     usage: 'promote @user OR reply to message',
     cooldown: 5,
     permissions: ['admin'],
+    groupOnly: true,
+    adminOnly: true,
+    botAdminRequired: true,
 
-    async execute({ sock, message, args, from, isGroup, isGroupAdmin, isBotAdmin }) {
+    async execute({ sock, message, args, from, isGroup, isGroupAdmin, isBotAdmin}) {
         if (!isGroup) {
             return await sock.sendMessage(from, {
                 text: formatResponse.error('GROUP ONLY',

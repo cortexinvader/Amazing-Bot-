@@ -1,9 +1,37 @@
 <div align="center">
 
 # 🌈 ✨ AMAZING BOT ✨ 🌈
-### 💫 Made by **Ilom** 💫
+
+<div style="text-align: center; margin: 20px 0;">
+  <h2 style="
+    font-size: 4em;
+    font-weight: bold;
+    background: linear-gradient(90deg, #ff00ff, #00ffff, #ff00ff);
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-shadow: 0 0 20px rgba(255,0,255,0.8), 0 0 40px rgba(0,255,255,0.6);
+    animation: glow 2s ease-in-out infinite;
+  ">
+    💫 Made by <span style="
+      animation: pulse 1.5s ease-in-out infinite;
+      filter: drop-shadow(0 0 10px rgba(255,0,255,1)) drop-shadow(0 0 20px rgba(0,255,255,0.8));
+    ">Ilom</span> 💫
+  </h2>
+</div>
 
 <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&size=32&duration=2800&pause=2000&color=FF00F7&center=true&vCenter=true&width=940&lines=Welcome+to+Amazing+Bot!;The+Most+Advanced+WhatsApp+Bot;Created+with+Love+by+Ilom" alt="Typing SVG" />
+
+<style>
+@keyframes glow {
+  0%, 100% { filter: brightness(1) drop-shadow(0 0 20px rgba(255,0,255,0.8)); }
+  50% { filter: brightness(1.5) drop-shadow(0 0 40px rgba(0,255,255,1)); }
+}
+@keyframes pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.05); opacity: 0.9; }
+}
+</style>
 
 [![Node.js](https://img.shields.io/badge/Node.js-20+-green?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org/)
 [![WhatsApp](https://img.shields.io/badge/WhatsApp-Bot-25D366?style=for-the-badge&logo=whatsapp&logoColor=white)](https://www.whatsapp.com/)
@@ -171,7 +199,41 @@
 
 <div align="center">
 
-## 💖 **Made with Love by Ilom** 💖
+<div style="text-align: center; padding: 20px;">
+  <h2 style="
+    font-size: 3em;
+    background: linear-gradient(45deg, #ff00ff, #00ffff, #ffff00, #ff00ff);
+    background-size: 300% 300%;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: rainbow 4s ease infinite;
+    text-shadow: 0 0 30px rgba(255,0,255,0.9);
+    filter: drop-shadow(0 0 15px rgba(0,255,255,0.7));
+  ">
+    💖 Made with Love by <span style="
+      font-weight: bold;
+      animation: glow-pulse 2s ease-in-out infinite;
+    ">✨ Ilom ✨</span> 💖
+  </h2>
+</div>
+
+<style>
+@keyframes rainbow {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+@keyframes glow-pulse {
+  0%, 100% { 
+    filter: drop-shadow(0 0 10px rgba(255,0,255,1)) drop-shadow(0 0 20px rgba(0,255,255,0.8));
+    transform: scale(1);
+  }
+  50% { 
+    filter: drop-shadow(0 0 20px rgba(255,0,255,1)) drop-shadow(0 0 40px rgba(0,255,255,1));
+    transform: scale(1.02);
+  }
+}
+</style>
 
 ### 🌈 **Amazing Bot - The Future of WhatsApp Automation** 🌈
 
