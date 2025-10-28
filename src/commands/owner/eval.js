@@ -17,7 +17,7 @@ export default {
             if (process.env.DISABLE_EVAL === 'true') {
                 await sock.sendMessage(from, {
                     text: `🚫 *Eval Command Disabled*\n\nThe eval command has been disabled via environment configuration for security reasons.\n\nTo enable: Set DISABLE_EVAL=false in your environment variables.`
-                });
+                }, { quoted: message });
                 return;
             }
 
@@ -41,13 +41,13 @@ export default {
             if (hasBlockedPattern) {
                 await sock.sendMessage(from, {
                     text: `🚫 *Security Block*\n\n⚠️ The code contains potentially dangerous patterns:\n• Environment variable access\n• File system operations\n• Process manipulation\n• Sensitive data references\n\n*These operations are blocked for security.*\n\nUse dedicated commands for file/system operations instead.`
-                });
+                }, { quoted: message });
                 return;
             }
             
             await sock.sendMessage(from, {
                 text: `⚠️ *SECURITY WARNING*\n\n🔴 **DANGER:** Executing arbitrary code\n📝 **Code:** \`${code.length > 100 ? code.substring(0, 100) + '...' : code}\`\n\n⏳ Executing...`
-            });
+            }, { quoted: message });
             
             const startTime = Date.now();
             let result;
@@ -83,14 +83,14 @@ export default {
             
             const response = `${error ? '❌' : '✅'} *Code Execution ${error ? 'Failed' : 'Complete'}*\n\n📝 **Code:**\n\`\`\`javascript\n${code}\n\`\`\`\n\n📤 **Result:**\n\`\`\`\n${result.length > 2000 ? result.substring(0, 2000) + '...[truncated]' : result}\n\`\`\`\n\n⏱️ **Execution Time:** ${executionTime}ms\n🔒 **Security Level:** MAXIMUM RISK\n\n${error ? '⚠️ *Error occurred during execution*' : '✅ *Execution completed successfully*'}`;
             
-            await sock.sendMessage(from, { text: response });
+            await sock.sendMessage(from, { text: response }, { quoted: message });
             
         } catch (error) {
             console.error('Eval command error:', error);
             
             await sock.sendMessage(from, {
                 text: `❌ *Critical Eval Error*\n\n**Error:** ${error.message}\n\n🚨 **SECURITY ALERT:** Code execution failed\n⚠️ **This could indicate a security issue or system error**\n\n**Recommended actions:**\n• Check system security\n• Review executed code\n• Monitor for suspicious activity\n• Consider restarting bot if needed`
-            });
+            }, { quoted: message });
         }
     }
 };
