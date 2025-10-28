@@ -1,12 +1,11 @@
 import yts from 'yt-search';
 import axios from 'axios';
-import ytdl from 'ytdl-core';
 
 export default {
     name: 'play',
-    aliases: ['p'],
+    aliases: ['song'],
     category: 'downloader',
-    description: 'Download audio from YouTube using multiple APIs',
+    description: 'Download audio from YouTube',
     usage: '.play <song name>',
     example: '.play baby girl by joeboy',
     cooldown: 10,
@@ -93,109 +92,119 @@ export default {
             let apiUsed = '';
 
             try {
-                const akuariResponse = await axios.get(`https://api.akuari.my.id/downloader/youtube?link=${encodeURIComponent(urlYt)}`, {
-                    timeout: 45000
+                const response = await axios.get(`https://api.siputzx.my.id/api/d/ytmp3?url=${encodeURIComponent(urlYt)}`, {
+                    timeout: 60000
                 });
-
-                if (akuariResponse.data && akuariResponse.data.mp3 && akuariResponse.data.mp3[1]) {
-                    downloadUrl = akuariResponse.data.mp3[1].url;
-                    apiUsed = 'Akuari API';
+                if (response.data && response.data.status && response.data.data && response.data.data.dl) {
+                    downloadUrl = response.data.data.dl;
+                    apiUsed = 'SiputZX API';
                 }
             } catch (error) {
-                console.log('Akuari API failed:', error.message);
+                console.log('SiputZX API failed:', error.message);
             }
 
             if (!downloadUrl) {
                 try {
-                    const ytdlInfo = await ytdl.getInfo(urlYt);
-                    const audioFormat = ytdl.chooseFormat(ytdlInfo.formats, { filter: 'audioonly', quality: 'highestaudio' });
-                    downloadUrl = audioFormat.url;
-                    apiUsed = 'YTDL-Core';
+                    const response = await axios.get(`https://api.ryzendesu.vip/api/downloader/ytmp3?url=${encodeURIComponent(urlYt)}`, {
+                        timeout: 60000
+                    });
+                    if (response.data && response.data.url) {
+                        downloadUrl = response.data.url;
+                        apiUsed = 'Ryzendesu API';
+                    }
                 } catch (error) {
-                    console.log('YTDL-Core failed:', error.message);
+                    console.log('Ryzendesu API failed:', error.message);
                 }
             }
 
             if (!downloadUrl) {
                 try {
-                    const bk9Response = await axios.get(`https://api.bk9.fun/tools/ytmp3?url=${encodeURIComponent(urlYt)}`, {
-                        timeout: 45000,
-                        headers: { 'User-Agent': 'Mozilla/5.0' }
+                    const response = await axios.get(`https://api.zenkey.my.id/api/download/ytmp3?apikey=zenkey&url=${encodeURIComponent(urlYt)}`, {
+                        timeout: 60000
                     });
-
-                    if (bk9Response.data && bk9Response.data.BK9) {
-                        downloadUrl = bk9Response.data.BK9;
-                        apiUsed = 'BK9 API';
+                    if (response.data && response.data.result && response.data.result.download) {
+                        downloadUrl = response.data.result.download;
+                        apiUsed = 'Zenkey API';
                     }
                 } catch (error) {
-                    console.log('BK9 API failed:', error.message);
+                    console.log('Zenkey API failed:', error.message);
                 }
             }
 
             if (!downloadUrl) {
                 try {
-                    const nyxResponse = await axios.get(`https://api.nyxs.pw/dl/yt-direct?url=${encodeURIComponent(urlYt)}`, {
-                        timeout: 45000
+                    const response = await axios.get(`https://api.betabotz.eu.org/api/download/ytmp3?url=${encodeURIComponent(urlYt)}&apikey=beta-deku07`, {
+                        timeout: 60000
                     });
-
-                    if (nyxResponse.data && nyxResponse.data.result && nyxResponse.data.result.urlAudio) {
-                        downloadUrl = nyxResponse.data.result.urlAudio;
-                        apiUsed = 'Nyxs API';
+                    if (response.data && response.data.result && response.data.result.mp3) {
+                        downloadUrl = response.data.result.mp3;
+                        apiUsed = 'BetaBotz API';
                     }
                 } catch (error) {
-                    console.log('Nyxs API failed:', error.message);
+                    console.log('BetaBotz API failed:', error.message);
                 }
             }
 
             if (!downloadUrl) {
                 try {
-                    const agatzResponse = await axios.get(`https://api.agatz.xyz/api/ytmp3?url=${encodeURIComponent(urlYt)}`, {
-                        timeout: 45000
+                    const response = await axios.get(`https://api.zahwazein.xyz/downloader/ytmp3?url=${encodeURIComponent(urlYt)}&apikey=zenzkey_92c0a19ec6fb`, {
+                        timeout: 60000
                     });
-
-                    if (agatzResponse.data && agatzResponse.data.data && agatzResponse.data.data.dl) {
-                        downloadUrl = agatzResponse.data.data.dl;
-                        apiUsed = 'Agatz API';
+                    if (response.data && response.data.result && response.data.result.download) {
+                        downloadUrl = response.data.result.download;
+                        apiUsed = 'Zahwazein API';
                     }
                 } catch (error) {
-                    console.log('Agatz API failed:', error.message);
+                    console.log('Zahwazein API failed:', error.message);
                 }
             }
 
             if (!downloadUrl) {
                 try {
-                    const vihangaResponse = await axios.get(`https://vihangayt.me/download/ytmp3?url=${encodeURIComponent(urlYt)}`, {
-                        timeout: 45000
+                    const response = await axios.get(`https://api.alyachan.dev/api/ytmp3?url=${encodeURIComponent(urlYt)}&apikey=DitzOfc`, {
+                        timeout: 60000
                     });
-
-                    if (vihangaResponse.data && vihangaResponse.data.data && vihangaResponse.data.data.download) {
-                        downloadUrl = vihangaResponse.data.data.download;
-                        apiUsed = 'Vihanga API';
+                    if (response.data && response.data.data && response.data.data.url) {
+                        downloadUrl = response.data.data.url;
+                        apiUsed = 'AlyaChan API';
                     }
                 } catch (error) {
-                    console.log('Vihanga API failed:', error.message);
+                    console.log('AlyaChan API failed:', error.message);
                 }
             }
 
             if (!downloadUrl) {
                 try {
-                    const widipeResponse = await axios.get(`https://widipe.com/download/ytdl?url=${encodeURIComponent(urlYt)}`, {
-                        timeout: 45000
+                    const response = await axios.get(`https://api.vreden.my.id/api/ytmp3?url=${encodeURIComponent(urlYt)}`, {
+                        timeout: 60000
                     });
-
-                    if (widipeResponse.data && widipeResponse.data.result && widipeResponse.data.result.mp3) {
-                        downloadUrl = widipeResponse.data.result.mp3;
-                        apiUsed = 'Widipe API';
+                    if (response.data && response.data.result && response.data.result.download) {
+                        downloadUrl = response.data.result.download;
+                        apiUsed = 'Vreden API';
                     }
                 } catch (error) {
-                    console.log('Widipe API failed:', error.message);
+                    console.log('Vreden API failed:', error.message);
+                }
+            }
+
+            if (!downloadUrl) {
+                try {
+                    const response = await axios.get(`https://api.tiklydown.eu.org/api/download/ytmp3?url=${encodeURIComponent(urlYt)}`, {
+                        timeout: 60000
+                    });
+                    if (response.data && response.data.audio && response.data.audio.download) {
+                        downloadUrl = response.data.audio.download;
+                        apiUsed = 'Tiklydown API';
+                    }
+                } catch (error) {
+                    console.log('Tiklydown API failed:', error.message);
                 }
             }
 
             if (!downloadUrl) {
                 await sock.sendMessage(from, { delete: downloadMessage.key });
                 await sock.sendMessage(from, {
-                    text: `❌ *Download Failed*\n\n⚠️ All download APIs are currently unavailable.\n\n💡 *Try:*\n• Using a different song\n• Waiting a few minutes\n• Checking if the video is available\n\n📝 *Song:* ${title}\n🔗 *URL:* ${urlYt}`
+                    text: `❌ *Download Failed*\n\n⚠️ All download APIs are currently unavailable.\n\n📝 *Song:* ${title}\n🔗 *URL:* ${urlYt}\n\n💡 *FREE API Sources (No RapidAPI):*\n\n🔹 *Self-Host yt-dlp*\n🔗 github.com/yt-dlp/yt-dlp\n💰 Free & Unlimited\n📦 Deploy on Railway.app (free)\n\n🔹 *YT-DLP API Wrapper*\n🔗 github.com/Itz-fork/Yt-Dl-Bot-Api\n💰 Free, self-hosted\n\n🔹 *Free API Lists*\n🔗 github.com/public-apis/public-apis\n🔗 github.com/fayazara/apihouse\n\n🔹 *Deploy Your Own*\nUse Vercel/Railway/Render for free hosting`
                 }, { quoted: message });
                 return;
             }
@@ -223,9 +232,7 @@ export default {
                     timeout: 120000,
                     maxContentLength: 50 * 1024 * 1024,
                     headers: {
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                        'DNT': '1',
-                        'Upgrade-Insecure-Request': '1'
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
                     }
                 });
 
@@ -262,25 +269,8 @@ export default {
         } catch (error) {
             console.error('Play command error:', error);
             
-            let errorMsg = error.message || 'Unknown error occurred';
-            let errorTip = '💡 Try again later!';
-            
-            if (error.message.includes('timeout')) {
-                errorTip = '💡 Download timeout. Try a shorter song or check your connection.';
-            } else if (error.message.includes('ENOTFOUND')) {
-                errorTip = '💡 Network error. Check your internet connection.';
-            } else if (error.message.includes('403')) {
-                errorTip = '💡 Access denied. The APIs may be rate limited.';
-            } else if (error.message.includes('404')) {
-                errorTip = '💡 Video not found. Try a different search query.';
-            } else if (error.message.includes('429')) {
-                errorTip = '💡 Too many requests. Wait a few minutes and try again.';
-            } else if (error.message.includes('maxContentLength')) {
-                errorTip = '💡 File too large. Try a shorter song.';
-            }
-
             await sock.sendMessage(from, {
-                text: `❌ *Download Failed*\n\n⚠️ Error: ${errorMsg}\n\n${errorTip}\n\n🐛 If this persists, try:\n• Different song name\n• Official music videos\n• Waiting a few minutes`
+                text: `❌ *Download Failed*\n\n⚠️ Error: ${error.message}\n\n💡 *Self-Host Solution (FREE):*\n\n*yt-dlp API (Recommended)*\n1. Fork: github.com/Itz-fork/Yt-Dl-Bot-Api\n2. Deploy on Railway.app (free)\n3. Get your API URL\n4. Update bot with your URL\n\n*Quick Deploy:*\n🔗 railway.app/new/template/yt-dlp\n⚡ One-click deploy\n💰 Free 500 hours/month\n\n📧 Contact bot owner for setup help`
             }, { quoted: message });
         }
     },
