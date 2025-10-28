@@ -1,5 +1,5 @@
 import config from '../../config.js';
-import { updateGroup } from '../../models/Group.js';
+import { updateGroup, getGroup } from '../../models/Group.js';
 import formatResponse from '../../utils/formatUtils.js';
 
 export default {
@@ -15,7 +15,7 @@ export default {
     adminOnly: true,
     botAdminRequired: true,
 
-    async execute({ sock, message, args, from, sender, group, isGroup, isGroupAdmin, isBotAdmin }) {
+    async execute({ sock, message, args, from, sender, isGroup, isGroupAdmin, isBotAdmin }) {
         if (!isGroup) {
             return await sock.sendMessage(from, {
                 text: formatResponse.error('GROUP ONLY',
@@ -40,6 +40,7 @@ export default {
 
         try {
             const action = args[0]?.toLowerCase();
+            const group = await getGroup(from);
             const currentStatus = group?.settings?.antiLink || false;
 
             if (!action) {
@@ -91,6 +92,7 @@ export default {
             }, { quoted: message });
 
         } catch (error) {
+            console.error('Antilink command error:', error);
             await sock.sendMessage(from, {
                 text: formatResponse.error('UPDATE FAILED',
                     'Failed to update antilink settings',
