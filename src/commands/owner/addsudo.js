@@ -29,7 +29,7 @@ export default {
                 }, { quoted: message });
             }
             
-            const phoneNumber = targetJid.split('@')[0].replace(/:\d+/, '');
+            const phoneNumber = targetJid.replace(/@s\.whatsapp\.net|@c\.us|@lid|:\d+/g, '').split(':')[0].split('@')[0].trim();
             const normalizedJid = `${phoneNumber}@s.whatsapp.net`;
             
             if (config.ownerNumbers.includes(normalizedJid)) {
@@ -58,11 +58,11 @@ export default {
             
             if (sudoLineIndex !== -1) {
                 const currentSudos = lines[sudoLineIndex].split('=')[1] || '';
-                const sudoList = currentSudos.split(',').filter(s => s.trim());
+                const sudoList = currentSudos.split(',').filter(s => s.trim()).map(s => s.trim());
                 
                 if (!sudoList.includes(phoneNumber)) {
                     sudoList.push(phoneNumber);
-                    lines[sudoLineIndex] = `SUDO_NUMBERS=${sudoList.join(',').trim()}`;
+                    lines[sudoLineIndex] = `SUDO_NUMBERS=${sudoList.join(',')}`;
                 }
             } else {
                 lines.push(`SUDO_NUMBERS=${phoneNumber}`);
