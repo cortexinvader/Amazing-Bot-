@@ -12,7 +12,7 @@ export default {
     adminOnly: true,
     botAdminRequired: true,
 
-    async execute({ sock, message, args, from, isGroup, isGroupAdmin, isBotAdmin }) {
+    async execute({ sock, message, from, isGroup, isGroupAdmin, isBotAdmin }) {
         if (!isGroup) {
             return await sock.sendMessage(from, {
                 text: formatResponse.error('GROUP ONLY',
@@ -86,6 +86,7 @@ export default {
             }, { quoted: message });
 
         } catch (error) {
+            console.error('Demote command error:', error);
             await sock.sendMessage(from, {
                 text: formatResponse.error('DEMOTION FAILED',
                     'Failed to demote user',
