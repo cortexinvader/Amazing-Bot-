@@ -29,19 +29,20 @@ export default {
                 }, { quoted: message });
             }
             
-            const phoneNumber = targetJid.split('@')[0];
+            const phoneNumber = targetJid.split('@')[0].replace(/:\d+/, '');
+            const normalizedJid = `${phoneNumber}@s.whatsapp.net`;
             
-            if (config.ownerNumbers.includes(targetJid)) {
+            if (config.ownerNumbers.includes(normalizedJid)) {
                 return await sock.sendMessage(from, {
                     text: `ℹ️ *Already Owner*\n\n@${phoneNumber} is already a bot owner.`,
-                    mentions: [targetJid]
+                    mentions: [normalizedJid]
                 }, { quoted: message });
             }
             
-            if (config.sudoers.includes(targetJid)) {
+            if (config.sudoers.includes(normalizedJid)) {
                 return await sock.sendMessage(from, {
                     text: `ℹ️ *Already Sudo*\n\n@${phoneNumber} is already a sudo admin.`,
-                    mentions: [targetJid]
+                    mentions: [normalizedJid]
                 }, { quoted: message });
             }
             
@@ -69,11 +70,11 @@ export default {
             
             await fs.writeFile(envPath, lines.join('\n'), 'utf8');
             
-            config.sudoers.push(targetJid);
+            config.sudoers.push(normalizedJid);
             
             await sock.sendMessage(from, {
                 text: `✅ *Sudo Admin Added*\n\n👤 *User:* @${phoneNumber}\n🔐 *Permissions:* Owner-level access\n📝 *Saved to:* .env file\n\n💡 This user can now use all owner commands!\n\n⚠️ *Note:* Restart the bot for full effect.`,
-                mentions: [targetJid]
+                mentions: [normalizedJid]
             }, { quoted: message });
             
         } catch (error) {

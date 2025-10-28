@@ -27,16 +27,16 @@ export default async function handleGroupJoin(sock, update) {
                     logger.debug(`No profile picture for ${participant}`);
                 }
                 
-                const userName = participant.replace('@s.whatsapp.net', '').replace('@lid', '');
+                const phoneNumber = participant.split('@')[0].replace(/:\d+/, '');
                 const userContact = groupMetadata.participants.find(p => p.id === participant);
-                const displayName = userContact?.notify || userName;
+                const displayName = userContact?.notify || phoneNumber;
                 
                 const welcomeImage = await createWelcomeImage(displayName, groupName, memberCount, profilePicUrl);
                 
                 const welcomeMessage = group.settings?.welcome?.message || 
                     `╭━━━━━⦿「 🎉 WELCOME 」⦿━━━━━╮
 │
-│  👋 𝗪𝗲𝗹𝗰𝗼𝗺𝗲 @${userName}!
+│  👋 𝗪𝗲𝗹𝗰𝗼𝗺𝗲 @${phoneNumber}!
 │
 │  🎊 You are member #${memberCount}
 │  🌟 Group: ${groupName}
@@ -55,6 +55,7 @@ export default async function handleGroupJoin(sock, update) {
                 
                 await createUser({
                     jid: participant,
+                    phone: phoneNumber,
                     name: displayName,
                     firstSeen: new Date()
                 });

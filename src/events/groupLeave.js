@@ -7,7 +7,7 @@ export default async function handleGroupLeave(sock, update) {
     try {
         const { id: groupId, participants, action, author } = update;
         
-        if (action !== 'remove') return;
+        if (action !== 'remove' && action !== 'leave') return;
         
         const group = await getGroup(groupId);
         if (!group || !group.settings?.goodbye?.enabled) return;

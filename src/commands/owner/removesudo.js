@@ -29,19 +29,20 @@ export default {
                 }, { quoted: message });
             }
             
-            const phoneNumber = targetJid.split('@')[0];
+            const phoneNumber = targetJid.split('@')[0].replace(/:\d+/, '');
+            const normalizedJid = `${phoneNumber}@s.whatsapp.net`;
             
-            if (config.ownerNumbers.includes(targetJid)) {
+            if (config.ownerNumbers.includes(normalizedJid)) {
                 return await sock.sendMessage(from, {
                     text: `⚠️ *Cannot Remove*\n\n@${phoneNumber} is a primary bot owner and cannot be removed via this command.`,
-                    mentions: [targetJid]
+                    mentions: [normalizedJid]
                 }, { quoted: message });
             }
             
-            if (!config.sudoers.includes(targetJid)) {
+            if (!config.sudoers.includes(normalizedJid)) {
                 return await sock.sendMessage(from, {
                     text: `ℹ️ *Not a Sudo*\n\n@${phoneNumber} is not a sudo admin.`,
-                    mentions: [targetJid]
+                    mentions: [normalizedJid]
                 }, { quoted: message });
             }
             
@@ -69,14 +70,14 @@ export default {
                 
                 await fs.writeFile(envPath, lines.join('\n'), 'utf8');
                 
-                const index = config.sudoers.indexOf(targetJid);
+                const index = config.sudoers.indexOf(normalizedJid);
                 if (index > -1) {
                     config.sudoers.splice(index, 1);
                 }
                 
                 await sock.sendMessage(from, {
                     text: `✅ *Sudo Admin Removed*\n\n👤 *User:* @${phoneNumber}\n📝 *Removed from:* .env file\n\n💡 This user can no longer use owner commands.\n\n⚠️ *Note:* Restart the bot for full effect.`,
-                    mentions: [targetJid]
+                    mentions: [normalizedJid]
                 }, { quoted: message });
             } else {
                 await sock.sendMessage(from, {
