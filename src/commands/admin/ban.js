@@ -58,7 +58,7 @@ export default {
                 }, { quoted: message });
             }
 
-            if (config.ownerNumbers.includes(targetJid)) {
+            if (config.ownerNumbers.some(owner => targetJid.includes(owner.split('@')[0]))) {
                 return sock.sendMessage(from, {
                     text: formatResponse.error('CANNOT BAN OWNER',
                         'Cannot ban the bot owner!')
@@ -95,6 +95,7 @@ export default {
             }, { quoted: message });
 
         } catch (error) {
+            console.error('Ban command error:', error);
             await sock.sendMessage(from, {
                 text: formatResponse.error('BAN FAILED',
                     'Failed to ban user',
