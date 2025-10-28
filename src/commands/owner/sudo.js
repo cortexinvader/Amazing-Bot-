@@ -22,6 +22,36 @@ async function saveSudoers(sudoers) {
     config.sudoers = sudoers;
 }
 
+async function updateEnvFile(phoneNumbers) {
+    try {
+        const envPath = path.join(process.cwd(), '.env');
+        let envContent = '';
+        
+        if (await fs.pathExists(envPath)) {
+            envContent = await fs.readFile(envPath, 'utf8');
+        }
+        
+        const lines = envContent.split('\n');
+        let sudoLineIndex = lines.findIndex(line => line.startsWith('SUDO_NUMBERS='));
+        
+        const cleanNumbers = phoneNumbers.map(num => 
+            num.replace(/@s\.whatsapp\.net|@c\.us|@lid|:\d+/g, '').split(':')[0].split('@')[0].trim()
+        ).filter(n => n);
+        
+        if (sudoLineIndex !== -1) {
+            lines[sudoLineIndex] = `SUDO_NUMBERS=${cleanNumbers.join(',')}`;
+        } else {
+            lines.push(`SUDO_NUMBERS=${cleanNumbers.join(',')}`);
+        }
+        
+        await fs.writeFile(envPath, lines.join('\n'), 'utf8');
+        return true;
+    } catch (error) {
+        console.error('Error updating .env file:', error);
+        return false;
+    }
+}
+
 export default {
     name: 'sudo',
     aliases: ['addadmin', 'makeadmin', 'botadmin'],
@@ -42,14 +72,14 @@ export default {
                     text: `❌ *Invalid Action*
 
 Available actions:
-• add - Add bot admin (reply or mention)
-• remove - Remove bot admin (reply or mention)
-• list - View all bot admins
+- add - Add bot admin (reply or mention)
+- remove - Remove bot admin (reply or mention)
+- list - View all bot admins
 
 *Usage:*
-• .sudo add @user
-• .sudo remove (reply to user)
-• .sudo list`
+- .sudo add @user
+- .sudo remove (reply to user)
+- .sudo list`
                 }, { quoted: message });
             }
 
@@ -72,7 +102,7 @@ Use \`.sudo add @user\` to add admins.
 
 `;
                 sudoers.forEach((admin, index) => {
-                    const number = admin.replace('@s.whatsapp.net', '').replace('@c.us', '');
+                    const number = admin.replace(/@s\.whatsapp\.net|@c\.us|@lid|:\d+/g, '').split(':')[0].split('@')[0].trim();
                     listText += `${index + 1}. @${number}\n`;
                 });
                 listText += `\n*Total:* ${sudoers.length} bot admin${sudoers.length > 1 ? 's' : ''}`;
@@ -98,16 +128,16 @@ Use \`.sudo add @user\` to add admins.
                     text: `❌ *No User Specified*
 
 Please specify a user by:
-• Replying to their message
-• Mentioning them with @
+- Replying to their message
+- Mentioning them with @
 
 *Usage:*
-• .sudo add @user
-• .sudo remove (reply to user message)`
+- .sudo add @user
+- .sudo remove (reply to user message)`
                 }, { quoted: message });
             }
 
-            const targetNumber = targetJid.split('@')[0].replace(/:\d+/, '');
+            const targetNumber = targetJid.replace(/@s\.whatsapp\.net|@c\.us|@lid|:\d+/g, '').split(':')[0].split('@')[0].trim();
             const normalizedJid = `${targetNumber}@s.whatsapp.net`;
 
             if (action === 'add') {
@@ -123,7 +153,7 @@ Use \`.sudo list\` to view all admins.`,
                 }
 
                 const isOwner = config.ownerNumbers.some(owner => {
-                    const ownerNum = owner.split('@')[0];
+                    const ownerNum = owner.replace(/@s\.whatsapp\.net|@c\.us|@lid|:\d+/g, '').split(':')[0].split('@')[0].trim();
                     return ownerNum === targetNumber;
                 });
 
@@ -140,6 +170,7 @@ No need to add as bot admin.`,
 
                 sudoers.push(normalizedJid);
                 await saveSudoers(sudoers);
+                await updateEnvFile(sudoers);
 
                 await sock.sendMessage(from, {
                     text: `✅ *Bot Admin Added*
@@ -148,7 +179,9 @@ No need to add as bot admin.`,
 *Added by:* @${sender.split('@')[0]}
 *Date:* ${new Date().toLocaleString()}
 
-@${targetNumber} now has bot admin privileges and can use owner commands.`,
+@${targetNumber} now has bot admin privileges and can use owner commands.
+
+⚠️ *Note:* Restart bot for full effect.`,
                     mentions: [normalizedJid, sender]
                 }, { quoted: message });
 
@@ -180,6 +213,7 @@ Use \`.sudo list\` to view all admins.`,
 
                 const updatedSudoers = sudoers.filter(s => s !== normalizedJid);
                 await saveSudoers(updatedSudoers);
+                await updateEnvFile(updatedSudoers);
 
                 await sock.sendMessage(from, {
                     text: `✅ *Bot Admin Removed*
