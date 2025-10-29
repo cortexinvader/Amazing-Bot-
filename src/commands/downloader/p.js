@@ -66,97 +66,40 @@ async function searchSpotifyTrack(query) {
     }
 }
 
-async function downloadFromYoutube(query) {
-    const apis = [
-        {
-            name: 'YT1s',
-            call: async (url) => {
-                const searchRes = await axios.post('https://www.yt1s.com/api/ajaxSearch/index',
-                    `q=${encodeURIComponent(url)}&vt=mp3`,
-                    {
-                        headers: {
-                            'Content-Type': 'application/x-www-form-urlencoded',
-                            'User-Agent': 'Mozilla/5.0'
-                        },
-                        timeout: 30000
-                    }
-                );
-
-                if (searchRes.data?.links?.mp3) {
-                    const key = Object.keys(searchRes.data.links.mp3)[0];
-                    const kValue = searchRes.data.links.mp3[key].k;
-                    
-                    const convertRes = await axios.post('https://www.yt1s.com/api/ajaxConvert/convert',
-                        `vid=${searchRes.data.vid}&k=${kValue}`,
-                        {
-                            headers: {
-                                'Content-Type': 'application/x-www-form-urlencoded',
-                                'User-Agent': 'Mozilla/5.0'
-                            },
-                            timeout: 30000
-                        }
-                    );
-                    return convertRes.data?.dlink || null;
-                }
-                return null;
-            }
-        },
-        {
-            name: 'Y2Mate',
-            call: async (url) => {
-                const analyzeRes = await axios.get('https://www.y2mate.com/mates/analyzeV2/ajax', {
-                    params: {
-                        k_query: url,
-                        k_page: 'home',
-                        hl: 'en',
-                        q_auto: 0
-                    },
-                    headers: { 'User-Agent': 'Mozilla/5.0' },
-                    timeout: 30000
-                });
-
-                if (analyzeRes.data?.links?.mp3) {
-                    const mp3Keys = Object.keys(analyzeRes.data.links.mp3);
-                    if (mp3Keys.length > 0) {
-                        const convertRes = await axios.get('https://www.y2mate.com/mates/convertV2/index', {
-                            params: {
-                                vid: analyzeRes.data.vid,
-                                k: analyzeRes.data.links.mp3[mp3Keys[0]].k
-                            },
-                            headers: { 'User-Agent': 'Mozilla/5.0' },
-                            timeout: 30000
-                        });
-                        return convertRes.data?.dlink || null;
-                    }
-                }
-                return null;
-            }
+async function searchYouTube(query) {
+    try {
+        const yts = (await import('youtube-yts')).default;
+        const results = await yts(query);
+        if (results && results.all && results.all.length > 0) {
+            return results.all[0].url;
         }
-    ];
-
-    const youtubeUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
-    
-    for (const api of apis) {
-        try {
-            console.log(`Trying ${api.name}...`);
-            const url = await api.call(youtubeUrl);
-            if (url) {
-                console.log(`${api.name} SUCCESS`);
-                return url;
-            }
-        } catch (error) {
-            console.log(`${api.name} failed:`, error.message);
-            continue;
-        }
+        return null;
+    } catch (error) {
+        console.error('YouTube search error:', error.message);
+        return null;
     }
-    return null;
+}
+
+async function downloadFromRebix(youtubeUrl) {
+    try {
+        const apiUrl = `https://api-rebix.vercel.app/api/yta?url=${encodeURIComponent(youtubeUrl)}`;
+        const response = await axios.get(apiUrl, { timeout: 30000 });
+        
+        if (response.data && response.data.status && response.data.downloadUrl) {
+            return response.data.downloadUrl;
+        }
+        return null;
+    } catch (error) {
+        console.error('Rebix API error:', error.message);
+        return null;
+    }
 }
 
 export default {
     name: 'p',
-    aliases: ['play2'],
+    aliases: ['play2','ytplay'],
     category: 'downloader',
-    description: 'Download audio using Spotify API + YouTube',
+    description: 'Search and play songs using Spotify + YouTube',
     usage: '.play <song name>',
     example: '.play baby girl by joeboy',
     cooldown: 10,
@@ -179,7 +122,7 @@ export default {
 
             if (!searchQuery) {
                 return await sock.sendMessage(from, {
-                    text: `❌ Please provide a song name\n\nExample: ${prefix}play baby girl`
+                    text: `❌ *Please provide a song name*\n\n📜 *Usage:* ${prefix}play <song name>\n\n🎶 *Example:* ${prefix}play Baby Girl by Joeboy`
                 }, { quoted: message });
             }
 
@@ -188,7 +131,7 @@ export default {
             });
 
             const searchMessage = await sock.sendMessage(from, {
-                text: `🔍 *Searching on Spotify:* ${searchQuery}\n⏳ Please wait...`
+                text: `🔍 *Searching:* ${searchQuery}\n⏳ Please wait...`
             }, { quoted: message });
 
             const spotifyTrack = await searchSpotifyTrack(searchQuery);
@@ -196,23 +139,21 @@ export default {
             if (!spotifyTrack) {
                 await sock.sendMessage(from, { delete: searchMessage.key });
                 return await sock.sendMessage(from, {
-                    text: `❌ No results found on Spotify for: ${searchQuery}\n\n💡 Try different keywords!`
+                    text: `❌ *No Results Found*\n\nNo tracks found for: *${searchQuery}*\n\n💡 Try different keywords!`
                 }, { quoted: message });
             }
 
             await sock.sendMessage(from, { delete: searchMessage.key });
 
-            const infoText = `╭──⦿【 🎵 TRACK INFO 】
-│
-│ 📝 *Title:* ${spotifyTrack.name}
-│ 👤 *Artist:* ${spotifyTrack.artist}
-│ 💿 *Album:* ${spotifyTrack.album}
-│ ⏱️ *Duration:* ${Math.floor(spotifyTrack.duration / 60)}:${(spotifyTrack.duration % 60).toString().padStart(2, '0')}
-│ 🎧 *Source:* Spotify API
-│
-╰────────⦿
+            const infoText = `*◉—⌈🔊 AUDIO PLAYER⌋—◉*
 
-⏳ *Downloading audio...*`;
+📌 *TITLE:* ${spotifyTrack.name}
+👤 *ARTIST:* ${spotifyTrack.artist}
+💿 *ALBUM:* ${spotifyTrack.album}
+⌚ *DURATION:* ${Math.floor(spotifyTrack.duration / 60)}:${(spotifyTrack.duration % 60).toString().padStart(2, '0')}
+🎧 *SOURCE:* Spotify API
+
+⏳ *Sending audio 🔊, please wait...*`;
 
             if (spotifyTrack.image) {
                 await sock.sendMessage(from, {
@@ -229,31 +170,45 @@ export default {
                 react: { text: '⬇️', key: message.key }
             });
 
-            if (spotifyTrack.preview_url) {
-                try {
-                    await sock.sendMessage(from, {
-                        audio: { url: spotifyTrack.preview_url },
-                        mimetype: 'audio/mpeg',
-                        fileName: `${spotifyTrack.name} - ${spotifyTrack.artist}.mp3`,
-                        ptt: false
-                    }, { quoted: message });
-
-                    await sock.sendMessage(from, {
-                        text: `✅ *Preview Sent*\n\n⚠️ This is a 30-second preview from Spotify\n\n💡 Full version downloading from YouTube...`
-                    }, { quoted: message });
-                } catch (previewError) {
-                    console.log('Preview send failed:', previewError.message);
-                }
-            }
+            const downloadMessage = await sock.sendMessage(from, {
+                text: `📥 *Downloading:* ${spotifyTrack.name}\n⏳ Please wait...`
+            }, { quoted: message });
 
             const youtubeQuery = `${spotifyTrack.name} ${spotifyTrack.artist} official audio`;
-            const downloadUrl = await downloadFromYoutube(youtubeQuery);
+            const youtubeUrl = await searchYouTube(youtubeQuery);
 
-            if (!downloadUrl) {
+            if (!youtubeUrl) {
+                await sock.sendMessage(from, { delete: downloadMessage.key });
                 return await sock.sendMessage(from, {
-                    text: `❌ *Download Failed*\n\nFound on Spotify but couldn't download full audio.\n\n🔗 *Listen on Spotify:*\n${spotifyTrack.spotify_url}\n\n💡 Try different song or check console logs.`
+                    text: `❌ *Download Failed*\n\nCouldn't find YouTube video.\n\n🔗 *Listen on Spotify:*\n${spotifyTrack.spotify_url}`
                 }, { quoted: message });
             }
+
+            const downloadUrl = await downloadFromRebix(youtubeUrl);
+
+            if (!downloadUrl) {
+                await sock.sendMessage(from, { delete: downloadMessage.key });
+                return await sock.sendMessage(from, {
+                    text: `❌ *Download Failed*\n\n⚠️ Rebix API error\n\n📝 *Song:* ${spotifyTrack.name}\n🔗 *YouTube:* ${youtubeUrl}\n🎵 *Spotify:* ${spotifyTrack.spotify_url}\n\n💡 Try again later`
+                }, { quoted: message });
+            }
+
+            await sock.sendMessage(from, { delete: downloadMessage.key });
+
+            const resultCaption = `╭──⦿【 🎵 AUDIO DOWNLOADED 】
+│
+│ 📝 *Title:* ${spotifyTrack.name}
+│ 👤 *Artist:* ${spotifyTrack.artist}
+│ 💿 *Album:* ${spotifyTrack.album}
+│ ⌚ *Duration:* ${Math.floor(spotifyTrack.duration / 60)}:${(spotifyTrack.duration % 60).toString().padStart(2, '0')}
+│ 📦 *Format:* MP3
+│ 🎚️ *Quality:* 128kbps
+│ 🌐 *Source:* Spotify + YouTube
+│
+╰────────⦿
+
+💫 | [ Amazing Bot 🚀 ]
+🔥 | Powered by Ilom`;
 
             try {
                 await sock.sendMessage(from, {
@@ -263,23 +218,8 @@ export default {
                     ptt: false
                 }, { quoted: message });
 
-                const resultText = `╭──⦿【 ✅ DOWNLOADED 】
-│
-│ 📝 *Title:* ${spotifyTrack.name}
-│ 👤 *Artist:* ${spotifyTrack.artist}
-│ 💿 *Album:* ${spotifyTrack.album}
-│ 📦 *Format:* MP3
-│ 🌐 *Source:* Spotify + YouTube
-│
-╰────────⦿
-
-🔗 *Spotify:* ${spotifyTrack.spotify_url}
-
-💫 | [ Amazing Bot 🚀 ]
-🔥 | Powered by Ilom`;
-
                 await sock.sendMessage(from, {
-                    text: resultText,
+                    text: resultCaption,
                     mentions: [sender]
                 }, { quoted: message });
 
@@ -288,13 +228,16 @@ export default {
                 });
 
             } catch (sendError) {
-                console.log('Direct send failed, trying buffer...');
+                console.log('Direct send failed, trying buffer method...');
+                
                 try {
                     const audioBuffer = await axios.get(downloadUrl, {
                         responseType: 'arraybuffer',
-                        timeout: 90000,
+                        timeout: 120000,
                         maxContentLength: 50 * 1024 * 1024,
-                        headers: { 'User-Agent': 'Mozilla/5.0' }
+                        headers: {
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                        }
                     });
 
                     await sock.sendMessage(from, {
@@ -305,20 +248,26 @@ export default {
                     }, { quoted: message });
 
                     await sock.sendMessage(from, {
+                        text: resultCaption,
+                        mentions: [sender]
+                    }, { quoted: message });
+
+                    await sock.sendMessage(from, {
                         react: { text: '✅', key: message.key }
                     });
 
                 } catch (bufferError) {
                     return await sock.sendMessage(from, {
-                        text: `❌ Failed to send audio\n\n🔗 *Listen on Spotify:*\n${spotifyTrack.spotify_url}\n\nDirect link: ${downloadUrl}`
+                        text: `❌ *Failed to send audio*\n\n⚠️ Error: ${bufferError.message}\n\n🔗 *Listen on Spotify:*\n${spotifyTrack.spotify_url}\n\n💡 Direct download link:\n${downloadUrl}`
                     }, { quoted: message });
                 }
             }
 
         } catch (error) {
             console.error('Play command error:', error);
+            
             await sock.sendMessage(from, {
-                text: `❌ Error: ${error.message}\n\n💡 Try: ${prefix}play <different song>`
+                text: `❌ *Download Failed*\n\n⚠️ Error: ${error.message}\n\n💡 Try:\n• ${prefix}play <different song>\n• Check your internet connection\n• Contact bot owner if issue persists`
             }, { quoted: message });
         }
     }
