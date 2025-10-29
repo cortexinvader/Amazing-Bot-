@@ -9,7 +9,7 @@ const config = {
     botWebsite: process.env.BOT_WEBSITE || 'https://ilom.tech',
 
     prefix: process.env.PREFIX || '.',
-    groupPrefix: process.env.GROUP_PREFIX || '.',
+    ownerNoPrefix: process.env.OWNER_NO_PREFIX === 'true',
 
     ownerNumbers: (process.env.OWNER_NUMBERS || 'YOUR_PHONE_NUMBER').split(',').map(num => 
         num.includes('@') ? num : `${num.trim()}@s.whatsapp.net`

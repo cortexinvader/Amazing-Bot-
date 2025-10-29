@@ -1,6 +1,6 @@
 import config from '../../config.js';
-import { getGroup, updateGroup } from '../../models/Group.js';
-import Settings from '../../models/Settings.js';
+import fs from 'fs';
+import path from 'path';
 
 export default {
     name: 'prefix',
@@ -11,10 +11,8 @@ export default {
     cooldown: 5,
     permissions: ['user'],
 
-    async execute({ sock, message, from, args, isGroup, isGroupAdmin, sender, commandHandler }) {
-        const currentPrefix = isGroup ? 
-            (await getGroup(from))?.settings?.prefix || config.groupPrefix : 
-            config.prefix;
+    async execute({ sock, message, from, args, sender, commandHandler }) {
+        const currentPrefix = config.prefix;
 
         if (!args[0]) {
             const response = `╭─「 *BOT PREFIX* 」
@@ -28,7 +26,7 @@ export default {
 │ ⚙️ *Change Prefix:*
 │ • ${currentPrefix}prefix [new_prefix]
 │ • Example: ${currentPrefix}prefix !
-│ • (Admin only in groups)
+│ • (Owner only)
 ╰────────────────
 
 *${config.botName} is ready!* 🚀`;
@@ -36,13 +34,7 @@ export default {
             return sock.sendMessage(from, { text: response }, { quoted: message });
         }
 
-        if (isGroup && !isGroupAdmin && !commandHandler.isOwner(sender)) {
-            return sock.sendMessage(from, {
-                text: `❌ Only group admins can change the prefix!`
-            }, { quoted: message });
-        }
-
-        if (!isGroup && !commandHandler.isOwner(sender)) {
+        if (!commandHandler.isOwner(sender)) {
             return sock.sendMessage(from, {
                 text: `❌ Only the owner can change the prefix!`
             }, { quoted: message });
@@ -56,29 +48,33 @@ export default {
             }, { quoted: message });
         }
 
-        if (isGroup) {
-            await updateGroup(from, {
-                'settings.prefix': newPrefix
-            });
-        } else {
-            config.prefix = newPrefix;
+        try {
+            const envPath = path.join(process.cwd(), '.env');
+            let envContent = '';
             
-            await Settings.findOneAndUpdate(
-                { key: 'prefix' },
-                { 
-                    key: 'prefix',
-                    value: newPrefix,
-                    type: 'string',
-                    description: 'Bot command prefix',
-                    category: 'general',
-                    editable: true
-                },
-                { upsert: true, new: true }
-            ).catch(() => {});
-        }
+            if (fs.existsSync(envPath)) {
+                envContent = fs.readFileSync(envPath, 'utf8');
+            }
 
-        return sock.sendMessage(from, {
-            text: `✅ *Prefix Updated!*\n\nNew prefix: ${newPrefix}\n\nExample: ${newPrefix}menu${!isGroup ? '\n✨ Global prefix saved to database!' : ''}`
-        }, { quoted: message });
+            const prefixRegex = /^PREFIX=.*/m;
+            if (prefixRegex.test(envContent)) {
+                envContent = envContent.replace(prefixRegex, `PREFIX=${newPrefix}`);
+            } else {
+                envContent += `\nPREFIX=${newPrefix}`;
+            }
+
+            fs.writeFileSync(envPath, envContent, 'utf8');
+            
+            config.prefix = newPrefix;
+
+            return sock.sendMessage(from, {
+                text: `✅ *Prefix Updated!*\n\nNew prefix: ${newPrefix}\n\nExample: ${newPrefix}menu\n\n✨ Prefix saved to .env file!\n⚠️ Restart bot to apply changes globally.`
+            }, { quoted: message });
+            
+        } catch (error) {
+            return sock.sendMessage(from, {
+                text: `❌ Failed to update prefix in .env file!\n\nError: ${error.message}`
+            }, { quoted: message });
+        }
     }
 };

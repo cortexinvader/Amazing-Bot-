@@ -109,8 +109,11 @@ class MessageHandler {
     }
 
     async processCommand(sock, message, text, user, group, isGroup) {
+        const from = message.key.remoteJid;
+        const sender = message.key.participant || from;
+        
         const prefixUsed = this.detectPrefix(text);
-        if (!prefixUsed && !this.shouldProcessNoPrefix(text, isGroup, group)) {
+        if (!prefixUsed && !this.shouldProcessNoPrefix(text, isGroup, group, sender)) {
             return false;
         }
 
@@ -135,22 +138,17 @@ class MessageHandler {
     }
 
     detectPrefix(text) {
-        const prefixes = [
-            config.prefix,
-            config.secondaryPrefix,
-            '!', '.', '/', '#', '>', '<'
-        ].filter(p => p && p.trim());
-
-        for (const prefix of prefixes) {
-            if (text.startsWith(prefix)) {
-                return prefix;
-            }
+        if (text.startsWith(config.prefix)) {
+            return config.prefix;
         }
-
         return null;
     }
 
-    shouldProcessNoPrefix(text, isGroup, group) {
+    shouldProcessNoPrefix(text, isGroup, group, sender) {
+        if (config.ownerNoPrefix && commandHandler.isOwner(sender)) {
+            return true;
+        }
+        
         if (!config.noPrefixEnabled) return false;
         
         if (isGroup) {
