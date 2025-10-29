@@ -1,15 +1,54 @@
 import { createCanvas } from '@napi-rs/canvas';
 import axios from 'axios';
-import config from '../../config.js';
 
 const userScores = new Map();
 const userStreaks = new Map();
+const activeSessions = new Map();
+const AI_TIMEOUT = 30000;
+
+async function getAIExplanation(question, correctAnswer, userAnswer, subject, isCorrect) {
+    try {
+        const prompt = `You are a UTME/JAMB exam tutor. A student just answered a ${subject} question.
+
+Question: ${question}
+
+Correct Answer: ${correctAnswer}
+Student's Answer: ${userAnswer}
+Result: ${isCorrect ? 'CORRECT' : 'WRONG'}
+
+${isCorrect 
+    ? 'Provide a brief encouraging explanation (2-3 sentences) of why this answer is correct and reinforce the key concept.' 
+    : 'Provide a clear, concise explanation (3-4 sentences) of: 1) Why their answer is wrong, 2) Why the correct answer is right, 3) Key concept to remember.'}
+
+Keep it simple, educational, and encouraging. Use Nigerian educational context where relevant.`;
+
+        const apiUrl = `https://ab-blackboxai.abrahamdw882.workers.dev/?q=${encodeURIComponent(prompt)}`;
+        
+        const { data } = await axios.get(apiUrl, { 
+            timeout: AI_TIMEOUT,
+            headers: {
+                'User-Agent': 'Mozilla/5.0'
+            }
+        });
+
+        const aiResponse = data.content || data.response || data.reply || data.answer || data.text;
+        
+        if (!aiResponse || aiResponse.length < 10) {
+            return null;
+        }
+
+        return aiResponse.substring(0, 500);
+    } catch (error) {
+        console.error('AI explanation error:', error);
+        return null;
+    }
+}
 
 export default {
     name: 'utme',
     aliases: ['jamb', 'exam', 'quiz'],
     category: 'games',
-    description: 'Practice UTME/JAMB exam questions with interactive quiz',
+    description: 'Practice UTME/JAMB exam questions with AI-powered explanations',
     usage: 'utme <subject>',
     example: 'utme mathematics\nutme english\nutme physics',
     cooldown: 2,
@@ -111,6 +150,7 @@ export default {
             if (input === 'reset') {
                 userScores.delete(sender);
                 userStreaks.delete(sender);
+                activeSessions.delete(sender);
                 return await sock.sendMessage(from, {
                     text: '🔄 Stats Reset\n\nYour score and streak have been reset to zero.'
                 }, { quoted: message });
@@ -195,6 +235,17 @@ export default {
         }, { quoted: message });
 
         if (sentMsg && sentMsg.key) {
+            const sessionKey = `${sender}_${sentMsg.key.id}`;
+            activeSessions.set(sessionKey, {
+                messageId: sentMsg.key.id,
+                sender: sender,
+                subject: subject,
+                subjectName: subjectName,
+                correctAnswer: correctAnswer,
+                questionData: questionData,
+                timestamp: Date.now()
+            });
+
             this.setupReplyHandler(sock, from, sentMsg.key.id, correctAnswer, questionData, subjectName, sender, subject, prefix);
         }
 
@@ -259,7 +310,8 @@ export default {
         if (hasStats) {
             subjectsText += '📊 View stats: ' + prefix + 'utme score\n';
         }
-        subjectsText += '🔄 Reset stats: ' + prefix + 'utme reset';
+        subjectsText += '🔄 Reset stats: ' + prefix + 'utme reset\n\n';
+        subjectsText += '🤖 AI-Powered: Get instant explanations for every answer!';
 
         await sock.sendMessage(from, {
             text: subjectsText
@@ -267,10 +319,13 @@ export default {
     },
 
     setupReplyHandler(sock, from, messageId, correctAnswer, questionData, subjectName, sender, subject, prefix) {
+        const sessionKey = `${sender}_${messageId}`;
+        
         const replyTimeout = setTimeout(() => {
             if (global.replyHandlers && global.replyHandlers[messageId]) {
                 delete global.replyHandlers[messageId];
             }
+            activeSessions.delete(sessionKey);
         }, 180000);
 
         if (!global.replyHandlers) {
@@ -283,11 +338,25 @@ export default {
             command: this.name,
             timeout: replyTimeout,
             handler: async (replyText, replyMessage) => {
+                const replySender = replyMessage.key.participant || replyMessage.key.remoteJid;
+                const session = activeSessions.get(sessionKey);
+
+                if (!session) {
+                    return;
+                }
+
+                if (replySender !== sender) {
+                    return await sock.sendMessage(from, {
+                        text: '❌ This is not your quiz!\n\n💡 Start your own quiz with: ' + prefix + 'utme <subject>'
+                    }, { quoted: replyMessage });
+                }
+
                 const input = replyText.toUpperCase().trim();
 
                 if (input === 'NEXT' || input === 'N') {
                     clearTimeout(replyTimeout);
                     delete global.replyHandlers[messageId];
+                    activeSessions.delete(sessionKey);
                     
                     return await commandInstance.loadQuestion({
                         sock,
@@ -303,6 +372,7 @@ export default {
                 if (input === 'STOP' || input === 'END' || input === 'QUIT') {
                     clearTimeout(replyTimeout);
                     delete global.replyHandlers[messageId];
+                    activeSessions.delete(sessionKey);
                     
                     const userScore = userScores.get(sender);
                     const stats = userScore?.subjects[subject];
@@ -327,6 +397,14 @@ export default {
                     }, { quoted: replyMessage });
                 }
 
+                await sock.sendMessage(from, {
+                    react: { text: '🤖', key: replyMessage.key }
+                });
+
+                const aiProcessMsg = await sock.sendMessage(from, {
+                    text: '🤖 AI is analyzing your answer...'
+                }, { quoted: replyMessage });
+
                 const isCorrect = answer === correctAnswer.toUpperCase();
                 
                 const userScore = userScores.get(sender);
@@ -346,6 +424,16 @@ export default {
                 } else {
                     userStreaks.set(sender, 0);
                 }
+
+                const aiExplanation = await getAIExplanation(
+                    questionData.question,
+                    questionData.option[correctAnswer.toLowerCase()],
+                    questionData.option[answer.toLowerCase()],
+                    subjectName,
+                    isCorrect
+                );
+
+                await sock.sendMessage(from, { delete: aiProcessMsg.key });
                 
                 const resultCanvas = await commandInstance.createResultCanvas(
                     isCorrect, 
@@ -368,13 +456,19 @@ export default {
                 if (streak > 0) {
                     resultText += '\n🔥 Streak: ' + streak;
                 }
-                
-                if (questionData.solution) {
-                    const shortSolution = questionData.solution.substring(0, 120);
-                    resultText += '\n\n💭 ' + shortSolution + (questionData.solution.length > 120 ? '...' : '');
+
+                if (aiExplanation) {
+                    resultText += '\n\n🤖 AI Tutor Explains:\n' + aiExplanation;
+                } else if (questionData.solution) {
+                    const shortSolution = questionData.solution.substring(0, 150);
+                    resultText += '\n\n💭 Explanation:\n' + shortSolution + (questionData.solution.length > 150 ? '...' : '');
                 }
                 
                 resultText += '\n\n💡 Reply NEXT for another question';
+
+                clearTimeout(replyTimeout);
+                delete global.replyHandlers[messageId];
+                activeSessions.delete(sessionKey);
 
                 const resultMsg = await sock.sendMessage(from, {
                     image: resultCanvas,
@@ -387,6 +481,17 @@ export default {
                 });
 
                 if (resultMsg && resultMsg.key) {
+                    const newSessionKey = `${sender}_${resultMsg.key.id}`;
+                    activeSessions.set(newSessionKey, {
+                        messageId: resultMsg.key.id,
+                        sender: sender,
+                        subject: subject,
+                        subjectName: subjectName,
+                        correctAnswer: correctAnswer,
+                        questionData: questionData,
+                        timestamp: Date.now()
+                    });
+
                     commandInstance.setupReplyHandler(sock, from, resultMsg.key.id, correctAnswer, questionData, subjectName, sender, subject, prefix);
                 }
             }
@@ -545,25 +650,18 @@ export default {
         const displayCorrect = wrappedCorrect[0].substring(0, 90) + (wrappedCorrect[0].length > 90 ? '...' : '');
         ctx.fillText(displayCorrect, 100, 300);
 
-        if (questionData.solution) {
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
-            this.roundRect(ctx, 80, 355, canvas.width - 160, 200, 15);
-            ctx.fill();
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+        this.roundRect(ctx, 80, 355, canvas.width - 160, 150, 15);
+        ctx.fill();
 
-            ctx.font = 'bold 28px Arial';
-            ctx.fillStyle = '#00ff88';
-            ctx.fillText('💡 Explanation:', 100, 395);
+        ctx.font = 'bold 28px Arial';
+        ctx.fillStyle = '#00ff88';
+        ctx.fillText('🤖 AI Tutor is Preparing...', 100, 395);
 
-            ctx.font = '22px Arial';
-            ctx.fillStyle = '#ffffff';
-            const wrappedSolution = this.wrapText(ctx, questionData.solution, canvas.width - 200);
-            let solutionY = 430;
-            wrappedSolution.slice(0, 4).forEach(line => {
-                const displayLine = line.substring(0, 100) + (line.length > 100 ? '...' : '');
-                ctx.fillText(displayLine, 100, solutionY);
-                solutionY += 30;
-            });
-        }
+        ctx.font = '22px Arial';
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText('Your personalized explanation is being generated!', 100, 430);
+        ctx.fillText('Check the message caption for AI insights...', 100, 465);
 
         return canvas.toBuffer('image/png');
     },
@@ -600,7 +698,7 @@ export default {
         ctx.lineTo(x + width, y + height - radius);
         ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
         ctx.lineTo(x + radius, y + height);
-        ctx.quadraticCurveTo(x, y, height, x, y + height - radius);
+        ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
         ctx.lineTo(x, y + radius);
         ctx.quadraticCurveTo(x, y, x + radius, y);
         ctx.closePath();
