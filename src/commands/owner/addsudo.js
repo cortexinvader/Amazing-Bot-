@@ -29,19 +29,44 @@ export default {
                 }, { quoted: message });
             }
             
-            const phoneNumber = targetJid.replace(/@s\.whatsapp\.net|@c\.us|@lid|:\d+/g, '').split(':')[0].split('@')[0].trim();
+            const fullJid = targetJid.includes('@') ? targetJid : `${targetJid}@s.whatsapp.net`;
+            
+            let phoneNumber = fullJid.split('@')[0];
+            
+            if (phoneNumber.includes(':')) {
+                phoneNumber = phoneNumber.split(':')[0];
+            }
+            
+            phoneNumber = phoneNumber.replace(/[^0-9]/g, '');
+            
+            if (!phoneNumber || phoneNumber.length < 10) {
+                return await sock.sendMessage(from, {
+                    text: `❌ *Invalid Phone Number*\n\nExtracted: ${phoneNumber}\nFrom: ${fullJid}\n\nCannot add this user.`
+                }, { quoted: message });
+            }
+            
             const normalizedJid = `${phoneNumber}@s.whatsapp.net`;
             
-            if (config.ownerNumbers.includes(normalizedJid)) {
+            const isAlreadyOwner = config.ownerNumbers.some(owner => {
+                const ownerPhone = owner.split('@')[0].replace(/[^0-9]/g, '').split(':')[0];
+                return ownerPhone === phoneNumber;
+            });
+            
+            if (isAlreadyOwner) {
                 return await sock.sendMessage(from, {
-                    text: `ℹ️ *Already Owner*\n\n@${phoneNumber} is already a bot owner.`,
+                    text: `ℹ️ *Already Owner*\n\n+${phoneNumber} is already a bot owner.`,
                     mentions: [normalizedJid]
                 }, { quoted: message });
             }
             
-            if (config.sudoers.includes(normalizedJid)) {
+            const isAlreadySudo = config.sudoers.some(sudo => {
+                const sudoPhone = sudo.split('@')[0].replace(/[^0-9]/g, '').split(':')[0];
+                return sudoPhone === phoneNumber;
+            });
+            
+            if (isAlreadySudo) {
                 return await sock.sendMessage(from, {
-                    text: `ℹ️ *Already Sudo*\n\n@${phoneNumber} is already a sudo admin.`,
+                    text: `ℹ️ *Already Sudo*\n\n+${phoneNumber} is already a sudo admin.`,
                     mentions: [normalizedJid]
                 }, { quoted: message });
             }
@@ -58,29 +83,37 @@ export default {
             
             if (sudoLineIndex !== -1) {
                 const currentSudos = lines[sudoLineIndex].split('=')[1] || '';
-                const sudoList = currentSudos.split(',').filter(s => s.trim()).map(s => s.trim());
+                const sudoList = currentSudos.split(',').map(s => s.trim()).filter(s => s);
                 
-                if (!sudoList.includes(phoneNumber)) {
+                const alreadyInList = sudoList.some(existingSudo => {
+                    const existingPhone = existingSudo.replace(/[^0-9]/g, '');
+                    return existingPhone === phoneNumber;
+                });
+                
+                if (!alreadyInList) {
                     sudoList.push(phoneNumber);
-                    lines[sudoLineIndex] = `SUDO_NUMBERS=${sudoList.join(',')}`;
                 }
+                
+                lines[sudoLineIndex] = `SUDO_NUMBERS=${sudoList.join(',')}`;
             } else {
                 lines.push(`SUDO_NUMBERS=${phoneNumber}`);
             }
             
             await fs.writeFile(envPath, lines.join('\n'), 'utf8');
             
-            config.sudoers.push(normalizedJid);
+            if (!config.sudoers.some(s => s.split('@')[0].replace(/[^0-9]/g, '').split(':')[0] === phoneNumber)) {
+                config.sudoers.push(normalizedJid);
+            }
             
             await sock.sendMessage(from, {
-                text: `✅ *Sudo Admin Added*\n\n👤 *User:* @${phoneNumber}\n🔐 *Permissions:* Owner-level access\n📝 *Saved to:* .env file\n\n💡 This user can now use all owner commands!\n\n⚠️ *Note:* Restart the bot for full effect.`,
+                text: `✅ *Sudo Admin Added*\n\n👤 *User:* +${phoneNumber}\n📱 *Number:* ${phoneNumber}\n🔐 *Permissions:* Owner-level access\n📝 *Saved to:* .env file\n\n💡 This user can now use all owner commands!\n\n⚠️ *Note:* Restart the bot for full effect.\n\n*Extracted from JID:* ${fullJid}`,
                 mentions: [normalizedJid]
             }, { quoted: message });
             
         } catch (error) {
             console.error('Add sudo error:', error);
             await sock.sendMessage(from, {
-                text: '❌ *Error*\n\nFailed to add sudo admin. Please try again.'
+                text: `❌ *Error*\n\nFailed to add sudo admin.\n\n*Error:* ${error.message}\n\nPlease try again.`
             }, { quoted: message });
         }
     }
