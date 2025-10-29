@@ -1,10 +1,125 @@
 import axios from 'axios';
 
+const SPOTIFY_CLIENT_ID = 'f9fff40f5e594655bb3215b658571231';
+const SPOTIFY_CLIENT_SECRET = 'a51ac8aa4a354d24ae69c5f1335dd6db';
+
+let spotifyToken = null;
+let tokenExpiry = 0;
+
+async function getSpotifyToken() {
+    if (spotifyToken && Date.now() < tokenExpiry) {
+        return spotifyToken;
+    }
+
+    try {
+        const response = await axios.post('https://accounts.spotify.com/api/token',
+            'grant_type=client_credentials',
+            {
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'Authorization': 'Basic ' + Buffer.from(SPOTIFY_CLIENT_ID + ':' + SPOTIFY_CLIENT_SECRET).toString('base64')
+                }
+            }
+        );
+
+        spotifyToken = response.data.access_token;
+        tokenExpiry = Date.now() + (response.data.expires_in * 1000) - 60000;
+        return spotifyToken;
+    } catch (error) {
+        console.error('Spotify token error:', error.message);
+        return null;
+    }
+}
+
+async function searchSpotifyArtist(artistName) {
+    try {
+        const token = await getSpotifyToken();
+        if (!token) return null;
+
+        const searchResponse = await axios.get('https://api.spotify.com/v1/search', {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            },
+            params: {
+                q: artistName,
+                type: 'artist',
+                limit: 1
+            }
+        });
+
+        if (searchResponse.data && searchResponse.data.artists && searchResponse.data.artists.items.length > 0) {
+            const artist = searchResponse.data.artists.items[0];
+            
+            const artistDetails = await axios.get(`https://api.spotify.com/v1/artists/${artist.id}`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            const topTracks = await axios.get(`https://api.spotify.com/v1/artists/${artist.id}/top-tracks`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                },
+                params: {
+                    market: 'US'
+                }
+            });
+
+            return {
+                name: artist.name,
+                image: artist.images[0]?.url || 'https://i.ibb.co/2M7rtLk/ilom.jpg',
+                followers: artistDetails.data.followers?.total || 0,
+                popularity: artistDetails.data.popularity || 0,
+                genres: artistDetails.data.genres || [],
+                url: artist.external_urls.spotify,
+                topTracks: topTracks.data.tracks.slice(0, 5).map(t => t.name) || []
+            };
+        }
+        return null;
+    } catch (error) {
+        console.error('Spotify artist search error:', error.message);
+        return null;
+    }
+}
+
+async function getMusicBrainzArtist(artistName) {
+    try {
+        const response = await axios.get('https://musicbrainz.org/ws/2/artist/', {
+            params: {
+                query: artistName,
+                fmt: 'json',
+                limit: 1
+            },
+            headers: {
+                'User-Agent': 'AmazingBot/1.0 (contact@example.com)'
+            },
+            timeout: 15000
+        });
+
+        if (response.data && response.data.artists && response.data.artists.length > 0) {
+            const artist = response.data.artists[0];
+            return {
+                name: artist.name,
+                image: 'https://i.ibb.co/2M7rtLk/ilom.jpg',
+                country: artist.country || 'Unknown',
+                type: artist.type || 'Artist',
+                disambiguation: artist.disambiguation || '',
+                tags: artist.tags?.map(t => t.name).slice(0, 5) || [],
+                url: `https://musicbrainz.org/artist/${artist.id}`
+            };
+        }
+        return null;
+    } catch (error) {
+        console.error('MusicBrainz error:', error.message);
+        return null;
+    }
+}
+
 export default {
     name: 'artist',
     aliases: ['musician', 'singer'],
     category: 'utility',
-    description: 'Search for artist information with image',
+    description: 'Search for artist information using Spotify API',
     usage: '.artist <artist name>',
     example: '.artist Adele\n.artist Drake',
     cooldown: 5,
@@ -27,7 +142,7 @@ export default {
 
             if (!artistName) {
                 await sock.sendMessage(from, {
-                    text: `❌ *Missing Artist Name*\n\n📜 *Usage:* ${prefix}artist <artist name>\n\n🎤 *Example:*\n${prefix}artist Adele\n${prefix}artist Ed Sheeran`
+                    text: `❌ *Missing Artist Name*\n\n📜 *Usage:* ${prefix}artist <artist name>\n\n🎤 *Example:*\n${prefix}artist Adele\n${prefix}artist Ed Sheeran\n${prefix}artist Drake`
                 }, { quoted: message });
                 return;
             }
@@ -40,116 +155,57 @@ export default {
                 text: `🔍 *Searching for:* ${artistName}\n⏳ Please wait...`
             }, { quoted: message });
 
-            let artistData = null;
-            let apiUsed = '';
-
-            try {
-                const lastfmResponse = await axios.get(`https://ws.audioscrobbler.com/2.0/`, {
-                    params: {
-                        method: 'artist.getinfo',
-                        artist: artistName,
-                        api_key: '345e5bb8fe1c6d0414ef99b85c08caa4',
-                        format: 'json',
-                        autocorrect: 1
-                    },
-                    timeout: 15000
-                });
-
-                if (lastfmResponse.data && lastfmResponse.data.artist) {
-                    const artist = lastfmResponse.data.artist;
-                    artistData = {
-                        name: artist.name,
-                        image: artist.image?.find(img => img.size === 'extralarge')?.['#text'] || 
-                               artist.image?.find(img => img.size === 'large')?.['#text'] ||
-                               artist.image?.find(img => img.size === 'medium')?.['#text'] ||
-                               'https://i.ibb.co/2M7rtLk/ilom.jpg',
-                        bio: artist.bio?.summary || artist.bio?.content || 'No biography available',
-                        listeners: artist.stats?.listeners || '0',
-                        playcount: artist.stats?.playcount || '0',
-                        tags: artist.tags?.tag?.map(t => t.name).slice(0, 5) || [],
-                        url: artist.url || '',
-                        similar: artist.similar?.artist?.map(a => a.name).slice(0, 5) || []
-                    };
-                    apiUsed = 'Last.fm API';
-                }
-            } catch (error) {
-                console.log('Last.fm API failed:', error.message);
-            }
+            let artistData = await searchSpotifyArtist(artistName);
+            let source = 'Spotify API';
 
             if (!artistData) {
-                try {
-                    const musicbrainzResponse = await axios.get(`https://musicbrainz.org/ws/2/artist/`, {
-                        params: {
-                            query: artistName,
-                            fmt: 'json',
-                            limit: 1
-                        },
-                        timeout: 15000,
-                        headers: {
-                            'User-Agent': 'AmazingBot/1.0'
-                        }
-                    });
-
-                    if (musicbrainzResponse.data && musicbrainzResponse.data.artists && musicbrainzResponse.data.artists.length > 0) {
-                        const artist = musicbrainzResponse.data.artists[0];
-                        artistData = {
-                            name: artist.name,
-                            image: 'https://i.ibb.co/2M7rtLk/ilom.jpg',
-                            bio: artist.disambiguation || 'No biography available',
-                            listeners: 'N/A',
-                            playcount: 'N/A',
-                            tags: artist.tags?.map(t => t.name).slice(0, 5) || [],
-                            url: `https://musicbrainz.org/artist/${artist.id}`,
-                            similar: []
-                        };
-                        apiUsed = 'MusicBrainz API';
-                    }
-                } catch (error) {
-                    console.log('MusicBrainz API failed:', error.message);
+                console.log('Spotify failed, trying MusicBrainz...');
+                const mbData = await getMusicBrainzArtist(artistName);
+                if (mbData) {
+                    artistData = {
+                        name: mbData.name,
+                        image: mbData.image,
+                        followers: 'N/A',
+                        popularity: 'N/A',
+                        genres: mbData.tags,
+                        url: mbData.url,
+                        topTracks: [],
+                        country: mbData.country,
+                        type: mbData.type
+                    };
+                    source = 'MusicBrainz API';
                 }
             }
 
             if (!artistData) {
                 await sock.sendMessage(from, { delete: searchMessage.key });
                 await sock.sendMessage(from, {
-                    text: `❌ *Artist Not Found*\n\nNo information found for: *${artistName}*\n\n💡 *Try:*\n• Checking spelling\n• Using full artist name\n• Searching popular artists\n\n🎤 *Example:* ${prefix}artist Adele`
+                    text: `❌ *Artist Not Found*\n\nNo information found for: *${artistName}*\n\n💡 *Try:*\n• Check spelling\n• Use full artist name\n• Try popular artists\n\n🎤 *Examples:*\n${prefix}artist Adele\n${prefix}artist The Weeknd\n${prefix}artist Taylor Swift`
                 }, { quoted: message });
                 return;
             }
 
             await sock.sendMessage(from, { delete: searchMessage.key });
 
-            const cleanBio = artistData.bio
-                .replace(/<a[^>]*>.*?<\/a>/g, '')
-                .replace(/<[^>]+>/g, '')
-                .replace(/\n\s*\n/g, '\n')
-                .trim();
-
-            const shortBio = cleanBio.length > 400 ? cleanBio.substring(0, 400) + '...' : cleanBio;
-
-            const infoText = `╭──⦿【 🎤 ARTIST INFO 】
+            let infoText = `╭──⦿【 🎤 ARTIST INFO 】
 │
 │ 👤 *Name:* ${artistData.name}
-│ 👁️ *Listeners:* ${this.formatNumber(artistData.listeners)}
-│ ▶️ *Total Plays:* ${this.formatNumber(artistData.playcount)}
-│
+│ 👥 *Followers:* ${this.formatNumber(artistData.followers)}
+│ ⭐ *Popularity:* ${artistData.popularity !== 'N/A' ? artistData.popularity + '/100' : 'N/A'}
+${artistData.country ? `│ 🌍 *Country:* ${artistData.country}\n` : ''}│
 ╰────────⦿
 
-╭──⦿【 📖 BIOGRAPHY 】
+${artistData.genres && artistData.genres.length > 0 ? `╭──⦿【 🏷️ GENRES 】
 │
-│ ${shortBio.split('\n').map(line => line.trim()).filter(line => line).join('\n│ ')}
+│ ${artistData.genres.map((g, i) => `${i + 1}. ${g}`).join('\n│ ')}
 │
-╰────────⦿
+╰────────⦿\n\n` : ''}${artistData.topTracks && artistData.topTracks.length > 0 ? `╭──⦿【 🎵 TOP TRACKS 】
+│
+│ ${artistData.topTracks.map((t, i) => `${i + 1}. ${t}`).join('\n│ ')}
+│
+╰────────⦿\n\n` : ''}🔗 *Profile:* ${artistData.url}
 
-${artistData.tags.length > 0 ? `╭──⦿【 🏷️ GENRES 】
-│
-│ ${artistData.tags.map(tag => `• ${tag}`).join('\n│ ')}
-│
-╰────────⦿\n\n` : ''}${artistData.similar.length > 0 ? `╭──⦿【 🎵 SIMILAR ARTISTS 】
-│
-│ ${artistData.similar.map(art => `• ${art}`).join('\n│ ')}
-│
-╰────────⦿\n\n` : ''}${artistData.url ? `🔗 *More Info:* ${artistData.url}\n\n` : ''}🌐 *Source:* ${apiUsed}
+🌐 *Source:* ${source}
 
 💫 | [ Amazing Bot 🚀 ]
 🔥 | Powered by Ilom`;
@@ -168,24 +224,26 @@ ${artistData.tags.length > 0 ? `╭──⦿【 🏷️ GENRES 】
             console.error('Artist command error:', error);
             
             let errorMsg = error.message || 'Unknown error occurred';
-            let errorTip = '💡 Try again later!';
+            let errorTip = '💡 Try again with different artist name!';
             
             if (error.message.includes('timeout')) {
                 errorTip = '💡 Request timeout. Check your connection.';
             } else if (error.message.includes('ENOTFOUND')) {
                 errorTip = '💡 Network error. Check internet connection.';
-            } else if (error.message.includes('404')) {
-                errorTip = '💡 Artist not found. Try different spelling.';
+            } else if (error.message.includes('401')) {
+                errorTip = '💡 Spotify API authentication failed.';
+            } else if (error.message.includes('429')) {
+                errorTip = '💡 Rate limited. Wait a moment and try again.';
             }
 
             await sock.sendMessage(from, {
-                text: `❌ *Search Failed*\n\n⚠️ Error: ${errorMsg}\n\n${errorTip}\n\n🎤 Try:\n• Different artist name\n• Popular artists\n• Correct spelling`
+                text: `❌ *Search Failed*\n\n⚠️ Error: ${errorMsg}\n\n${errorTip}\n\n🎤 Try:\n• Different artist name\n• Popular artists (Adele, Drake, Ed Sheeran)\n• Check spelling`
             }, { quoted: message });
         }
     },
 
     formatNumber(num) {
-        if (!num || num === 'N/A' || num === '0') return 'N/A';
+        if (!num || num === 'N/A' || num === '0' || num === 0) return 'N/A';
         const number = parseInt(num);
         if (isNaN(number)) return 'N/A';
         if (number >= 1000000000) {
