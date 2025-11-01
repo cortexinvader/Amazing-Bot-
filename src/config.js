@@ -4,7 +4,7 @@ const config = {
     botName: process.env.BOT_NAME || 'Ilom Bot',
     botVersion: process.env.BOT_VERSION || '1.0.0',
     botDescription: process.env.BOT_DESCRIPTION || '🧠 Amazing Bot created by Ilom',
-    botThumbnail: process.env.BOT_THUMBNAIL || 'https://i.ibb.co/2M7rtLk/ilom.jpg',
+    botThumbnail: process.env.BOT_THUMBNAIL || 'https://files.catbox.moe/13uws5.jpg',
     botRepository: process.env.BOT_REPOSITORY || 'https://github.com/NexusCoders-cyber/Amazing-Bot-.git',
     botWebsite: process.env.BOT_WEBSITE || 'https://ilom.tech',
 
