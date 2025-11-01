@@ -86,7 +86,6 @@ async function processSessionCredentials() {
 
             logger.info('🔐 Processing session credentials from environment...');
 
-            // Handle Mega.nz session download
             if (sessionId.startsWith('sypher™--')) {
                 try {
                     const sessdata = sessionId.replace("sypher™--", "");
@@ -112,11 +111,9 @@ async function processSessionCredentials() {
                     return true;
                 } catch (error) {
                     logger.warn('⚠️ Failed to download session from Mega:', error.message);
-                    // Continue to other formats if Mega fails
                 }
             }
 
-            // Handle different session ID formats with improved error handling
             if (sessionId.startsWith('Ilom~')) {
                 const cleanId = sessionId.replace('Ilom~', '');
                 sessionData = JSON.parse(Buffer.from(cleanId, 'base64').toString());
@@ -135,12 +132,9 @@ async function processSessionCredentials() {
             }
 
             if (sessionData && typeof sessionData === 'object') {
-                // Handle complete multi-file auth state structure
                 if (sessionData.creds) {
-                    // New format: contains both creds and keys
                     await fs.writeJSON(path.join(SESSION_PATH, 'creds.json'), sessionData.creds, { spaces: 2 });
 
-                    // Process keys if available
                     if (sessionData.keys && typeof sessionData.keys === 'object') {
                         const keysPath = path.join(SESSION_PATH, 'keys');
                         await fs.ensureDir(keysPath);
@@ -155,7 +149,6 @@ async function processSessionCredentials() {
                         logger.info('✅ Session credentials processed (keys will be generated)');
                     }
                 } else {
-                    // Legacy format: direct creds object
                     await fs.writeJSON(path.join(SESSION_PATH, 'creds.json'), sessionData, { spaces: 2 });
                     logger.info('✅ Session credentials processed (legacy format)');
                 }
@@ -167,7 +160,6 @@ async function processSessionCredentials() {
         }
     }
 
-    // Check for existing valid session
     const credsPath = path.join(SESSION_PATH, 'creds.json');
     const keysPath = path.join(SESSION_PATH, 'keys');
 
@@ -253,7 +245,6 @@ async function handleConnectionEvents(sock, connectionUpdate) {
             console.log(chalk.yellow('📝 Scan the QR code to generate a new session'));
         }
 
-        // Generate QR code if scanner is enabled
         if (qrService.isQREnabled()) {
             try {
                 const qrGenerated = await qrService.generateQR(qr);
@@ -322,7 +313,6 @@ async function handleConnectionEvents(sock, connectionUpdate) {
         logger.info('✅ WhatsApp connection established');
         console.log(chalk.green.bold('🚀 Bot is online and ready!'));
 
-        // Clear QR code when successfully connected
         if (qrService.isQREnabled()) {
             await qrService.clearQR();
         }
@@ -336,6 +326,64 @@ async function handleConnectionEvents(sock, connectionUpdate) {
     } else if (connection === 'connecting') {
         logger.info('🔗 Connecting to WhatsApp...');
     }
+}
+
+async function setupEventHandlers(sock, saveCreds) {
+    sock.ev.on('creds.update', () => {
+        logger.debug('Credentials updated, saving...');
+        saveCreds();
+    });
+
+    sock.ev.on('messages.upsert', async ({ messages, type }) => {
+        if (type === 'notify') {
+            for (const message of messages) {
+                await messageHandler.handleIncomingMessage(sock, message);
+            }
+        }
+    });
+
+    sock.ev.on('messages.update', async (messageUpdates) => {
+        await messageHandler.handleMessageUpdate(sock, messageUpdates);
+    });
+
+    sock.ev.on('messages.delete', async (deletedMessages) => {
+        await messageHandler.handleMessageDelete(sock, deletedMessages);
+    });
+
+    sock.ev.on('messages.reaction', async (reactions) => {
+        const handleReaction = (await import('./src/events/messageReaction.js')).default;
+        for (const reaction of reactions) {
+            await handleReaction(sock, reaction);
+        }
+    });
+
+    sock.ev.on('group-participants.update', async (groupUpdate) => {
+        try {
+            await groupHandler.handleParticipantsUpdate(sock, groupUpdate);
+        } catch (error) {
+            logger.error('Group participants update error:', error);
+        }
+    });
+
+    sock.ev.on('groups.update', async (groupsUpdate) => {
+        try {
+            await groupHandler.handleGroupUpdate(sock, groupsUpdate);
+        } catch (error) {
+            logger.error('Groups update error:', error);
+        }
+    });
+
+    sock.ev.on('call', async (callEvents) => {
+        await callHandler.handleIncomingCall(sock, callEvents);
+    });
+
+    sock.ev.on('contacts.update', async (contactUpdates) => {
+        try {
+            await eventHandler.handleContactUpdate(sock, contactUpdates);
+        } catch (error) {
+            logger.error('Contact update error:', error);
+        }
+    });
 }
 
 async function establishWhatsAppConnection() {
@@ -369,7 +417,6 @@ async function establishWhatsAppConnection() {
 
         logger.info('📢 Setting up connection event handlers...');
 
-        // Set up connection timeout
         const connectionTimeout = setTimeout(async () => {
             logger.warn('⚠️  Connection timeout - WhatsApp connection took too long');
             logger.info('💡 This might be due to:');
@@ -378,7 +425,6 @@ async function establishWhatsAppConnection() {
             logger.info('   - WhatsApp server problems');
             logger.info('🔄 Attempting to reconnect...');
 
-            // Close existing socket and reconnect
             if (sock && sock.end) {
                 await sock.end();
             }
@@ -386,7 +432,7 @@ async function establishWhatsAppConnection() {
                 reconnectAttempts++;
                 setTimeout(establishWhatsAppConnection, 5000);
             }
-        }, 30000); // 30 seconds timeout
+        }, 30000);
 
         sock.ev.on('connection.update', (update) => {
             logger.debug('Connection update received:', JSON.stringify(update));
@@ -396,61 +442,7 @@ async function establishWhatsAppConnection() {
             handleConnectionEvents(sock, update);
         });
 
-        sock.ev.on('creds.update', () => {
-            logger.debug('Credentials updated, saving...');
-            saveCreds();
-        });
-
-        sock.ev.on('messages.upsert', async ({ messages, type }) => {
-            if (type === 'notify') {
-                for (const message of messages) {
-                    await messageHandler.handleIncomingMessage(sock, message);
-                }
-            }
-        });
-
-        sock.ev.on('messages.update', async (messageUpdates) => {
-            await messageHandler.handleMessageUpdate(sock, messageUpdates);
-        });
-
-        sock.ev.on('messages.delete', async (deletedMessages) => {
-            await messageHandler.handleMessageDelete(sock, deletedMessages);
-        });
-
-        sock.ev.on('messages.reaction', async (reactions) => {
-            const handleReaction = (await import('./src/events/messageReaction.js')).default;
-            for (const reaction of reactions) {
-                await handleReaction(sock, reaction);
-            }
-        });
-
-        sock.ev.on('group-participants.update', async (groupUpdate) => {
-            try {
-                await groupHandler.handleParticipantsUpdate(sock, groupUpdate);
-            } catch (error) {
-                logger.error('Group participants update error:', error);
-            }
-        });
-
-        sock.ev.on('groups.update', async (groupsUpdate) => {
-            try {
-                await groupHandler.handleGroupUpdate(sock, groupsUpdate);
-            } catch (error) {
-                logger.error('Groups update error:', error);
-            }
-        });
-
-        sock.ev.on('call', async (callEvents) => {
-            await callHandler.handleIncomingCall(sock, callEvents);
-        });
-
-        sock.ev.on('contacts.update', async (contactUpdates) => {
-            try {
-                await eventHandler.handleContactUpdate(sock, contactUpdates);
-            } catch (error) {
-                logger.error('Contact update error:', error);
-            }
-        });
+        await setupEventHandlers(sock, saveCreds);
 
         global.sock = sock;
 
