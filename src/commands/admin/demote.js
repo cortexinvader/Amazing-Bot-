@@ -28,14 +28,6 @@ export default {
             }, { quoted: message });
         }
 
-        if (!isBotAdmin) {
-            return await sock.sendMessage(from, {
-                text: formatResponse.error('BOT NOT ADMIN',
-                    'I need to be an admin to demote users',
-                    'Make me an admin first')
-            }, { quoted: message });
-        }
-
         try {
             await sock.sendMessage(from, {
                 react: { text: '⏳', key: message.key }
@@ -60,9 +52,18 @@ export default {
 
             const groupMetadata = await sock.groupMetadata(from);
             const botJid = sock.user.id;
-            const botParticipant = groupMetadata.participants.find(p => p.id === botJid);
+            
+            const botParticipant = groupMetadata.participants.find(p => {
+                if (p.id === botJid) return true;
+                
+                const botPhone = botJid.split('@')[0].split(':')[0];
+                const pPhone = p.id.split('@')[0].split(':')[0];
+                const pLidPhone = p.lid ? p.lid.split('@')[0].split(':')[0] : null;
+                
+                return pPhone === botPhone || pLidPhone === botPhone;
+            });
 
-            if (!botParticipant || (botParticipant.admin !== 'admin' && botParticipant.admin !== 'superadmin')) {
+            if (!botParticipant || (!botParticipant.admin)) {
                 return await sock.sendMessage(from, {
                     text: formatResponse.error('BOT NOT ADMIN',
                         'I need admin privileges to demote users',
