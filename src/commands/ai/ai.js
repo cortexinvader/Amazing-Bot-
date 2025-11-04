@@ -319,6 +319,24 @@ export default {
 │
 ╰────────────⦿`
                         }, { quoted: replyMessage });
+                        clearTimeout(replyTimeout);
+                        delete global.replyHandlers[messageId];
+                        return;
+                    } else {
+                        await sock.sendMessage(from, {
+                            text: `╭──⦿【 ❌ INVALID MODE 】
+│
+│ 📋 𝗔𝘃𝗮𝗶𝗹𝗮𝗯𝗹𝗲 𝗠𝗼𝗱𝗲𝘀:
+│    • normal - Helpful assistant
+│    • god - Wise and omnipotent
+│    • naughty - Playful and flirty
+│    • roast - Savage roaster
+│
+│ 💡 𝗘𝘅𝗮𝗺𝗽𝗹𝗲:
+│    ${prefix}ai set god
+│
+╰────────────⦿`
+                        }, { quoted: replyMessage });
                         return;
                     }
                 }
