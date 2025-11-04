@@ -1,0 +1,249 @@
+import axios from 'axios';
+
+const PLAYSTORE_TIMEOUT = 15000; // 15s for fetch
+const REPLY_TIMEOUT = 300000; // 5 min for next search
+
+export default {
+    name: 'apk',
+    aliases: ['playstore', 'app', 'apps'],
+    category: 'downloader',
+    description: 'Search for APK apps on Play Store',
+    usage: 'apk <query>',
+    example: 'apk Suno Ai',
+    cooldown: 5,
+    permissions: ['user'],
+    supportsReply: true,
+    args: true,
+    minArgs: 1,
+
+    async execute({ sock, message, args, from, sender, prefix }) {
+        const query = args.join(' ').trim();
+
+        if (!query) {
+            return await sock.sendMessage(from, {
+                text: `╭──⦿【 📱 PLAY STORE SEARCH 】
+│
+│ 💡 𝗨𝘀𝗮𝗴𝗲:
+│    ${prefix}apk <app name>
+│
+│ 📝 𝗘𝘅𝗮𝗺𝗽𝗹𝗲𝘀:
+│    ${prefix}apk Suno Ai
+│    ${prefix}apk whatsapp
+│    ${prefix}apk instagram
+│
+│ 🔄 𝗡𝗲𝘅𝘁 𝗦𝗲𝗮𝗿𝗰𝗵:
+│    Reply to results with new query
+│
+╰────────────⦿`
+            }, { quoted: message });
+        }
+
+        try {
+            await sock.sendMessage(from, {
+                react: { text: '🔍', key: message.key }
+            });
+
+            const statusMsg = await sock.sendMessage(from, {
+                text: `⏳ Searching Play Store for "${query}"...`
+            }, { quoted: message });
+
+            const apiUrl = `https://arychauhann.onrender.com/api/playstore?query=${encodeURIComponent(query)}`;
+            const { data } = await axios.get(apiUrl, {
+                timeout: PLAYSTORE_TIMEOUT,
+                headers: {
+                    'User-Agent': 'Mozilla/5.0'
+                }
+            });
+
+            const apps = data.data || [];
+            if (apps.length === 0) {
+                await sock.sendMessage(from, {
+                    text: `❌ No apps found for "${query}"`,
+                    edit: statusMsg.key
+                }, { quoted: message });
+                return;
+            }
+
+            // Assume app structure: { name, developer, icon, score, installs, apk: 'download_url' }
+            const firstApp = apps[0];
+            const name = firstApp.name || 'Unknown App';
+            const developer = firstApp.developer || 'Unknown Developer';
+            const score = firstApp.score ? `${firstApp.score}/5` : 'N/A';
+            const installs = firstApp.installs || 'N/A';
+            const iconUrl = firstApp.icon || '';
+            const apkUrl = firstApp.apk || firstApp.download || '';
+
+            let caption = `📱 *${name}*\n\n👨‍💻 Developer: ${developer}\n⭐ Rating: ${score}\n📥 Installs: ${installs}\n\n`;
+            if (apkUrl) {
+                caption += `🔗 Download APK: ${apkUrl}\n`;
+            }
+            caption += `\nFound ${apps.length} apps.\n💡 Reply for new search!`;
+
+            const sentMsg = await sock.sendMessage(from, {
+                image: { url: iconUrl },
+                caption
+            }, { quoted: message });
+
+            // Send remaining app icons if more
+            for (let i = 1; i < apps.length; i++) {
+                const app = apps[i];
+                await sock.sendMessage(from, {
+                    image: { url: app.icon || '' },
+                    caption: `📱 ${app.name || 'App'}\n👨‍💻 ${app.developer || 'Dev'}\n⭐ ${app.score ? `${app.score}/5` : 'N/A'}`
+                }, { quoted: sentMsg });
+            }
+
+            await sock.sendMessage(from, {
+                react: { text: '✅', key: message.key }
+            });
+
+            if (sentMsg && sentMsg.key && sentMsg.key.id) {
+                this.setupReplyListener(sock, from, sentMsg.key.id, query, sender, prefix);
+            }
+
+        } catch (error) {
+            console.error('APK command error:', error);
+
+            const errorMsg = error.code === 'ECONNABORTED'
+                ? 'Search timeout'
+                : error.response?.status === 429
+                ? 'Rate limit - wait a bit'
+                : error.message || 'Failed to search apps';
+
+            await sock.sendMessage(from, {
+                text: `╭──⦿【 ❌ ERROR 】
+│
+│ ⚠️ Play Store search failed
+│
+│ 📝 Error: ${errorMsg}
+│
+│ 🔄 Try again
+│
+╰────────────⦿`
+            }, { quoted: message });
+
+            await sock.sendMessage(from, {
+                react: { text: '❌', key: message.key }
+            });
+        }
+    },
+
+    setupReplyListener(sock, from, messageId, originalQuery, authorizedSender, prefix) {
+        if (!global.replyHandlers) {
+            global.replyHandlers = {};
+        }
+
+        const existingHandler = global.replyHandlers[messageId];
+        if (existingHandler && existingHandler.timeout) {
+            clearTimeout(existingHandler.timeout);
+        }
+
+        const replyTimeout = setTimeout(() => {
+            if (global.replyHandlers && global.replyHandlers[messageId]) {
+                delete global.replyHandlers[messageId];
+            }
+        }, REPLY_TIMEOUT);
+
+        global.replyHandlers[messageId] = {
+            command: this.name,
+            authorizedSender: authorizedSender,
+            originalQuery: originalQuery,
+            timeout: replyTimeout,
+            handler: async (replyText, replyMessage) => {
+                const replySender = replyMessage.key.participant || replyMessage.key.remoteJid;
+                
+                if (replySender !== authorizedSender) {
+                    return;
+                }
+
+                const newQuery = replyText.trim();
+                const searchQuery = newQuery || originalQuery;
+
+                try {
+                    await sock.sendMessage(from, {
+                        react: { text: '🔍', key: replyMessage.key }
+                    });
+
+                    const statusMsg = await sock.sendMessage(from, {
+                        text: `⏳ Searching Play Store for "${searchQuery}"...`
+                    }, { quoted: replyMessage });
+
+                    const apiUrl = `https://arychauhann.onrender.com/api/playstore?query=${encodeURIComponent(searchQuery)}`;
+                    const { data } = await axios.get(apiUrl, {
+                        timeout: PLAYSTORE_TIMEOUT,
+                        headers: {
+                            'User-Agent': 'Mozilla/5.0'
+                        }
+                    });
+
+                    const apps = data.data || [];
+                    if (apps.length === 0) {
+                        await sock.sendMessage(from, {
+                            text: `❌ No apps found for "${searchQuery}"`,
+                            edit: statusMsg.key
+                        }, { quoted: replyMessage });
+                        return;
+                    }
+
+                    const firstApp = apps[0];
+                    const name = firstApp.name || 'Unknown App';
+                    const developer = firstApp.developer || 'Unknown Developer';
+                    const score = firstApp.score ? `${firstApp.score}/5` : 'N/A';
+                    const installs = firstApp.installs || 'N/A';
+                    const iconUrl = firstApp.icon || '';
+                    const apkUrl = firstApp.apk || firstApp.download || '';
+
+                    let caption = `📱 *${name}*\n\n👨‍💻 Developer: ${developer}\n⭐ Rating: ${score}\n📥 Installs: ${installs}\n\n`;
+                    if (apkUrl) {
+                        caption += `🔗 Download APK: ${apkUrl}\n`;
+                    }
+                    caption += `\nFound ${apps.length} apps.\n💡 Reply for new search!`;
+
+                    const newSentMsg = await sock.sendMessage(from, {
+                        image: { url: iconUrl },
+                        caption
+                    }, { quoted: replyMessage });
+
+                    for (let i = 1; i < apps.length; i++) {
+                        const app = apps[i];
+                        await sock.sendMessage(from, {
+                            image: { url: app.icon || '' },
+                            caption: `📱 ${app.name || 'App'}\n👨‍💻 ${app.developer || 'Dev'}\n⭐ ${app.score ? `${app.score}/5` : 'N/A'}`
+                        }, { quoted: newSentMsg });
+                    }
+
+                    await sock.sendMessage(from, {
+                        react: { text: '✅', key: replyMessage.key }
+                    });
+
+                    clearTimeout(replyTimeout);
+                    delete global.replyHandlers[messageId];
+
+                    if (newSentMsg && newSentMsg.key && newSentMsg.key.id) {
+                        this.setupReplyListener(sock, from, newSentMsg.key.id, searchQuery, authorizedSender, prefix);
+                    }
+
+                } catch (error) {
+                    console.error('APK reply error:', error);
+
+                    const errorMsg = error.code === 'ECONNABORTED'
+                        ? 'Search timeout'
+                        : error.response?.status === 429
+                        ? 'Rate limit exceeded'
+                        : error.message || 'Unknown error';
+
+                    await sock.sendMessage(from, {
+                        text: `❌ Failed to search: ${errorMsg}\nTry again!`
+                    }, { quoted: replyMessage });
+
+                    await sock.sendMessage(from, {
+                        react: { text: '❌', key: replyMessage.key }
+                    });
+
+                    clearTimeout(replyTimeout);
+                    delete global.replyHandlers[messageId];
+                }
+            }
+        };
+    }
+};
