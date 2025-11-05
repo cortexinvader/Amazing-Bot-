@@ -187,33 +187,17 @@ export default {
 
             await sock.sendMessage(from, { delete: searchMessage.key });
 
-            let infoText = `╭──⦿【 🎤 ARTIST INFO 】
-│
-│ 👤 *Name:* ${artistData.name}
-│ 👥 *Followers:* ${this.formatNumber(artistData.followers)}
-│ ⭐ *Popularity:* ${artistData.popularity !== 'N/A' ? artistData.popularity + '/100' : 'N/A'}
-${artistData.country ? `│ 🌍 *Country:* ${artistData.country}\n` : ''}│
-╰────────⦿
+            const followers = this.formatNumber(artistData.followers);
+            const popularity = artistData.popularity !== 'N/A' ? `${artistData.popularity}/100` : 'N/A';
+            const genresList = artistData.genres.length > 0 ? artistData.genres.join(', ') : 'N/A';
+            const topTracksList = artistData.topTracks.length > 0 ? artistData.topTracks.map((t, i) => `${i + 1}. ${t}`).join('\n') : 'N/A';
+            const countryLine = artistData.country ? `\n*Country:* ${artistData.country}` : '';
 
-${artistData.genres && artistData.genres.length > 0 ? `╭──⦿【 🏷️ GENRES 】
-│
-│ ${artistData.genres.map((g, i) => `${i + 1}. ${g}`).join('\n│ ')}
-│
-╰────────⦿\n\n` : ''}${artistData.topTracks && artistData.topTracks.length > 0 ? `╭──⦿【 🎵 TOP TRACKS 】
-│
-│ ${artistData.topTracks.map((t, i) => `${i + 1}. ${t}`).join('\n│ ')}
-│
-╰────────⦿\n\n` : ''}🔗 *Profile:* ${artistData.url}
-
-🌐 *Source:* ${source}
-
-💫 | [ Amazing Bot 🚀 ]
-🔥 | Powered by Ilom`;
+            const infoText = `*🎤 Artist Info*\n\n*Name:* ${artistData.name}\n*Followers:* ${followers}\n*Popularity:* ${popularity}${countryLine}\n\n*Genres:* ${genresList}\n\n*Top Tracks:*\n${topTracksList}\n\n*Profile:* ${artistData.url}\n\n*Source:* ${source}\n\n💫 *Powered by Amazing Bot 🚀*`;
 
             await sock.sendMessage(from, {
                 image: { url: artistData.image },
-                caption: infoText,
-                mentions: [sender]
+                caption: infoText
             }, { quoted: message });
 
             await sock.sendMessage(from, {
