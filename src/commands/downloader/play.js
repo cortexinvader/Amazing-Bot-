@@ -1,11 +1,116 @@
-import yts from 'yt-search';
 import axios from 'axios';
+
+const SPOTIFY_CLIENT_ID = 'f9fff40f5e594655bb3215b658571231';
+const SPOTIFY_CLIENT_SECRET = 'a51ac8aa4a354d24ae69c5f1335dd6db';
+
+let spotifyToken = null;
+let tokenExpiry = 0;
+
+async function getSpotifyToken() {
+    if (spotifyToken && Date.now() < tokenExpiry) {
+        return spotifyToken;
+    }
+
+    try {
+        const response = await axios.post('https://accounts.spotify.com/api/token',
+            'grant_type=client_credentials',
+            {
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'Authorization': 'Basic ' + Buffer.from(SPOTIFY_CLIENT_ID + ':' + SPOTIFY_CLIENT_SECRET).toString('base64')
+                },
+                timeout: 10000
+            }
+        );
+
+        spotifyToken = response.data.access_token;
+        tokenExpiry = Date.now() + (response.data.expires_in * 1000) - 60000;
+        return spotifyToken;
+    } catch (error) {
+        console.error('Spotify token error:', error.message);
+        return null;
+    }
+}
+
+async function searchSpotifyTrack(query) {
+    try {
+        const token = await getSpotifyToken();
+        if (!token) return null;
+
+        const response = await axios.get('https://api.spotify.com/v1/search', {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            },
+            params: {
+                q: query,
+                type: 'track',
+                limit: 1
+            },
+            timeout: 10000
+        });
+
+        if (response.data && response.data.tracks && response.data.tracks.items.length > 0) {
+            const track = response.data.tracks.items[0];
+            return {
+                name: track.name,
+                artist: track.artists.map(a => a.name).join(', '),
+                album: track.album.name,
+                image: track.album.images[0]?.url || null,
+                duration: Math.floor(track.duration_ms / 1000),
+                spotify_url: track.external_urls.spotify
+            };
+        }
+        return null;
+    } catch (error) {
+        console.error('Spotify search error:', error.message);
+        return null;
+    }
+}
+
+async function searchYouTube(query) {
+    try {
+        const yts = (await import('yt-search')).default;
+        const results = await yts(query);
+        
+        if (results && results.videos && results.videos.length > 0) {
+            const video = results.videos[0];
+            return {
+                url: video.url,
+                title: video.title,
+                author: video.author.name,
+                duration: video.duration.seconds,
+                views: video.views,
+                thumbnail: video.thumbnail,
+                videoId: video.videoId
+            };
+        }
+        return null;
+    } catch (error) {
+        console.error('YouTube search error:', error.message);
+        return null;
+    }
+}
+
+async function downloadFromRebix(youtubeUrl) {
+    try {
+        const apiUrl = `https://api-rebix.vercel.app/api/yta?url=${encodeURIComponent(youtubeUrl)}`;
+        const response = await axios.get(apiUrl, { timeout: 60000 });
+        
+        if (response.data && response.data.status && response.data.downloadUrl) {
+            return response.data.downloadUrl;
+        }
+        return null;
+    } catch (error) {
+        console.error('Rebix API error:', error.message);
+        return null;
+    }
+}
 
 export default {
     name: 'play',
-    aliases: ['song'],
+    aliases: ['ytplay'],
     category: 'downloader',
-    description: 'Download audio from YouTube',
+    description: 'Search and play songs from YouTube',
     usage: '.play <song name>',
     example: '.play baby girl by joeboy',
     cooldown: 10,
@@ -22,15 +127,14 @@ export default {
     supportsReact: true,
     supportsButtons: false,
 
-    async execute({ sock, message, args, command, from, sender, prefix }) {
+    async execute({ sock, message, args, from, sender, prefix }) {
         try {
             const searchQuery = args.join(' ').trim();
 
             if (!searchQuery) {
-                await sock.sendMessage(from, {
+                return await sock.sendMessage(from, {
                     text: `❌ *Missing Song Name*\n\n📜 *Usage:* ${prefix}play <song name>\n\n🎶 *Example:* ${prefix}play Baby Girl by Joeboy`
                 }, { quoted: message });
-                return;
             }
 
             await sock.sendMessage(from, {
@@ -41,42 +145,37 @@ export default {
                 text: `🔍 *Searching:* ${searchQuery}\n⏳ Please wait...`
             }, { quoted: message });
 
-            const { videos } = await yts(searchQuery);
-            
-            if (!videos || videos.length === 0) {
+            const youtubeResult = await searchYouTube(searchQuery);
+
+            if (!youtubeResult) {
                 await sock.sendMessage(from, { delete: searchMessage.key });
-                await sock.sendMessage(from, {
+                return await sock.sendMessage(from, {
                     text: `❌ *No Results Found*\n\nNo videos found for: *${searchQuery}*\n\n💡 Try different keywords!`
                 }, { quoted: message });
-                return;
             }
 
-            const video = videos[0];
-            const urlYt = video.url;
-            const title = video.title;
-            const thumbnail = video.thumbnail;
-            const duration = video.timestamp;
-            const views = video.views;
-            const author = video.author.name;
-            const published = video.ago;
-            const videoId = video.videoId;
-
-            const infoText = `*◉—⌈🔊 AUDIO PLAYER⌋—◉*
-
-📌 *TITLE:* ${title}
-📆 *PUBLISHED:* ${published}
-⌚ *DURATION:* ${duration}
-👀 *VIEWS:* ${this.formatNumber(views)}
-👤 *AUTHOR:* ${author}
-🆔 *ID:* ${videoId}
-🔗 *LINK:* ${urlYt}
-
-⏳ *Sending audio 🔊, please wait...*`;
+            const spotifyTrack = await searchSpotifyTrack(searchQuery);
 
             await sock.sendMessage(from, { delete: searchMessage.key });
 
-            await sock.sendMessage(from, {
-                image: { url: thumbnail },
+            let infoText;
+            let imageUrl = youtubeResult.thumbnail;
+            const title = spotifyTrack?.name || youtubeResult.title;
+            const artist = spotifyTrack?.artist || youtubeResult.author;
+            const album = spotifyTrack?.album;
+            const duration = spotifyTrack?.duration || youtubeResult.duration;
+            const formattedDuration = `${Math.floor(duration / 60)}:${(duration % 60).toString().padStart(2, '0')}`;
+            const source = spotifyTrack ? 'Spotify + YouTube' : 'YouTube';
+            const extraLine = spotifyTrack ? `Album: ${album}` : `Views: ${this.formatNumber(youtubeResult.views)}`;
+
+            if (spotifyTrack && spotifyTrack.image) {
+                imageUrl = spotifyTrack.image;
+            }
+
+            infoText = `*🎵 Song Info*\n\n*Title:* ${title}\n*Artist:* ${artist}\n*${extraLine}*\n*Duration:* ${formattedDuration}\n*Source:* ${source}\n\n💫 *Powered by Amazing Bot 🚀*`;
+
+            const infoMessage = await sock.sendMessage(from, {
+                image: { url: imageUrl },
                 caption: infoText
             }, { quoted: message });
 
@@ -88,189 +187,65 @@ export default {
                 text: `📥 *Downloading:* ${title}\n⏳ Please wait...`
             }, { quoted: message });
 
-            let downloadUrl = null;
-            let apiUsed = '';
-
-            try {
-                const response = await axios.get(`https://api.siputzx.my.id/api/d/ytmp3?url=${encodeURIComponent(urlYt)}`, {
-                    timeout: 60000
-                });
-                if (response.data && response.data.status && response.data.data && response.data.data.dl) {
-                    downloadUrl = response.data.data.dl;
-                    apiUsed = 'SiputZX API';
-                }
-            } catch (error) {
-                console.log('SiputZX API failed:', error.message);
-            }
-
-            if (!downloadUrl) {
-                try {
-                    const response = await axios.get(`https://api.ryzendesu.vip/api/downloader/ytmp3?url=${encodeURIComponent(urlYt)}`, {
-                        timeout: 60000
-                    });
-                    if (response.data && response.data.url) {
-                        downloadUrl = response.data.url;
-                        apiUsed = 'Ryzendesu API';
-                    }
-                } catch (error) {
-                    console.log('Ryzendesu API failed:', error.message);
-                }
-            }
-
-            if (!downloadUrl) {
-                try {
-                    const response = await axios.get(`https://api.zenkey.my.id/api/download/ytmp3?apikey=zenkey&url=${encodeURIComponent(urlYt)}`, {
-                        timeout: 60000
-                    });
-                    if (response.data && response.data.result && response.data.result.download) {
-                        downloadUrl = response.data.result.download;
-                        apiUsed = 'Zenkey API';
-                    }
-                } catch (error) {
-                    console.log('Zenkey API failed:', error.message);
-                }
-            }
-
-            if (!downloadUrl) {
-                try {
-                    const response = await axios.get(`https://api.betabotz.eu.org/api/download/ytmp3?url=${encodeURIComponent(urlYt)}&apikey=beta-deku07`, {
-                        timeout: 60000
-                    });
-                    if (response.data && response.data.result && response.data.result.mp3) {
-                        downloadUrl = response.data.result.mp3;
-                        apiUsed = 'BetaBotz API';
-                    }
-                } catch (error) {
-                    console.log('BetaBotz API failed:', error.message);
-                }
-            }
-
-            if (!downloadUrl) {
-                try {
-                    const response = await axios.get(`https://api.zahwazein.xyz/downloader/ytmp3?url=${encodeURIComponent(urlYt)}&apikey=zenzkey_92c0a19ec6fb`, {
-                        timeout: 60000
-                    });
-                    if (response.data && response.data.result && response.data.result.download) {
-                        downloadUrl = response.data.result.download;
-                        apiUsed = 'Zahwazein API';
-                    }
-                } catch (error) {
-                    console.log('Zahwazein API failed:', error.message);
-                }
-            }
-
-            if (!downloadUrl) {
-                try {
-                    const response = await axios.get(`https://api.alyachan.dev/api/ytmp3?url=${encodeURIComponent(urlYt)}&apikey=DitzOfc`, {
-                        timeout: 60000
-                    });
-                    if (response.data && response.data.data && response.data.data.url) {
-                        downloadUrl = response.data.data.url;
-                        apiUsed = 'AlyaChan API';
-                    }
-                } catch (error) {
-                    console.log('AlyaChan API failed:', error.message);
-                }
-            }
-
-            if (!downloadUrl) {
-                try {
-                    const response = await axios.get(`https://api.vreden.my.id/api/ytmp3?url=${encodeURIComponent(urlYt)}`, {
-                        timeout: 60000
-                    });
-                    if (response.data && response.data.result && response.data.result.download) {
-                        downloadUrl = response.data.result.download;
-                        apiUsed = 'Vreden API';
-                    }
-                } catch (error) {
-                    console.log('Vreden API failed:', error.message);
-                }
-            }
-
-            if (!downloadUrl) {
-                try {
-                    const response = await axios.get(`https://api.tiklydown.eu.org/api/download/ytmp3?url=${encodeURIComponent(urlYt)}`, {
-                        timeout: 60000
-                    });
-                    if (response.data && response.data.audio && response.data.audio.download) {
-                        downloadUrl = response.data.audio.download;
-                        apiUsed = 'Tiklydown API';
-                    }
-                } catch (error) {
-                    console.log('Tiklydown API failed:', error.message);
-                }
-            }
+            const downloadUrl = await downloadFromRebix(youtubeResult.url);
 
             if (!downloadUrl) {
                 await sock.sendMessage(from, { delete: downloadMessage.key });
-                await sock.sendMessage(from, {
-                    text: `❌ *Download Failed*\n\n⚠️ All download APIs are currently unavailable.\n\n📝 *Song:* ${title}\n🔗 *URL:* ${urlYt}\n\n💡 *FREE API Sources (No RapidAPI):*\n\n🔹 *Self-Host yt-dlp*\n🔗 github.com/yt-dlp/yt-dlp\n💰 Free & Unlimited\n📦 Deploy on Railway.app (free)\n\n🔹 *YT-DLP API Wrapper*\n🔗 github.com/Itz-fork/Yt-Dl-Bot-Api\n💰 Free, self-hosted\n\n🔹 *Free API Lists*\n🔗 github.com/public-apis/public-apis\n🔗 github.com/fayazara/apihouse\n\n🔹 *Deploy Your Own*\nUse Vercel/Railway/Render for free hosting`
+                return await sock.sendMessage(from, {
+                    text: `❌ *Download Failed*\n\n⚠️ Rebix API unavailable\n\n📝 *Song:* ${title}\n🔗 *URL:* ${youtubeResult.url}\n\n💡 Try again later or contact bot owner`
                 }, { quoted: message });
-                return;
             }
 
             await sock.sendMessage(from, { delete: downloadMessage.key });
 
-            const resultCaption = `╭──⦿【 🎵 AUDIO DOWNLOADED 】
-│
-│ 📝 *Title:* ${title}
-│ 👤 *Channel:* ${author}
-│ ⌚ *Duration:* ${duration}
-│ 👁️ *Views:* ${this.formatNumber(views)}
-│ 📦 *Format:* MP3
-│ 🎚️ *Quality:* 128kbps
-│ 🌐 *Source:* ${apiUsed}
-│
-╰────────⦿
-
-💫 | [ Amazing Bot 🚀 ]
-🔥 | Powered by Ilom`;
-
             try {
-                const audioBuffer = await axios.get(downloadUrl, {
-                    responseType: 'arraybuffer',
-                    timeout: 120000,
-                    maxContentLength: 50 * 1024 * 1024,
-                    headers: {
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                    }
-                });
-
-                await sock.sendMessage(from, {
-                    audio: Buffer.from(audioBuffer.data),
-                    mimetype: 'audio/mpeg',
-                    fileName: `${title.substring(0, 50)}.mp3`,
-                    ptt: false
-                }, { quoted: message });
-
-                await sock.sendMessage(from, {
-                    text: resultCaption,
-                    mentions: [sender]
-                }, { quoted: message });
-
-            } catch (bufferError) {
                 await sock.sendMessage(from, {
                     audio: { url: downloadUrl },
                     mimetype: 'audio/mpeg',
-                    fileName: `${title.substring(0, 50)}.mp3`,
+                    fileName: `${title}.mp3`,
                     ptt: false
-                }, { quoted: message });
+                }, { quoted: infoMessage });
 
                 await sock.sendMessage(from, {
-                    text: resultCaption,
-                    mentions: [sender]
-                }, { quoted: message });
-            }
+                    react: { text: '✅', key: message.key }
+                });
 
-            await sock.sendMessage(from, {
-                react: { text: '✅', key: message.key }
-            });
+            } catch (sendError) {
+                console.log('Direct send failed, trying buffer method...');
+                
+                try {
+                    const audioBuffer = await axios.get(downloadUrl, {
+                        responseType: 'arraybuffer',
+                        timeout: 120000,
+                        maxContentLength: 50 * 1024 * 1024,
+                        headers: {
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                        }
+                    });
+
+                    await sock.sendMessage(from, {
+                        audio: Buffer.from(audioBuffer.data),
+                        mimetype: 'audio/mpeg',
+                        fileName: `${title}.mp3`,
+                        ptt: false
+                    }, { quoted: infoMessage });
+
+                    await sock.sendMessage(from, {
+                        react: { text: '✅', key: message.key }
+                    });
+
+                } catch (bufferError) {
+                    return await sock.sendMessage(from, {
+                        text: `❌ *Failed to send audio*\n\n⚠️ Error: ${bufferError.message}\n\n💡 Direct download link:\n${downloadUrl}`
+                    }, { quoted: message });
+                }
+            }
 
         } catch (error) {
             console.error('Play command error:', error);
             
             await sock.sendMessage(from, {
-                text: `❌ *Download Failed*\n\n⚠️ Error: ${error.message}\n\n💡 *Self-Host Solution (FREE):*\n\n*yt-dlp API (Recommended)*\n1. Fork: github.com/Itz-fork/Yt-Dl-Bot-Api\n2. Deploy on Railway.app (free)\n3. Get your API URL\n4. Update bot with your URL\n\n*Quick Deploy:*\n🔗 railway.app/new/template/yt-dlp\n⚡ One-click deploy\n💰 Free 500 hours/month\n\n📧 Contact bot owner for setup help`
+                text: `❌ *Download Failed*\n\n⚠️ Error: ${error.message}\n\n💡 Try:\n• ${prefix}play <different song>\n• Check internet connection\n• Contact bot owner`
             }, { quoted: message });
         }
     },
