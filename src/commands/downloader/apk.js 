@@ -6,7 +6,7 @@ const REPLY_TIMEOUT = 300000; // 5 min for next search
 export default {
     name: 'apk',
     aliases: ['playstore', 'app', 'apps'],
-    category: 'downloader',
+    category: 'search',
     description: 'Search for APK apps on Play Store',
     usage: 'apk <query>',
     example: 'apk Suno Ai',
