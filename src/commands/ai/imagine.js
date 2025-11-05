@@ -1,60 +1,76 @@
-import config from '../../config.js';
-
-
+import axios from 'axios';
 
 export default {
     name: 'imagine',
-    aliases: ['generate', 'create', 'draw'],
-    category: 'ai',
-    description: 'Generate images using AI based on text descriptions',
-    usage: 'imagine [description]',
-    cooldown: 30,
+    aliases: ['texttoimage'],
+    category: 'ai-image-gen',
+    description: 'Generate images from text prompt and send all images',
+    usage: 'imagine <prompt>',
+    example: 'imagine a cat in space',
+    cooldown: 5,
     permissions: ['user'],
     args: true,
     minArgs: 1,
+    maxArgs: Infinity,
+    typing: true,
+    premium: false,
+    hidden: false,
+    ownerOnly: false,
+    supportsReply: false,
+    supportsChat: false,
+    supportsReact: true,
+    supportsButtons: false,
 
-    async execute({ sock, message, args, from, user, prefix }) {
+    async execute({ sock, message, args, from, prefix }) {
         try {
-            const description = args.join(' ');
+            const prompt = args.join(' ').trim();
 
-            if (description.length < 5) {
+            if (!prompt) {
                 return await sock.sendMessage(from, {
-                    text: `🎨 *AI Image Generator*\n\n❌ Please provide a detailed description.\n\n*Usage:* ${prefix}imagine a beautiful sunset over mountains\n\n*Examples:*\n• ${prefix}imagine a cute cat wearing sunglasses\n• ${prefix}imagine futuristic city with flying cars\n• ${prefix}imagine abstract art with vibrant colors`
-                });
+                    text: `⚠️ Please provide a prompt.\n\n📜 *Usage:* ${prefix}imagine <prompt>\n\n🎨 *Example:* ${prefix}imagine a beautiful sunset over mountains`
+                }, { quoted: message });
             }
 
             await sock.sendMessage(from, {
-                text: `🎨 *AI Image Generation*\n\n📝 *Prompt:* ${description}\n🤖 *Status:* Processing...\n⏱️ *Estimated time:* 15-30 seconds\n\n*Please wait while AI creates your image...*`
+                react: { text: '⏳', key: message.key }
             });
 
-            // Simulate AI processing time
-            setTimeout(async () => {
-                try {
-                    const imageDescriptions = [
-                        "A stunning high-resolution image",
-                        "An artistic masterpiece",
-                        "A photorealistic creation",
-                        "A creative interpretation",
-                        "A beautifully rendered image"
-                    ];
+            const processingMsg = await sock.sendMessage(from, {
+                text: `⏳ Generating your image...`
+            }, { quoted: message });
 
-                    const randomDesc = imageDescriptions[Math.floor(Math.random() * imageDescriptions.length)];
-
-                    await sock.sendMessage(from, {
-                        text: `🎨 *AI Image Generated!*\n\n📝 *Your prompt:* ${description}\n\n🖼️ *Result:* ${randomDesc} has been created based on your description!\n\n⚠️ *Note:* Actual image generation requires AI API configuration (DALL-E, Midjourney, or Stable Diffusion).\n\n*To enable this feature:*\n• Configure OpenAI API for DALL-E\n• Set up Stability AI for Stable Diffusion\n• Connect Midjourney API\n\n*Contact bot owner to enable full AI image generation.*`
-                    });
-
-                } catch (error) {
-                    await sock.sendMessage(from, {
-                        text: '❌ *Generation Failed*\n\nFailed to generate image. Please try again.'
-                    });
+            const apiUrl = `https://theone-fast-image-gen.vercel.app/download-image?prompt=${encodeURIComponent(prompt)}&expires=${Date.now() + 10000}&size=16%3A9`;
+            const response = await axios.get(apiUrl, { 
+                responseType: 'arraybuffer',
+                timeout: 30000,
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
                 }
-            }, 3000);
+            });
+
+            const buffer = Buffer.from(response.data, 'binary');
+
+            await sock.sendMessage(from, { delete: processingMsg.key });
+
+            await sock.sendMessage(from, {
+                image: buffer,
+                mimetype: 'image/jpeg',
+                caption: `✅ Image generation completed.\nPrompt: ${prompt}`
+            }, { quoted: message });
+
+            await sock.sendMessage(from, {
+                react: { text: '✅', key: message.key }
+            });
 
         } catch (error) {
-            console.error('Imagine command error:', error);
+            console.error('Image generation error:', error.message || error);
+            
             await sock.sendMessage(from, {
-                text: '❌ *AI Error*\n\nFailed to process image generation request.'
+                text: `❌ Failed to generate image.\n\n💡 Try again with a different prompt or check if the service is available.`
+            }, { quoted: message });
+
+            await sock.sendMessage(from, {
+                react: { text: '❌', key: message.key }
             });
         }
     }
