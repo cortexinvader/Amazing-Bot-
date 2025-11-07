@@ -1,94 +1,95 @@
 import axios from 'axios';
-import config from '../../config.js';
-
-const API_KEY = 'a0ebe80e-bf1a-4dbf-8d36-6935b1bfa5ea';
-const SEARCH_API = 'https://kaiz-apis.gleeze.com/api/ytsearch';
 
 export default {
-    name: 'ytsearch',
-    aliases: ['yts', 'youtubesearch', 'searchyt'],
+    name: 'yts',
+    aliases: ['ytsearch', 'youtube'],
     category: 'downloader',
-    description: 'Search for videos on YouTube',
-    usage: 'ytsearch <query>',
-    example: 'ytsearch Ilom music',
-    cooldown: 3,
-    permissions: [],
+    description: 'Search YouTube videos and display results with thumbnails.',
+    usage: 'yts <query>',
+    example: 'yts Baby girl joeboy',
+    cooldown: 7,
+    permissions: ['user'],
     args: true,
     minArgs: 1,
+    maxArgs: Infinity,
     typing: true,
     premium: false,
     hidden: false,
     ownerOnly: false,
+    supportsReply: false,
+    supportsChat: false,
+    supportsReact: true,
+    supportsButtons: false,
 
-    async execute({ sock, message, args, from, sender, prefix }) {
+    async execute({ sock, message, args, from }) {
+        const query = args.join(' ');
+
+        if (!query.trim()) {
+            return await sock.sendMessage(from, {
+                text: '❗ Please provide a YouTube search query.'
+            }, { quoted: message });
+        }
+
         try {
-            const query = args.join(' ');
+            await sock.sendMessage(from, { react: { text: '⏳', key: message.key } });
 
-            await sock.sendMessage(from, {
-                text: `🔍 *Searching YouTube...*\n\n📝 Query: ${query}\n⏳ Please wait...`
-            }, { quoted: message });
+            const count = 5; // Limit to 5 results for neat output
+            const apiUrl = `https://arychauhann.onrender.com/api/youtubesearch?q=${encodeURIComponent(query)}&count=${count}`;
 
-            const response = await axios.get(SEARCH_API, {
-                params: {
-                    query: query,
-                    apikey: API_KEY
-                },
-                timeout: 30000
+            const response = await axios.get(apiUrl, {
+                timeout: 30000,
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                }
             });
 
-            if (!response.data || !response.data.results || response.data.results.length === 0) {
+            const data = response.data;
+
+            // Assuming API returns an array of objects like [{title, thumbnail, duration, views, channel, url}, ...]
+            // Adjust keys based on actual API structure if known
+            if (!Array.isArray(data) || data.length === 0) {
+                throw new Error('No YouTube results found');
+            }
+
+            // Send intro message
+            await sock.sendMessage(from, {
+                text: `🎥 *YouTube Search Results for:* ${query}\n\nFound ${data.length} results. Here they are:`
+            }, { quoted: message });
+
+            // Loop through results and send each neatly (all at once in sequence)
+            for (const [index, item] of data.entries()) {
+                const title = item.title || 'Untitled';
+                const description = item.description || 'No description available.';
+                const thumbnail = item.thumbnail || item.image || item.cover;
+                const duration = item.duration || 'N/A';
+                const views = item.views || 'N/A';
+                const channel = item.channel || item.author || 'Unknown';
+                const url = item.url || item.link || '';
+
+                if (!thumbnail) continue; // Skip if no thumbnail
+
+                const caption = `📺 *${title}*\n\n` +
+                                `• Channel: ${channel}\n` +
+                                `• Duration: ${duration}\n` +
+                                `• Views: ${views}\n\n` +
+                                `${description.substring(0, 150)}${description.length > 150 ? '...' : ''}\n\n` +
+                                `${url ? `🔗 [Watch](${url})` : ''}\n\n` +
+                                `_Result ${index + 1}/${data.length}_`;
+
                 await sock.sendMessage(from, {
-                    text: `❌ *No Results Found*\n\nNo videos found for: ${query}\n\nTry different keywords.`
+                    image: { url: thumbnail },
+                    caption: caption
                 }, { quoted: message });
-                return;
             }
 
-            const results = response.data.results.slice(0, 10);
-            
-            let resultText = `╭──⦿【 🎥 YOUTUBE SEARCH 】\n`;
-            resultText += `│\n`;
-            resultText += `│ 🔍 𝗤𝘂𝗲𝗿𝘆: ${query}\n`;
-            resultText += `│ 📊 𝗥𝗲𝘀𝘂𝗹𝘁𝘀: ${results.length}\n`;
-            resultText += `│\n`;
-            resultText += `╰────────────⦿\n\n`;
+            await sock.sendMessage(from, { react: { text: '✅', key: message.key } });
 
-            results.forEach((video, index) => {
-                resultText += `*${index + 1}. ${video.title}*\n`;
-                resultText += `👤 ${video.author || 'Unknown'}\n`;
-                resultText += `⏱️ ${video.duration || 'N/A'}\n`;
-                resultText += `👁️ ${video.views || 'N/A'}\n`;
-                resultText += `🔗 ${video.url}\n\n`;
-            });
-
-            resultText += `╭─────────────⦿\n`;
-            resultText += `│💫 | [ ${config.botName} 🍀 ]\n`;
-            resultText += `╰────────────⦿\n\n`;
-            resultText += `💡 Use ${prefix}ytmp3 <url> to download audio\n`;
-            resultText += `💡 Use ${prefix}ytmp4 <url> to download video`;
-
+        } catch (err) {
+            console.error('YTS command error:', err);
             await sock.sendMessage(from, {
-                text: resultText
+                text: `❌ Failed to search YouTube: ${err.message}`
             }, { quoted: message });
-
-        } catch (error) {
-            console.error('YouTube search error:', error);
-
-            let errorMessage = '❌ *Search Failed*\n\n';
-            
-            if (error.response) {
-                errorMessage += `Status: ${error.response.status}\n`;
-                errorMessage += `Message: ${error.response.data?.message || 'API error'}\n`;
-            } else if (error.request) {
-                errorMessage += 'Network error. Check your connection.\n';
-            } else {
-                errorMessage += `Error: ${error.message}\n`;
-            }
-
-            errorMessage += '\nPlease try again later.';
-
-            await sock.sendMessage(from, {
-                text: errorMessage
-            }, { quoted: message });
+            await sock.sendMessage(from, { react: { text: '❌', key: message.key } });
         }
     }
 };
