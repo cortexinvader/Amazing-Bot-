@@ -1,10 +1,11 @@
 import axios from 'axios';
+import config from '../../config.js';
 
 export default {
     name: 'flux',
-    aliases: ['img', 'generate'],
+    aliases: ['fluxpro', 'img', 'generate'],
     category: 'ai',
-    description: 'Generate image using Flux AI from prompt.',
+    description: 'Generate image using Flux Pro AI',
     usage: 'flux <prompt>',
     example: 'flux a cute cat in space',
     cooldown: 10,
@@ -21,58 +22,90 @@ export default {
     supportsReact: true,
     supportsButtons: false,
 
-    async execute({ sock, message, args, from }) {
-        const prompt = args.join(' ');
-
-        if (!prompt.trim()) {
-            return await sock.sendMessage(from, {
-                text: '❗ Please provide a prompt for image generation.'
-            }, { quoted: message });
-        }
+    async execute(options) {
+        const {
+            sock,
+            message,
+            args,
+            from,
+            sender,
+            prefix
+        } = options;
 
         try {
-            await sock.sendMessage(from, { react: { text: '⏳', key: message.key } });
+            const prompt = args.join(' ').trim();
 
-            const apiUrl = `https://arychauhann.onrender.com/api/fluxpro?prompt=${encodeURIComponent(prompt)}`;
-
-            // First, get the response to check if it's a URL or direct image
-            const response = await axios.get(apiUrl, {
-                timeout: 60000,
-                headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                }
-            });
-
-            let imageBuffer;
-            const data = response.data;
-
-            // Assuming API returns direct image buffer or {image: 'url'}
-            if (typeof data === 'string' && data.startsWith('http')) {
-                // If URL, download the image
-                const imgResponse = await axios.get(data, {
-                    responseType: 'arraybuffer',
-                    timeout: 30000
-                });
-                imageBuffer = imgResponse.data;
-            } else if (Buffer.isBuffer(data)) {
-                imageBuffer = data;
-            } else {
-                throw new Error('Invalid image response from API');
+            if (!prompt) {
+                return await sock.sendMessage(from, {
+                    text: `Usage: ${prefix}flux <image prompt>\n\nExample: ${prefix}flux a futuristic city at night`
+                }, { quoted: message });
             }
 
+            // React to user's message
+            await sock.sendMessage(from, {
+                react: { text: '🖼️', key: message.key }
+            });
+
+            // Send processing message
+            const statusMsg = await sock.sendMessage(from, {
+                text: '⏳ Generating image with Flux Pro...'
+            }, { quoted: message });
+
+            // API call - assuming returns JSON with 'imageUrl' or direct binary
+            const apiUrl = `https://arychauhann.onrender.com/api/fluxpro?prompt=${encodeURIComponent(prompt)}`;
+            const { data } = await axios.get(apiUrl, {
+                timeout: 60000, // Longer timeout for image gen
+                headers: {
+                    'User-Agent': 'Mozilla/5.0'
+                },
+                responseType: 'arraybuffer' // For binary image
+            });
+
+            // If JSON with url, fetch url; assume direct image buffer
+            let imageBuffer;
+            if (typeof data === 'object' && data.imageUrl) {
+                // Fetch from url
+                const imgRes = await axios.get(data.imageUrl, { responseType: 'arraybuffer' });
+                imageBuffer = Buffer.from(imgRes.data);
+            } else {
+                // Direct buffer
+                imageBuffer = Buffer.from(data);
+            }
+
+            // Send image
             await sock.sendMessage(from, {
                 image: imageBuffer,
-                caption: `🎨 *Flux Generated:* ${prompt}`
+                caption: `Generated with Flux Pro: "${prompt}"`,
+                mimetype: 'image/png' // Assume PNG
             }, { quoted: message });
 
-            await sock.sendMessage(from, { react: { text: '✅', key: message.key } });
-
-        } catch (err) {
-            console.error('Flux command error:', err);
+            // Edit status to done or remove
             await sock.sendMessage(from, {
-                text: `❌ Image generation failed: ${err.message}`
+                text: '✅ Image generated!',
+                edit: statusMsg.key
             }, { quoted: message });
-            await sock.sendMessage(from, { react: { text: '❌', key: message.key } });
+
+            // Success react
+            await sock.sendMessage(from, {
+                react: { text: '✅', key: message.key }
+            });
+
+        } catch (error) {
+            console.error('Flux command error:', error);
+
+            const errorMsg = error.code === 'ECONNABORTED'
+                ? 'Generation timeout - Try a simpler prompt'
+                : error.response?.status === 429
+                ? 'Rate limit exceeded - try again in a moment'
+                : error.message || 'Unknown error occurred';
+
+            await sock.sendMessage(from, {
+                text: `Failed to generate image\n\nError: ${errorMsg}\nTry again in a moment`
+            }, { quoted: message });
+
+            await sock.sendMessage(from, {
+                react: { text: '❌', key: message.key }
+            });
         }
     }
 };
