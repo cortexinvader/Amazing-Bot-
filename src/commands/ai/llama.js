@@ -1,17 +1,28 @@
 import axios from 'axios';
+import config from '../../config.js';
+
+function cleanResponse(text) {
+    // Remove code block formatting to flatten output (removes boxes in WhatsApp)
+    return text.replace(/```[\s\S]*?```/g, (match) => {
+        const lines = match.split('\n');
+        // Remove first (```lang) and last (```) lines, join the rest
+        const content = lines.slice(1, -1).join('\n').trim();
+        return content || '';
+    });
+}
 
 export default {
-    name: 'llama',
-    aliases: ['llama2'],
+    name: 'llama2',
+    aliases: ['llama', 'llm2'],
     category: 'ai',
-    description: 'Chat with Llama2 AI model.',
-    usage: 'llama <prompt>',
-    example: 'llama Hey, how are you?',
-    cooldown: 5,
+    description: 'Chat with Llama 2 AI',
+    usage: 'llama2 <query>',
+    example: 'llama2 What is quantum physics?',
+    cooldown: 3,
     permissions: ['user'],
-    args: true,
-    minArgs: 1,
-    maxArgs: Infinity,
+    args: false,
+    minArgs: 0,
+    maxArgs: 0,
     typing: true,
     premium: false,
     hidden: false,
@@ -21,46 +32,98 @@ export default {
     supportsReact: true,
     supportsButtons: false,
 
-    async execute({ sock, message, args, from }) {
-        const prompt = args.join(' ');
-
-        if (!prompt.trim()) {
-            return await sock.sendMessage(from, {
-                text: '❗ Please provide a prompt for Llama2.'
-            }, { quoted: message });
-        }
+    async execute(options) {
+        const {
+            sock,
+            message,
+            args,
+            from,
+            sender,
+            prefix
+        } = options;
 
         try {
-            await sock.sendMessage(from, { react: { text: '⏳', key: message.key } });
+            let query = args.join(' ').trim();
 
-            const apiUrl = `https://arychauhann.onrender.com/api/llama2?prompt=${encodeURIComponent(prompt)}`;
+            // Handle quoted message if no direct query
+            const quotedMsg = message.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+            if (quotedMsg && !query) {
+                const quotedText = quotedMsg.conversation ||
+                                 quotedMsg.extendedTextMessage?.text ||
+                                 quotedMsg.imageMessage?.caption ||
+                                 quotedMsg.videoMessage?.caption || '';
+                if (quotedText) {
+                    query = quotedText;
+                }
+            }
 
-            const response = await axios.get(apiUrl, {
+            if (!query) {
+                return await sock.sendMessage(from, {
+                    text: `Usage: ${prefix}llama2 <your question>\n\nExample: ${prefix}llama2 What is AI?`
+                }, { quoted: message });
+            }
+
+            // React to user's message
+            await sock.sendMessage(from, {
+                react: { text: '🤖', key: message.key }
+            });
+
+            // Send processing message
+            const statusMsg = await sock.sendMessage(from, {
+                text: '⏳ Processing your query with Llama 2...'
+            }, { quoted: message });
+
+            // API call
+            const apiUrl = `https://arychauhann.onrender.com/api/llama2?prompt=${encodeURIComponent(query)}`;
+            const { data } = await axios.get(apiUrl, {
                 timeout: 30000,
                 headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                    'User-Agent': 'Mozilla/5.0'
                 }
             });
 
-            const data = response.data;
+            let aiResponse = data.response ||
+                             data.content ||
+                             data.reply ||
+                             data.answer ||
+                             data.text ||
+                             data.prompt_response ||
+                             'No response received';
 
-            // Assuming API returns plain text or {response: 'text'}
-            let aiResponse = typeof data === 'string' ? data : (data.response || data.text || 'No response');
+            if (!aiResponse || aiResponse === 'No response received') {
+                throw new Error('Empty response from Llama 2');
+            }
 
-            const output = `🤖 *Llama2 Response:*\n\n${aiResponse}`;
+            // Clean the AI response
+            aiResponse = cleanResponse(aiResponse);
 
+            // Edit the status message
             await sock.sendMessage(from, {
-                text: output
+                text: aiResponse,
+                edit: statusMsg.key
             }, { quoted: message });
 
-            await sock.sendMessage(from, { react: { text: '✅', key: message.key } });
-
-        } catch (err) {
-            console.error('Llama command error:', err);
+            // Success react
             await sock.sendMessage(from, {
-                text: `❌ Llama2 failed: ${err.message}`
+                react: { text: '✅', key: message.key }
+            });
+
+        } catch (error) {
+            console.error('Llama2 command error:', error);
+
+            const errorMsg = error.code === 'ECONNABORTED'
+                ? 'Request timeout - AI took too long to respond'
+                : error.response?.status === 429
+                ? 'Rate limit exceeded - try again in a moment'
+                : error.message || 'Unknown error occurred';
+
+            await sock.sendMessage(from, {
+                text: `Failed to get Llama 2 response\n\nError: ${errorMsg}\nTry again in a moment`
             }, { quoted: message });
-            await sock.sendMessage(from, { react: { text: '❌', key: message.key } });
+
+            await sock.sendMessage(from, {
+                react: { text: '❌', key: message.key }
+            });
         }
     }
 };
