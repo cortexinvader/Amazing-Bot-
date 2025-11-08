@@ -1,6 +1,5 @@
 import config from '../../config.js';
 import { updateGroup, getGroup } from '../../models/Group.js';
-import formatResponse from '../../utils/formatUtils.js';
 
 export default {
     name: 'antilink',
@@ -18,23 +17,19 @@ export default {
     async execute({ sock, message, args, from, sender, isGroup, isGroupAdmin, isBotAdmin }) {
         if (!isGroup) {
             return await sock.sendMessage(from, {
-                text: formatResponse.error('GROUP ONLY',
-                    'This command can only be used in groups')
+                text: '╭──⦿【 ❌ ERROR 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: Group only command\n│\n│ 💡 This command works in groups\n╰────────⦿'
             }, { quoted: message });
         }
 
         if (!isGroupAdmin) {
             return await sock.sendMessage(from, {
-                text: formatResponse.error('ADMIN ONLY',
-                    'You need to be a group admin to use this command')
+                text: '╭──⦿【 ❌ ERROR 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: Admin only\n│\n│ 💡 You need admin privileges\n╰────────⦿'
             }, { quoted: message });
         }
 
         if (!isBotAdmin) {
             return await sock.sendMessage(from, {
-                text: formatResponse.error('BOT NOT ADMIN',
-                    'I need admin privileges to manage antilink protection',
-                    'Make me an admin first')
+                text: '╭──⦿【 ❌ ERROR 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: Bot not admin\n│\n│ 💡 Make me an admin first\n╰────────⦿'
             }, { quoted: message });
         }
 
@@ -63,9 +58,7 @@ export default {
                 newStatus = false;
             } else {
                 return await sock.sendMessage(from, {
-                    text: formatResponse.error('INVALID OPTION',
-                        'Use: on/off, enable/disable, or 1/0',
-                        'Example: antilink on')
+                    text: '╭──⦿【 ❌ ERROR 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: Invalid option\n│\n│ 💡 Use: on/off, enable/disable\n╰────────⦿'
                 }, { quoted: message });
             }
 
@@ -75,8 +68,8 @@ export default {
 
             const statusIcon = newStatus ? '✅' : '❌';
             const actionText = newStatus ? 
-                'Links will be automatically deleted and users warned' : 
-                'Links are now allowed in this group';
+                'Links will be automatically deleted' : 
+                'Links are now allowed';
 
             await sock.sendMessage(from, {
                 text: `╭──⦿【 🔗 ANTILINK ${newStatus ? 'ENABLED' : 'DISABLED'} 】
@@ -92,11 +85,8 @@ export default {
             }, { quoted: message });
 
         } catch (error) {
-            console.error('Antilink command error:', error);
             await sock.sendMessage(from, {
-                text: formatResponse.error('UPDATE FAILED',
-                    'Failed to update antilink settings',
-                    error.message)
+                text: '╭──⦿【 ❌ ERROR 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: Failed to update\n│\n│ 💡 Try again later\n╰────────⦿'
             }, { quoted: message });
         }
     }
