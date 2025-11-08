@@ -1,7 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { fileTypeFromBuffer } from 'file-type';
-import ffmpeg from 'fluent-ffmpeg'; // npm install fluent-ffmpeg file-type (needs FFmpeg installed)
+import ffmpeg from 'fluent-ffmpeg';
 import config from '../../config.js';
 
 const TEMP_DIR = path.join(process.cwd(), 'temp');
@@ -17,51 +16,33 @@ function cleanTempFile(filePath) {
 
 async function convertToGif(inputBuffer, fileTypeExt) {
     return new Promise((resolve, reject) => {
-        const inputPath = path.join(TEMP_DIR, `input.${fileTypeExt}`);
+        const inputPath = path.join(TEMP_DIR, `input_${Date.now()}.${fileTypeExt}`);
         const outputPath = path.join(TEMP_DIR, `output_${Date.now()}.gif`);
 
         fs.writeFileSync(inputPath, inputBuffer);
 
         ffmpeg(inputPath)
-            .videoFilters([
-                'scale=320:-1:flags=lanczos', // Scale to width 320, preserve aspect
-                'fps=10' // Limit to 10 FPS for smaller GIF
-            ])
-            .outputOptions([
-                '-vf', 'palettegen=stats_mode=diff', // Generate palette
-                '-y' // Overwrite output
-            ])
+            .output(outputPath)
+            .outputFormat('gif')
+            .videoFilter('scale=320:-1:flags=lanczos,fps=10')
+            .outputOptions(['-y'])
             .on('error', (err) => {
                 cleanTempFile(inputPath);
+                cleanTempFile(outputPath);
                 reject(err);
             })
             .on('end', () => {
-                // Second pass: apply palette for better colors
-                const palettePath = path.join(TEMP_DIR, 'palette.png');
-                fs.writeFileSync(palettePath, inputBuffer); // Reuse input? Wait, no—generate from first pass? Simplified
-
-                ffmpeg(inputPath)
-                    .videoFilters([
-                        'scale=320:-1:flags=lanczos',
-                        'fps=10',
-                        `palette=palette.png` // Use generated palette
-                    ])
-                    .outputOptions(['-y'])
-                    .on('error', (err) => {
-                        cleanTempFile(inputPath);
-                        cleanTempFile(palettePath);
-                        reject(err);
-                    })
-                    .on('end', () => {
-                        cleanTempFile(inputPath);
-                        cleanTempFile(palettePath);
-                        const gifBuffer = fs.readFileSync(outputPath);
-                        cleanTempFile(outputPath);
-                        resolve(gifBuffer);
-                    })
-                    .save(outputPath);
+                cleanTempFile(inputPath);
+                try {
+                    const gifBuffer = fs.readFileSync(outputPath);
+                    cleanTempFile(outputPath);
+                    resolve(gifBuffer);
+                } catch (readErr) {
+                    cleanTempFile(outputPath);
+                    reject(readErr);
+                }
             })
-            .save(palettePath); // First pass to generate palette
+            .run();
     });
 }
 
@@ -92,7 +73,6 @@ export default {
             let isVideo = false;
             let isImage = false;
 
-            // Check direct or quoted media
             if (message.message?.videoMessage) {
                 mediaMessage = message.message.videoMessage;
                 isVideo = true;
@@ -117,47 +97,39 @@ export default {
                 return;
             }
 
-            // React
             await sock.sendMessage(from, {
                 react: { text: '🎬', key: message.key }
             });
 
-            // Download to temp
             const tempFile = path.join(TEMP_DIR, `${Date.now()}.tmp`);
-            const stream = await sock.downloadAndSaveMediaMessage(mediaMessage, tempFile);
-            await new Promise((resolve, reject) => {
-                stream.on('end', resolve);
-                stream.on('error', reject);
-            });
-
-            const mediaBuffer = fs.readFileSync(tempFile);
-            const fileType = await fileTypeFromBuffer(mediaBuffer);
+            const savedPath = await sock.downloadAndSaveMediaMessage(mediaMessage, tempFile);
+            
+            const mediaBuffer = fs.readFileSync(savedPath);
+            const { fileTypeFromBuffer } = await import('file-type');
+            const detectedType = await fileTypeFromBuffer(mediaBuffer);
             const supportedExts = ['mp4', 'webm', 'avi', 'mov', 'jpg', 'jpeg', 'png', 'gif'];
 
-            if (!fileType || !supportedExts.includes(fileType.ext)) {
-                cleanTempFile(tempFile);
+            if (!detectedType || !supportedExts.includes(detectedType.ext)) {
+                cleanTempFile(savedPath);
                 await sock.sendMessage(from, {
                     text: `❌ *Error*\nUnsupported format. Use MP4/WEBM videos or JPG/PNG images.`
                 }, { quoted: message });
                 return;
             }
 
-            // Convert to GIF (images become static GIFs via ffmpeg)
-            const gifBuffer = await convertToGif(mediaBuffer, fileType.ext);
+            const gifBuffer = await convertToGif(mediaBuffer, detectedType.ext);
 
-            // Send GIF immediately
             await sock.sendMessage(from, {
-                video: gifBuffer, // WhatsApp treats GIF as video with gif mimetype
-                mimetype: 'video/mp4', // But for GIF, use 'image/gif' if possible; Baileys sends as video for animated
+                video: gifBuffer,
+                gifPlayback: true,
                 caption: mediaMessage.caption ? `GIF: ${mediaMessage.caption}` : 'Converted to GIF'
             }, { quoted: message });
 
-            // Success react
             await sock.sendMessage(from, {
                 react: { text: '✅', key: message.key }
             });
 
-            cleanTempFile(tempFile);
+            cleanTempFile(savedPath);
 
         } catch (error) {
             console.error('ToGIF command error:', error);

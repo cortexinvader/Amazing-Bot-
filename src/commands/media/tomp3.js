@@ -1,6 +1,5 @@
 import fs from 'fs';
 import path from 'path';
-import { fileTypeFromBuffer } from 'file-type';
 import ffmpeg from 'fluent-ffmpeg'; // npm install fluent-ffmpeg file-type (needs FFmpeg installed)
 import config from '../../config.js';
 
@@ -41,7 +40,7 @@ async function convertToMp3(inputBuffer, fileTypeExt) {
 }
 
 export default {
-    name: 'tom p3',
+    name: 'tomp3',
     aliases: ['mp3', 'toaudio'],
     category: 'media',
     description: 'Convert replied voice/video/audio to MP3',
@@ -93,18 +92,15 @@ export default {
 
             // Download to temp
             const tempFile = path.join(TEMP_DIR, `${Date.now()}.tmp`);
-            const stream = await sock.downloadAndSaveMediaMessage(mediaMessage, tempFile);
-            await new Promise((resolve, reject) => {
-                stream.on('end', resolve);
-                stream.on('error', reject);
-            });
-
-            const mediaBuffer = fs.readFileSync(tempFile);
-            const fileType = await fileTypeFromBuffer(mediaBuffer);
+            const savedPath = await sock.downloadAndSaveMediaMessage(mediaMessage, tempFile);
+            
+            const mediaBuffer = fs.readFileSync(savedPath);
+            const { fileTypeFromBuffer } = await import('file-type');
+            const detectedType = await fileTypeFromBuffer(mediaBuffer);
             const supportedExts = ['ogg', 'mp4', 'webm', 'm4a', 'mp3', 'wav'];
 
-            if (!fileType || !supportedExts.includes(fileType.ext)) {
-                cleanTempFile(tempFile);
+            if (!detectedType || !supportedExts.includes(detectedType.ext)) {
+                cleanTempFile(savedPath);
                 await sock.sendMessage(from, {
                     text: `❌ *Error*\nUnsupported format. Use OGG, MP4, or similar audio/video.`
                 }, { quoted: message });
@@ -112,7 +108,7 @@ export default {
             }
 
             // Convert
-            const mp3Buffer = await convertToMp3(mediaBuffer, fileType.ext);
+            const mp3Buffer = await convertToMp3(mediaBuffer, detectedType.ext);
 
             // Send MP3 immediately
             await sock.sendMessage(from, {
@@ -127,7 +123,7 @@ export default {
                 react: { text: '✅', key: message.key }
             });
 
-            cleanTempFile(tempFile);
+            cleanTempFile(savedPath);
 
         } catch (error) {
             console.error('ToMP3 command error:', error);

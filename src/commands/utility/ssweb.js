@@ -32,8 +32,10 @@ export default {
 
         try {
             const waitMsg = await sock.sendMessage(from, {
-                text: `🕵️‍♂️ Taking screenshot of *url*...`
-            ,  quoted: message );const apiUrl = `https://arychauhann.onrender.com/api/ssweb?url={encodeURIComponent(url)}&type=desktop`;
+                text: `🕵️‍♂️ Taking screenshot of *${url}*...`
+            }, { quoted: message });
+            
+            const apiUrl = `https://arychauhann.onrender.com/api/ssweb?url=${encodeURIComponent(url)}&type=desktop`;
 
             const response = await axios.get(apiUrl, {
                 responseType: 'arraybuffer'
@@ -43,15 +45,15 @@ export default {
 
             await sock.sendMessage(from, {
                 image: imageBuffer,
-                caption: `🖼️ Screenshot of: *url*`
-            ,  quoted: message );
+                caption: `🖼️ Screenshot of: *${url}*`
+            }, { quoted: message });
 
-            await sock.sendMessage(from,  delete: waitMsg.key );
+            await sock.sendMessage(from, { delete: waitMsg.key });
 
-         catch (err) 
+        } catch (err) {
             console.error('ssweb error:', err);
-            await sock.sendMessage(from, 
-                text: `❌ Failed to capture screenshot.:{err.message}`
+            await sock.sendMessage(from, {
+                text: `❌ Failed to capture screenshot: ${err.message}`
             }, { quoted: message });
         }
     }

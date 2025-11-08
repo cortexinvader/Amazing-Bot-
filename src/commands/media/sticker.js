@@ -1,6 +1,5 @@
 import fs from 'fs';
 import path from 'path';
-import { fileTypeFromBuffer } from 'file-type';
 import sharp from 'sharp'; // npm install sharp file-type
 import config from '../../config.js';
 
@@ -86,17 +85,14 @@ export default {
 
             // Download to temp
             const tempFile = path.join(TEMP_DIR, `${Date.now()}.tmp`);
-            const stream = await sock.downloadAndSaveMediaMessage(mediaMessage, tempFile);
-            await new Promise((resolve, reject) => {
-                stream.on('end', resolve);
-                stream.on('error', reject);
-            });
+            const savedPath = await sock.downloadAndSaveMediaMessage(mediaMessage, tempFile);
+            
+            const mediaBuffer = fs.readFileSync(savedPath);
+            const { fileTypeFromBuffer } = await import('file-type');
+            const detectedType = await fileTypeFromBuffer(mediaBuffer);
 
-            const mediaBuffer = fs.readFileSync(tempFile);
-            const fileType = await fileTypeFromBuffer(mediaBuffer);
-
-            if (!fileType || !['jpg', 'jpeg', 'png', 'gif'].includes(fileType.ext)) {
-                cleanTempFile(tempFile);
+            if (!detectedType || !['jpg', 'jpeg', 'png', 'gif'].includes(detectedType.ext)) {
+                cleanTempFile(savedPath);
                 await sock.sendMessage(from, {
                     text: `❌ *Error*\nUnsupported format. Use JPG, PNG, or GIF images.`
                 }, { quoted: message });
@@ -117,7 +113,7 @@ export default {
                 react: { text: '✅', key: message.key }
             });
 
-            cleanTempFile(tempFile);
+            cleanTempFile(savedPath);
 
         } catch (error) {
             console.error('Sticker command error:', error);

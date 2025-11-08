@@ -1,6 +1,5 @@
 import fs from 'fs';
-import path from 'path';
-import { fileTypeFromBuffer } from 'file-type'; // npm install file-type
+import path from 'path'; // npm install file-type
 import config from '../../config.js';
 
 const TEMP_DIR = path.join(process.cwd(), 'temp');
@@ -91,17 +90,14 @@ export default {
 
             // Download/extract to temp
             const tempFile = path.join(TEMP_DIR, `${Date.now()}.tmp`);
-            const stream = await sock.downloadAndSaveMediaMessage(mediaMessage, tempFile);
-            await new Promise((resolve, reject) => {
-                stream.on('end', resolve);
-                stream.on('error', reject);
-            });
+            const savedPath = await sock.downloadAndSaveMediaMessage(mediaMessage, tempFile);
+            
+            const mediaBuffer = fs.readFileSync(savedPath);
+            const { fileTypeFromBuffer } = await import('file-type');
+            const detectedType = await fileTypeFromBuffer(mediaBuffer);
 
-            const mediaBuffer = fs.readFileSync(tempFile);
-            const fileType = await fileTypeFromBuffer(mediaBuffer);
-
-            if (!fileType) {
-                cleanTempFile(tempFile);
+            if (!detectedType) {
+                cleanTempFile(savedPath);
                 await sock.sendMessage(from, {
                     text: `❌ *Error*\nInvalid media file - could not extract.`
                 }, { quoted: message });
@@ -111,29 +107,29 @@ export default {
             let sendOptions = {};
             const caption = mediaMessage.caption || 'Extracted from View Once';
 
-            if (isImage || fileType.mime.startsWith('image/')) {
+            if (isImage || detectedType.mime.startsWith('image/')) {
                 sendOptions = {
                     image: mediaBuffer,
-                    mimetype: fileType.mime,
+                    mimetype: detectedType.mime,
                     caption: caption,
                     viewOnce: false
                 };
-            } else if (isVideo || fileType.mime.startsWith('video/')) {
+            } else if (isVideo || detectedType.mime.startsWith('video/')) {
                 sendOptions = {
                     video: mediaBuffer,
-                    mimetype: fileType.mime,
+                    mimetype: detectedType.mime,
                     caption: caption,
                     viewOnce: false
                 };
-            } else if (isAudio || fileType.mime.startsWith('audio/')) {
+            } else if (isAudio || detectedType.mime.startsWith('audio/')) {
                 sendOptions = {
                     audio: mediaBuffer,
-                    mimetype: fileType.mime || 'audio/ogg', // Default to ogg for voice notes
+                    mimetype: detectedType.mime || 'audio/ogg', // Default to ogg for voice notes
                     ptt: false, // Send as normal audio, not voice note
                     caption: caption
                 };
             } else {
-                cleanTempFile(tempFile);
+                cleanTempFile(savedPath);
                 await sock.sendMessage(from, {
                     text: `❌ *Error*\nUnsupported type. Only images/videos/audio can be extracted.`
                 }, { quoted: message });
@@ -148,7 +144,7 @@ export default {
                 react: { text: '✅', key: message.key }
             });
 
-            cleanTempFile(tempFile);
+            cleanTempFile(savedPath);
 
         } catch (error) {
             console.error('VV command error:', error);
