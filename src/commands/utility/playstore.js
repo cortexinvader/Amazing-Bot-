@@ -1,10 +1,21 @@
 import axios from 'axios';
+import config from '../../config.js';
+
+function cleanResponse(text) {
+    // Remove code block formatting to flatten output (removes boxes in WhatsApp)
+    return text.replace(/```[\s\S]*?```/g, (match) => {
+        const lines = match.split('\n');
+        // Remove first (```lang) and last (```) lines, join the rest
+        const content = lines.slice(1, -1).join('\n').trim();
+        return content || '';
+    });
+}
 
 export default {
     name: 'playstore',
-    aliases: ['apk', 'app'],
+    aliases: ['ps', 'app', 'apk'],
     category: 'utility',
-    description: 'Search and get APK download link from Play Store.',
+    description: 'Search Play Store for apps and get download info',
     usage: 'playstore <app name>',
     example: 'playstore whatsapp',
     cooldown: 5,
@@ -21,55 +32,97 @@ export default {
     supportsReact: true,
     supportsButtons: false,
 
-    async execute({ sock, message, args, from }) {
-        const query = args.join(' ');
-
-        if (!query.trim()) {
-            return await sock.sendMessage(from, {
-                text: '❗ Please provide an app name to search.'
-            }, { quoted: message });
-        }
+    async execute(options) {
+        const {
+            sock,
+            message,
+            args,
+            from,
+            sender,
+            prefix
+        } = options;
 
         try {
-            await sock.sendMessage(from, { react: { text: '⏳', key: message.key } });
+            const query = args.join(' ').trim();
 
+            if (!query) {
+                return await sock.sendMessage(from, {
+                    text: `Usage: ${prefix}playstore <app name>\n\nExample: ${prefix}playstore instagram`
+                }, { quoted: message });
+            }
+
+            // React to user's message
+            await sock.sendMessage(from, {
+                react: { text: '📱', key: message.key }
+            });
+
+            // Send processing message
+            const statusMsg = await sock.sendMessage(from, {
+                text: '⏳ Searching Play Store...'
+            }, { quoted: message });
+
+            // API call
             const apiUrl = `https://arychauhann.onrender.com/api/playstore?query=${encodeURIComponent(query)}`;
-
-            const response = await axios.get(apiUrl, {
+            const { data } = await axios.get(apiUrl, {
                 timeout: 30000,
                 headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                    'User-Agent': 'Mozilla/5.0'
                 }
             });
 
-            const data = response.data;
-
-            // Assuming API returns an array of apps or single object with apk_url
-            // Adjust based on actual structure; for now, assume first result
-            if (!data || !data[0] || !data[0].apk_url) {
-                throw new Error('No APK found for the query');
+            // Assuming response structure: {"operator": "...", "result": [{app details with download url?}]}
+            // If empty, show no results
+            if (!data.result || data.result.length === 0) {
+                const responseText = `No apps found for "${query}".\n\nTry a different search term.`;
+                await sock.sendMessage(from, {
+                    text: responseText,
+                    edit: statusMsg.key
+                }, { quoted: message });
+                return;
             }
 
-            const app = data[0];
-            const downloadText = `📱 *${app.name || 'App'}*\n\n` +
-                                 `• Developer: ${app.developer || 'N/A'}\n` +
-                                 `• Package: ${app.package_name || 'N/A'}\n` +
-                                 `• Version: ${app.version || 'N/A'}\n\n` +
-                                 `🔗 *Download APK:*\n${app.apk_url || 'No link'}\n\n` +
-                                 `⚠️ Use at your own risk. Verify APK safety!`;
+            // For first result, extract name, icon?, download link (assume 'downloadUrl' field)
+            const app = data.result[0];
+            const appName = app.name || app.title || 'Unknown App';
+            const developer = app.developer || 'Unknown Developer';
+            const downloadUrl = app.downloadUrl || app.apkUrl || null; // Assume field for APK
+            const iconUrl = app.icon || app.iconUrl || null;
 
+            let responseText = `📱 **${appName}**\n\n👨‍💻 Developer: ${developer}\n\n`;
+            if (downloadUrl) {
+                responseText += `🔗 Download APK: ${downloadUrl}\n\n`;
+            } else {
+                responseText += `No direct download available.\n\n`;
+            }
+            responseText += `Search for: "${query}"`;
+
+            // If icon, could fetch and send as image, but for simplicity, text only
             await sock.sendMessage(from, {
-                text: downloadText
+                text: responseText,
+                edit: statusMsg.key
             }, { quoted: message });
 
-            await sock.sendMessage(from, { react: { text: '✅', key: message.key } });
-
-        } catch (err) {
-            console.error('Playstore command error:', err);
+            // Success react
             await sock.sendMessage(from, {
-                text: `❌ Failed to fetch APK: ${err.message}`
+                react: { text: '✅', key: message.key }
+            });
+
+        } catch (error) {
+            console.error('Playstore command error:', error);
+
+            const errorMsg = error.code === 'ECONNABORTED'
+                ? 'Request timeout - Try again later'
+                : error.response?.status === 429
+                ? 'Rate limit exceeded - try again in a moment'
+                : error.message || 'Unknown error occurred';
+
+            await sock.sendMessage(from, {
+                text: `Failed to search Play Store\n\nError: ${errorMsg}\nTry again in a moment`
             }, { quoted: message });
-            await sock.sendMessage(from, { react: { text: '❌', key: message.key } });
+
+            await sock.sendMessage(from, {
+                react: { text: '❌', key: message.key }
+            });
         }
     }
 };
