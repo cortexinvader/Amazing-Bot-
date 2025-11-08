@@ -1,12 +1,10 @@
-import formatResponse from '../../utils/formatUtils.js';
-
 export default {
     name: 'hidetag',
     aliases: ['htag', 'announce'],
     category: 'admin',
     description: 'Send a message tagging everyone without showing mentions',
     usage: 'hidetag [message] OR reply to message',
-    example: 'hidetag Important announcement for all members',
+    example: 'hidetag Important announcement',
     cooldown: 10,
     permissions: ['admin'],
     groupOnly: true,
@@ -15,15 +13,13 @@ export default {
     async execute({ sock, message, args, from, sender, isGroup, isGroupAdmin }) {
         if (!isGroup) {
             return await sock.sendMessage(from, {
-                text: formatResponse.error('GROUP ONLY',
-                    'This command can only be used in groups')
+                text: '╭──⦿【 ❌ ERROR 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: Group only command\n│\n│ 💡 This command works in groups\n╰────────⦿'
             }, { quoted: message });
         }
 
         if (!isGroupAdmin) {
             return await sock.sendMessage(from, {
-                text: formatResponse.error('ADMIN ONLY',
-                    'You need to be a group admin to use this command')
+                text: '╭──⦿【 ❌ ERROR 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: Admin only\n│\n│ 💡 You need admin privileges\n╰────────⦿'
             }, { quoted: message });
         }
 
@@ -40,9 +36,7 @@ export default {
 
             if (!text) {
                 return await sock.sendMessage(from, {
-                    text: formatResponse.error('NO MESSAGE',
-                        'Please provide a message to send',
-                        'Usage: hidetag Your announcement here OR reply to message')
+                    text: '╭──⦿【 ❌ ERROR 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: No message provided\n│\n│ 💡 Provide text or reply\n╰────────⦿'
                 }, { quoted: message });
             }
 
@@ -66,9 +60,7 @@ export default {
 
         } catch (error) {
             await sock.sendMessage(from, {
-                text: formatResponse.error('HIDETAG FAILED',
-                    'Failed to send hidden tag message',
-                    error.message)
+                text: '╭──⦿【 ❌ ERROR 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: Hidetag failed\n│\n│ 💡 Try again later\n╰────────⦿'
             }, { quoted: message });
         }
     }
