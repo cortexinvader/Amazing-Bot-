@@ -297,3 +297,10 @@ __tests__/fixtures/
 *.zip
 *.rar
 *.7z
+
+# Replit
+.replit
+.config/
+.upm/
+replit.nix
+.breakpoints
