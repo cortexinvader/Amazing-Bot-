@@ -1,5 +1,4 @@
 import { updateUser, getUser } from '../../models/User.js';
-import formatResponse from '../../utils/formatUtils.js';
 
 export default {
     name: 'warn',
@@ -16,15 +15,13 @@ export default {
     async execute({ sock, message, args, from, sender, isGroup, isGroupAdmin }) {
         if (!isGroup) {
             return await sock.sendMessage(from, {
-                text: formatResponse.error('GROUP ONLY',
-                    'This command can only be used in groups')
+                text: '╭──⦿【 ❌ ERROR 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: Group only command\n│\n│ 💡 This command works in groups\n╰────────⦿'
             }, { quoted: message });
         }
 
         if (!isGroupAdmin) {
             return await sock.sendMessage(from, {
-                text: formatResponse.error('ADMIN ONLY',
-                    'You need to be a group admin to use this command')
+                text: '╭──⦿【 ❌ ERROR 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: Admin only\n│\n│ 💡 You need admin privileges\n╰────────⦿'
             }, { quoted: message });
         }
 
@@ -43,16 +40,13 @@ export default {
                 reason = args.slice(1).join(' ') || reason;
             } else {
                 return await sock.sendMessage(from, {
-                    text: formatResponse.error('NO TARGET',
-                        'Reply to a message or mention a user to warn',
-                        'Usage: warn @user [reason] OR reply to message')
+                    text: '╭──⦿【 ❌ ERROR 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: No target\n│\n│ 💡 Reply or mention user\n╰────────⦿'
                 }, { quoted: message });
             }
 
             if (targetJid === sender) {
                 return await sock.sendMessage(from, {
-                    text: formatResponse.error('INVALID ACTION',
-                        'You cannot warn yourself')
+                    text: '╭──⦿【 ❌ ERROR 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: Cannot warn yourself\n│\n│ 💡 Invalid action\n╰────────⦿'
                 }, { quoted: message });
             }
 
@@ -93,13 +87,13 @@ export default {
                         isBanned: true,
                         banReason: 'Too many warnings (3/3)',
                         bannedBy: 'System',
-                        banUntil: new Date(Date.now() + 24 * 60 * 60 * 1000)
+                        bannedAt: new Date()
                     }
                 });
                 responseText += `
 │
-│ 🚫 𝗔𝗨𝗧𝗢-𝗕𝗔𝗡: User has been banned
-│ for 24 hours due to 3 warnings
+│ 🚫 𝗔𝗨𝗧𝗢-𝗕𝗔𝗡: User banned
+│ for 3 warnings
 │`;
             }
 
@@ -113,9 +107,7 @@ export default {
 
         } catch (error) {
             await sock.sendMessage(from, {
-                text: formatResponse.error('WARN FAILED',
-                    'Failed to warn user',
-                    error.message)
+                text: '╭──⦿【 ❌ ERROR 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: Warn failed\n│\n│ 💡 Try again later\n╰────────⦿'
             }, { quoted: message });
         }
     }
