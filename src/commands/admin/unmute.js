@@ -1,5 +1,4 @@
 import { updateUser } from '../../models/User.js';
-import formatResponse from '../../utils/formatUtils.js';
 
 export default {
     name: 'unmute',
@@ -16,15 +15,13 @@ export default {
     async execute({ sock, message, args, from, sender, isGroup, isGroupAdmin }) {
         if (!isGroup) {
             return await sock.sendMessage(from, {
-                text: formatResponse.error('GROUP ONLY',
-                    'This command can only be used in groups')
+                text: '╭──⦿【 ❌ ERROR 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: Group only command\n│\n│ 💡 This command works in groups\n╰────────⦿'
             }, { quoted: message });
         }
 
         if (!isGroupAdmin) {
             return await sock.sendMessage(from, {
-                text: formatResponse.error('ADMIN ONLY',
-                    'You need to be a group admin to use this command')
+                text: '╭──⦿【 ❌ ERROR 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: Admin only\n│\n│ 💡 You need admin privileges\n╰────────⦿'
             }, { quoted: message });
         }
 
@@ -39,9 +36,7 @@ export default {
                 targetJid = mentionedUsers[0];
             } else {
                 return await sock.sendMessage(from, {
-                    text: formatResponse.error('NO TARGET',
-                        'Reply to a message or mention a user to unmute',
-                        'Usage: unmute @user OR reply to message')
+                    text: '╭──⦿【 ❌ ERROR 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: No target\n│\n│ 💡 Reply or mention user\n╰────────⦿'
                 }, { quoted: message });
             }
 
@@ -62,7 +57,7 @@ export default {
 │ 👮 𝗨𝗻𝗺𝘂𝘁𝗲𝗱 𝗯𝘆: @${sender.split('@')[0]}
 │ 📅 𝗗𝗮𝘁𝗲: ${new Date().toLocaleDateString()}
 │
-│ ✅ User can now use bot commands again
+│ ✅ Can use bot commands again
 │
 ╰────────────⦿`,
                 mentions: [targetJid, sender]
@@ -70,9 +65,7 @@ export default {
 
         } catch (error) {
             await sock.sendMessage(from, {
-                text: formatResponse.error('UNMUTE FAILED',
-                    'Failed to unmute user',
-                    error.message)
+                text: '╭──⦿【 ❌ ERROR 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: Unmute failed\n│\n│ 💡 Try again later\n╰────────⦿'
             }, { quoted: message });
         }
     }
