@@ -5,6 +5,7 @@ const aiCache = new Map();
 const aiModes = new Map();
 const AI_CONTEXT_LIMIT = 10;
 const AI_TIMEOUT = 30000;
+const CONVERSATION_TIMEOUT = 300000;
 
 const systemPrompts = {
     normal: 'You are a helpful and honest AI assistant.',
@@ -91,8 +92,9 @@ export default {
                 }
 
                 aiModes.set(sender, mode);
+                const modeEmojis = { normal: '🤖', god: '⚡', naughty: '😈', roast: '🔥' };
                 return await sock.sendMessage(from, {
-                    text: `AI mode set to: ${mode.charAt(0).toUpperCase() + mode.slice(1)} mode!`
+                    text: `${modeEmojis[mode]} AI mode set to: ${mode.charAt(0).toUpperCase() + mode.slice(1)} mode!`
                 }, { quoted: message });
             }
 
@@ -109,13 +111,10 @@ export default {
                 react: { text: '🤖', key: message.key }
             });
 
-            let statusMsg = null;
-            if (!isReply) {
-                // Send processing message for initial queries
-                statusMsg = await sock.sendMessage(from, {
-                    text: 'Processing your query...'
-                }, { quoted: message });
-            }
+            // Always send processing message (for both initial and replies, like the first version)
+            const statusMsg = await sock.sendMessage(from, {
+                text: '⏳ Processing your query...'
+            }, { quoted: message });
 
             // Initialize or get history
             if (!aiCache.has(sender)) {
@@ -172,25 +171,19 @@ export default {
             aiCache.set(sender, history);
 
             // Response text (reduced formatting to avoid visual clutter)
-            const contextInfo = history.length > 2 ? `\n\n(Context: ${Math.floor(history.length / 2)} messages)` : '';
-            const responseText = `${aiResponse}${contextInfo}\n\nReply to continue. Clear: ${prefix}ai clear. Mode: ${userMode.charAt(0).toUpperCase() + userMode.slice(1)}. Change: ${prefix}ai set <mode>`;
+            const messageCount = Math.floor(history.length / 2);
+            const contextInfo = history.length > 2 ? `\n\n💬 Context: ${messageCount} message${messageCount > 1 ? 's' : ''}` : '';
+            const modeEmojis = { normal: '🤖', god: '⚡', naughty: '😈', roast: '🔥' };
+            const responseText = `${aiResponse}${contextInfo}\n\n💡 Reply to continue conversation\n🗑️ ${prefix}ai clear to reset\n${modeEmojis[userMode]} Mode: ${userMode.charAt(0).toUpperCase() + userMode.slice(1)}\n🎭 ${prefix}ai set <mode> to change`;
 
-            let sentMsg;
-            if (statusMsg && !isReply) {
-                // Edit the processing message
-                sentMsg = await sock.sendMessage(from, {
-                    text: responseText,
-                    edit: statusMsg.key
-                }, { quoted: message });
-            } else {
-                // Send new message (for replies)
-                sentMsg = await sock.sendMessage(from, {
-                    text: responseText
-                }, { quoted: message });
-            }
+            // Always edit the status message
+            const sentMsg = await sock.sendMessage(from, {
+                text: responseText,
+                edit: statusMsg.key
+            }, { quoted: message });
 
             // Setup reply handler for future continuations (ensures prefix-less replies work via global handler)
-            if (sentMsg && sentMsg.key) {
+            if (sentMsg && sentMsg.key && sentMsg.key.id) {
                 this.setupReplyHandler(sock, from, sentMsg.key.id, sender, prefix);
             }
 
@@ -218,7 +211,7 @@ export default {
         }
     },
 
-    setupReplyHandler(sock, from, messageId, sender, prefix) {
+    setupReplyHandler(sock, from, messageId, authorizedSender, prefix) {
         // Clear any existing handler for this message ID
         if (global.replyHandlers && global.replyHandlers[messageId]) {
             clearTimeout(global.replyHandlers[messageId].timeout);
@@ -230,7 +223,7 @@ export default {
             if (global.replyHandlers && global.replyHandlers[messageId]) {
                 delete global.replyHandlers[messageId];
             }
-        }, 300000); // 5 minutes
+        }, CONVERSATION_TIMEOUT);
 
         if (!global.replyHandlers) {
             global.replyHandlers = {};
@@ -238,30 +231,76 @@ export default {
 
         global.replyHandlers[messageId] = {
             command: this.name,
+            authorizedSender: authorizedSender,
             timeout: replyTimeout,
             handler: async (replyText, replyMessage) => {
+                // Check if reply is from authorized sender (like the first version)
+                const replySender = replyMessage.key.participant || replyMessage.key.remoteJid;
+                if (replySender !== authorizedSender) {
+                    return;
+                }
+
                 const query = replyText.trim();
 
                 if (!query) {
                     await sock.sendMessage(from, {
-                        text: 'Please provide a query to continue.'
+                        text: '❌ Please provide a query to continue the conversation.'
                     }, { quoted: replyMessage });
                     return;
                 }
 
-                const args = [query]; // Pass as single arg to preserve full query (avoids split/join issues)
-                // Execute as reply (no processing message)
+                // Handle clear/reset in handler (like first version, for optimization)
+                if (query.toLowerCase() === 'clear' || query.toLowerCase() === 'reset') {
+                    aiCache.delete(authorizedSender);
+                    await sock.sendMessage(from, {
+                        text: '🗑️ Conversation history cleared! Start fresh with a new query.'
+                    }, { quoted: replyMessage });
+                    clearTimeout(replyTimeout);
+                    delete global.replyHandlers[messageId];
+                    return;
+                }
+
+                // Handle mode setting in handler (like first version)
+                if (query.toLowerCase().startsWith('set ')) {
+                    const modeInput = query.slice(4).trim().toLowerCase();
+                    let mode = null;
+                    if (modeInput === 'normal') mode = 'normal';
+                    else if (modeInput === 'god' || modeInput.includes('god')) mode = 'god';
+                    else if (modeInput === 'naughty' || modeInput.includes('naughty')) mode = 'naughty';
+                    else if (modeInput === 'roast' || modeInput.includes('roast')) mode = 'roast';
+                    
+                    if (mode) {
+                        aiModes.set(authorizedSender, mode);
+                        const modeEmojis = { normal: '🤖', god: '⚡', naughty: '😈', roast: '🔥' };
+                        await sock.sendMessage(from, {
+                            text: `${modeEmojis[mode]} AI mode set to: ${mode.charAt(0).toUpperCase() + mode.slice(1)} mode!`
+                        }, { quoted: replyMessage });
+                        clearTimeout(replyTimeout);
+                        delete global.replyHandlers[messageId];
+                        return;
+                    } else {
+                        await sock.sendMessage(from, {
+                            text: `Invalid mode. Available: normal, god, naughty, roast\n\nExample: ${prefix}ai set god`
+                        }, { quoted: replyMessage });
+                        clearTimeout(replyTimeout);
+                        delete global.replyHandlers[messageId];
+                        return;
+                    }
+                }
+
+                // For regular queries, call execute as reply (no duplication)
+                const args = [query]; // Pass as single arg to preserve full query
                 await this.execute({
                     sock,
                     message: replyMessage,
                     args,
                     from,
-                    sender,
+                    sender: authorizedSender,
                     prefix,
                     isReply: true
                 });
 
-                // Clean up handler
+                // Clean up old handler after processing
                 clearTimeout(replyTimeout);
                 delete global.replyHandlers[messageId];
             }
