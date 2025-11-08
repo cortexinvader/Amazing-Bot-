@@ -1,13 +1,24 @@
 import axios from 'axios';
+import config from '../../config.js';
+
+function cleanResponse(text) {
+    // Remove code block formatting to flatten output (removes boxes in WhatsApp)
+    return text.replace(/```[\s\S]*?```/g, (match) => {
+        const lines = match.split('\n');
+        // Remove first (```lang) and last (```) lines, join the rest
+        const content = lines.slice(1, -1).join('\n').trim();
+        return content || '';
+    });
+}
 
 export default {
     name: 'lyrics',
-    aliases: ['lyric', 'song'],
+    aliases: ['lyric'],
     category: 'utility',
-    description: 'Search and get song lyrics.',
+    description: 'Get lyrics for a song',
     usage: 'lyrics <song name>',
     example: 'lyrics Baby',
-    cooldown: 5,
+    cooldown: 3,
     permissions: ['user'],
     args: true,
     minArgs: 1,
@@ -21,51 +32,88 @@ export default {
     supportsReact: true,
     supportsButtons: false,
 
-    async execute({ sock, message, args, from }) {
-        const query = args.join(' ');
-
-        if (!query.trim()) {
-            return await sock.sendMessage(from, {
-                text: '❗ Please provide a song name or lyrics query.'
-            }, { quoted: message });
-        }
+    async execute(options) {
+        const {
+            sock,
+            message,
+            args,
+            from,
+            sender,
+            prefix
+        } = options;
 
         try {
-            await sock.sendMessage(from, { react: { text: '⏳', key: message.key } });
+            const query = args.join(' ').trim();
 
+            if (!query) {
+                return await sock.sendMessage(from, {
+                    text: `Usage: ${prefix}lyrics <song name>\n\nExample: ${prefix}lyrics shape of you`
+                }, { quoted: message });
+            }
+
+            // React to user's message
+            await sock.sendMessage(from, {
+                react: { text: '🎵', key: message.key }
+            });
+
+            // Send processing message
+            const statusMsg = await sock.sendMessage(from, {
+                text: '⏳ Searching for lyrics...'
+            }, { quoted: message });
+
+            // API call
             const apiUrl = `https://arychauhann.onrender.com/api/lrclib?query=${encodeURIComponent(query)}`;
-
-            const response = await axios.get(apiUrl, {
+            const { data } = await axios.get(apiUrl, {
                 timeout: 30000,
                 headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                    'User-Agent': 'Mozilla/5.0'
                 }
             });
 
-            const data = response.data;
-
-            // Assuming API returns { lyrics: 'full lyrics text', title: '...', artist: '...' }
-            // Adjust if actual structure differs
-            if (!data || !data.lyrics) {
-                throw new Error('No lyrics found for the query');
+            // Response structure: {"operator": "...", "results": [{id, trackName, artistName, plainLyrics, ...}]}
+            if (!data.results || data.results.length === 0) {
+                const responseText = `No lyrics found for "${query}".\n\nTry a more specific song name.`;
+                await sock.sendMessage(from, {
+                    text: responseText,
+                    edit: statusMsg.key
+                }, { quoted: message });
+                return;
             }
 
-            const lyricsText = `🎵 *${data.title || query}* by ${data.artist || 'Unknown'}\n\n` +
-                               `${data.lyrics || 'Lyrics not available'}\n\n` +
-                               `💡 Powered by LrcLib API`;
+            // Take first result
+            const song = data.results[0];
+            const trackName = song.trackName;
+            const artistName = song.artistName;
+            const plainLyrics = cleanResponse(song.plainLyrics || '');
+
+            let responseText = `🎵 **${trackName}**\n\n👤 Artist: ${artistName}\n\n📝 Lyrics:\n\n${plainLyrics}`;
 
             await sock.sendMessage(from, {
-                text: lyricsText
+                text: responseText,
+                edit: statusMsg.key
             }, { quoted: message });
 
-            await sock.sendMessage(from, { react: { text: '✅', key: message.key } });
-
-        } catch (err) {
-            console.error('Lyrics command error:', err);
+            // Success react
             await sock.sendMessage(from, {
-                text: `❌ Failed to fetch lyrics: ${err.message}`
+                react: { text: '✅', key: message.key }
+            });
+
+        } catch (error) {
+            console.error('Lyrics command error:', error);
+
+            const errorMsg = error.code === 'ECONNABORTED'
+                ? 'Request timeout - Try again later'
+                : error.response?.status === 429
+                ? 'Rate limit exceeded - try again in a moment'
+                : error.message || 'Unknown error occurred';
+
+            await sock.sendMessage(from, {
+                text: `Failed to fetch lyrics\n\nError: ${errorMsg}\nTry again in a moment`
             }, { quoted: message });
-            await sock.sendMessage(from, { react: { text: '❌', key: message.key } });
+
+            await sock.sendMessage(from, {
+                react: { text: '❌', key: message.key }
+            });
         }
     }
 };
