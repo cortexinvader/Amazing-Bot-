@@ -2,7 +2,7 @@ import axios from 'axios';
 
 export default {
     name: 'bibleai',
-    aliases: ['bible', biblegpt],
+    aliases: ['bible', 'biblegpt'],
     category: 'ai',
     description: 'Chat with BibleGPT AI (Bible-themed responses)',
     usage: 'biblegpt <prompt>',
