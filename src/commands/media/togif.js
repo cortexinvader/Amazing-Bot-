@@ -14,6 +14,17 @@ function cleanTempFile(filePath) {
     }
 }
 
+async function downloadMedia(message) {
+    try {
+        const { downloadMediaMessage } = await import('@whiskeysockets/baileys');
+        const buffer = await downloadMediaMessage(message, 'buffer', {});
+        return buffer;
+    } catch (error) {
+        console.error('Media download error:', error);
+        throw error;
+    }
+}
+
 async function convertToGif(inputBuffer, fileTypeExt) {
     return new Promise((resolve, reject) => {
         const inputPath = path.join(TEMP_DIR, `input_${Date.now()}.${fileTypeExt}`);
@@ -72,70 +83,101 @@ export default {
             let mediaMessage = null;
             let isVideo = false;
             let isImage = false;
+            let mediaCaption = '';
 
-            if (message.message?.videoMessage) {
-                mediaMessage = message.message.videoMessage;
+            const msgContent = message.message;
+            
+            if (!msgContent) {
+                await sock.sendMessage(from, {
+                    text: `Reply to a video or image to convert to GIF\n\nExample: Reply with ${prefix}togif`
+                }, { quoted: message });
+                return;
+            }
+
+            if (msgContent.videoMessage) {
+                mediaMessage = message;
                 isVideo = true;
-            } else if (message.message?.imageMessage) {
-                mediaMessage = message.message.imageMessage;
+                mediaCaption = msgContent.videoMessage.caption || '';
+            } else if (msgContent.imageMessage) {
+                mediaMessage = message;
                 isImage = true;
-            } else {
-                const quoted = message.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-                if (quoted?.videoMessage) {
-                    mediaMessage = quoted.videoMessage;
+                mediaCaption = msgContent.imageMessage.caption || '';
+            } else if (msgContent.extendedTextMessage?.contextInfo?.quotedMessage) {
+                const quoted = msgContent.extendedTextMessage.contextInfo.quotedMessage;
+                if (quoted.videoMessage) {
+                    mediaMessage = {
+                        message: quoted,
+                        key: message.key
+                    };
                     isVideo = true;
-                } else if (quoted?.imageMessage) {
-                    mediaMessage = quoted.imageMessage;
+                    mediaCaption = quoted.videoMessage.caption || '';
+                } else if (quoted.imageMessage) {
+                    mediaMessage = {
+                        message: quoted,
+                        key: message.key
+                    };
                     isImage = true;
+                    mediaCaption = quoted.imageMessage.caption || '';
                 }
             }
 
             if (!mediaMessage) {
                 await sock.sendMessage(from, {
-                    text: `❌ *Error*\nReply to a video or image to convert to GIF!\n\n💡 Example: Reply with \`${prefix}togif\``
+                    text: `Reply to a video or image to convert to GIF\n\nExample: Reply with ${prefix}togif`
                 }, { quoted: message });
                 return;
             }
 
             await sock.sendMessage(from, {
-                react: { text: '🎬', key: message.key }
+                react: { text: '⏳', key: message.key }
             });
 
-            const tempFile = path.join(TEMP_DIR, `${Date.now()}.tmp`);
-            const savedPath = await sock.downloadAndSaveMediaMessage(mediaMessage, tempFile);
-            
-            const mediaBuffer = fs.readFileSync(savedPath);
-            const { fileTypeFromBuffer } = await import('file-type');
-            const detectedType = await fileTypeFromBuffer(mediaBuffer);
-            const supportedExts = ['mp4', 'webm', 'avi', 'mov', 'jpg', 'jpeg', 'png', 'gif'];
+            const buffer = await downloadMedia(mediaMessage);
 
-            if (!detectedType || !supportedExts.includes(detectedType.ext)) {
-                cleanTempFile(savedPath);
+            if (!buffer || buffer.length === 0) {
                 await sock.sendMessage(from, {
-                    text: `❌ *Error*\nUnsupported format. Use MP4/WEBM videos or JPG/PNG images.`
+                    text: `Failed to download media. Please try again.`
                 }, { quoted: message });
                 return;
             }
 
-            const gifBuffer = await convertToGif(mediaBuffer, detectedType.ext);
+            const { fileTypeFromBuffer } = await import('file-type');
+            const detectedType = await fileTypeFromBuffer(buffer);
+
+            if (!detectedType) {
+                await sock.sendMessage(from, {
+                    text: `Could not detect file type. Please use a valid video or image.`
+                }, { quoted: message });
+                return;
+            }
+
+            const supportedExts = ['mp4', 'webm', 'avi', 'mov', 'mkv', 'flv', 'jpg', 'jpeg', 'png', 'webp'];
+            if (!supportedExts.includes(detectedType.ext)) {
+                await sock.sendMessage(from, {
+                    text: `Unsupported format: ${detectedType.ext}\n\nSupported formats: MP4, WEBM, AVI, MOV, JPG, PNG`
+                }, { quoted: message });
+                return;
+            }
+
+            const gifBuffer = await convertToGif(buffer, detectedType.ext);
 
             await sock.sendMessage(from, {
                 video: gifBuffer,
                 gifPlayback: true,
-                caption: mediaMessage.caption ? `GIF: ${mediaMessage.caption}` : 'Converted to GIF'
+                caption: mediaCaption ? `GIF: ${mediaCaption}` : 'Converted to GIF'
             }, { quoted: message });
 
             await sock.sendMessage(from, {
                 react: { text: '✅', key: message.key }
             });
 
-            cleanTempFile(savedPath);
-
         } catch (error) {
             console.error('ToGIF command error:', error);
+            
             await sock.sendMessage(from, {
-                text: `❌ *Error*\nFailed to convert to GIF: ${error.message}\n\n💡 Ensure FFmpeg is installed.`
+                text: `Failed to convert to GIF: ${error.message}\n\nMake sure FFmpeg is installed on your system.`
             }, { quoted: message });
+            
             await sock.sendMessage(from, {
                 react: { text: '❌', key: message.key }
             });
