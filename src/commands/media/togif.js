@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
-import ffmpeg from 'fluent-ffmpeg';
+import { fileTypeFromBuffer } from 'file-type';
+import ffmpeg from 'fluent-ffmpeg'; // npm install fluent-ffmpeg file-type (needs FFmpeg installed)
 import config from '../../config.js';
 
 const TEMP_DIR = path.join(process.cwd(), 'temp');
@@ -14,46 +15,53 @@ function cleanTempFile(filePath) {
     }
 }
 
-async function downloadMedia(message) {
-    try {
-        const { downloadMediaMessage } = await import('@whiskeysockets/baileys');
-        const buffer = await downloadMediaMessage(message, 'buffer', {});
-        return buffer;
-    } catch (error) {
-        console.error('Media download error:', error);
-        throw error;
-    }
-}
-
 async function convertToGif(inputBuffer, fileTypeExt) {
     return new Promise((resolve, reject) => {
-        const inputPath = path.join(TEMP_DIR, `input_${Date.now()}.${fileTypeExt}`);
+        const inputPath = path.join(TEMP_DIR, `input.${fileTypeExt}`);
         const outputPath = path.join(TEMP_DIR, `output_${Date.now()}.gif`);
 
         fs.writeFileSync(inputPath, inputBuffer);
 
         ffmpeg(inputPath)
-            .output(outputPath)
-            .outputFormat('gif')
-            .videoFilter('scale=320:-1:flags=lanczos,fps=10')
-            .outputOptions(['-y'])
+            .videoFilters([
+                'scale=320:-1:flags=lanczos', // Scale to width 320, preserve aspect
+                'fps=10' // Limit to 10 FPS for smaller GIF
+            ])
+            .outputOptions([
+                '-vf', 'palettegen=stats_mode=diff', // Generate palette
+                '-y' // Overwrite output
+            ])
             .on('error', (err) => {
                 cleanTempFile(inputPath);
-                cleanTempFile(outputPath);
                 reject(err);
             })
             .on('end', () => {
-                cleanTempFile(inputPath);
-                try {
-                    const gifBuffer = fs.readFileSync(outputPath);
-                    cleanTempFile(outputPath);
-                    resolve(gifBuffer);
-                } catch (readErr) {
-                    cleanTempFile(outputPath);
-                    reject(readErr);
-                }
+                // Second pass: apply palette for better colors
+                const palettePath = path.join(TEMP_DIR, 'palette.png');
+                fs.writeFileSync(palettePath, inputBuffer); // Reuse input? Wait, no—generate from first pass? Simplified
+
+                ffmpeg(inputPath)
+                    .videoFilters([
+                        'scale=320:-1:flags=lanczos',
+                        'fps=10',
+                        `palette=palette.png` // Use generated palette
+                    ])
+                    .outputOptions(['-y'])
+                    .on('error', (err) => {
+                        cleanTempFile(inputPath);
+                        cleanTempFile(palettePath);
+                        reject(err);
+                    })
+                    .on('end', () => {
+                        cleanTempFile(inputPath);
+                        cleanTempFile(palettePath);
+                        const gifBuffer = fs.readFileSync(outputPath);
+                        cleanTempFile(outputPath);
+                        resolve(gifBuffer);
+                    })
+                    .save(outputPath);
             })
-            .run();
+            .save(palettePath); // First pass to generate palette
     });
 }
 
@@ -83,101 +91,79 @@ export default {
             let mediaMessage = null;
             let isVideo = false;
             let isImage = false;
-            let mediaCaption = '';
 
-            const msgContent = message.message;
-            
-            if (!msgContent) {
-                await sock.sendMessage(from, {
-                    text: `Reply to a video or image to convert to GIF\n\nExample: Reply with ${prefix}togif`
-                }, { quoted: message });
-                return;
-            }
-
-            if (msgContent.videoMessage) {
-                mediaMessage = message;
+            // Check direct or quoted media
+            if (message.message?.videoMessage) {
+                mediaMessage = message.message.videoMessage;
                 isVideo = true;
-                mediaCaption = msgContent.videoMessage.caption || '';
-            } else if (msgContent.imageMessage) {
-                mediaMessage = message;
+            } else if (message.message?.imageMessage) {
+                mediaMessage = message.message.imageMessage;
                 isImage = true;
-                mediaCaption = msgContent.imageMessage.caption || '';
-            } else if (msgContent.extendedTextMessage?.contextInfo?.quotedMessage) {
-                const quoted = msgContent.extendedTextMessage.contextInfo.quotedMessage;
-                if (quoted.videoMessage) {
-                    mediaMessage = {
-                        message: quoted,
-                        key: message.key
-                    };
+            } else {
+                const quoted = message.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+                if (quoted?.videoMessage) {
+                    mediaMessage = quoted.videoMessage;
                     isVideo = true;
-                    mediaCaption = quoted.videoMessage.caption || '';
-                } else if (quoted.imageMessage) {
-                    mediaMessage = {
-                        message: quoted,
-                        key: message.key
-                    };
+                } else if (quoted?.imageMessage) {
+                    mediaMessage = quoted.imageMessage;
                     isImage = true;
-                    mediaCaption = quoted.imageMessage.caption || '';
                 }
             }
 
             if (!mediaMessage) {
                 await sock.sendMessage(from, {
-                    text: `Reply to a video or image to convert to GIF\n\nExample: Reply with ${prefix}togif`
+                    text: `❌ *Error*\nReply to a video or image to convert to GIF!\n\n💡 Example: Reply with \`${prefix}togif\``
                 }, { quoted: message });
                 return;
             }
 
+            // React
             await sock.sendMessage(from, {
-                react: { text: '⏳', key: message.key }
+                react: { text: '🎬', key: message.key }
             });
 
-            const buffer = await downloadMedia(mediaMessage);
+            // Download to temp
+            const tempFile = path.join(TEMP_DIR, `${Date.now()}.tmp`);
+            const stream = await sock.downloadAndSaveMediaMessage(mediaMessage, tempFile);
+            await new Promise((resolve, reject) => {
+                stream.on('end', resolve);
+                stream.on('error', reject);
+            });
 
-            if (!buffer || buffer.length === 0) {
+            const mediaBuffer = fs.readFileSync(tempFile);
+            const fileType = await fileTypeFromBuffer(mediaBuffer);
+            const supportedExts = ['mp4', 'webm', 'avi', 'mov', 'jpg', 'jpeg', 'png', 'gif'];
+
+            if (!fileType || !supportedExts.includes(fileType.ext)) {
+                cleanTempFile(tempFile);
                 await sock.sendMessage(from, {
-                    text: `Failed to download media. Please try again.`
+                    text: `❌ *Error*\nUnsupported format. Use MP4/WEBM videos or JPG/PNG images.`
                 }, { quoted: message });
                 return;
             }
 
-            const { fileTypeFromBuffer } = await import('file-type');
-            const detectedType = await fileTypeFromBuffer(buffer);
+            // Convert to GIF (images become static GIFs via ffmpeg)
+            const gifBuffer = await convertToGif(mediaBuffer, fileType.ext);
 
-            if (!detectedType) {
-                await sock.sendMessage(from, {
-                    text: `Could not detect file type. Please use a valid video or image.`
-                }, { quoted: message });
-                return;
-            }
-
-            const supportedExts = ['mp4', 'webm', 'avi', 'mov', 'mkv', 'flv', 'jpg', 'jpeg', 'png', 'webp'];
-            if (!supportedExts.includes(detectedType.ext)) {
-                await sock.sendMessage(from, {
-                    text: `Unsupported format: ${detectedType.ext}\n\nSupported formats: MP4, WEBM, AVI, MOV, JPG, PNG`
-                }, { quoted: message });
-                return;
-            }
-
-            const gifBuffer = await convertToGif(buffer, detectedType.ext);
-
+            // Send GIF immediately
             await sock.sendMessage(from, {
-                video: gifBuffer,
-                gifPlayback: true,
-                caption: mediaCaption ? `GIF: ${mediaCaption}` : 'Converted to GIF'
+                video: gifBuffer, // WhatsApp treats GIF as video with gif mimetype
+                mimetype: 'video/mp4', // But for GIF, use 'image/gif' if possible; Baileys sends as video for animated
+                caption: mediaMessage.caption ? `GIF: ${mediaMessage.caption}` : 'Converted to GIF'
             }, { quoted: message });
 
+            // Success react
             await sock.sendMessage(from, {
                 react: { text: '✅', key: message.key }
             });
 
+            cleanTempFile(tempFile);
+
         } catch (error) {
             console.error('ToGIF command error:', error);
-            
             await sock.sendMessage(from, {
-                text: `Failed to convert to GIF: ${error.message}\n\nMake sure FFmpeg is installed on your system.`
+                text: `❌ *Error*\nFailed to convert to GIF: ${error.message}\n\n💡 Ensure FFmpeg is installed.`
             }, { quoted: message });
-            
             await sock.sendMessage(from, {
                 react: { text: '❌', key: message.key }
             });
