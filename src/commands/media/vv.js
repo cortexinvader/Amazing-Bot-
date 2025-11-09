@@ -1,5 +1,5 @@
 import fs from 'fs';
-import path from 'path'; // npm install file-type
+import path from 'path';
 import config from '../../config.js';
 
 const TEMP_DIR = path.join(process.cwd(), 'temp');
@@ -10,6 +10,17 @@ if (!fs.existsSync(TEMP_DIR)) {
 function cleanTempFile(filePath) {
     if (fs.existsSync(filePath)) {
         fs.unlinkSync(filePath);
+    }
+}
+
+async function downloadMedia(message) {
+    try {
+        const { downloadMediaMessage } = await import('@whiskeysockets/baileys');
+        const buffer = await downloadMediaMessage(message, 'buffer', {});
+        return buffer;
+    } catch (error) {
+        console.error('Media download error:', error);
+        throw error;
     }
 }
 
@@ -36,121 +47,148 @@ export default {
 
     async execute({ sock, message, from, prefix }) {
         try {
-            const quoted = message.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-            if (!quoted) {
+            const msgContent = message.message;
+            
+            if (!msgContent || !msgContent.extendedTextMessage?.contextInfo?.quotedMessage) {
                 await sock.sendMessage(from, {
-                    text: `❌ *Error*\nReply to a view once image/video/audio to extract and view it!\n\n💡 Example: Reply with \`${prefix}vv\``
+                    text: `Reply to a view once image/video/audio to extract and view it\n\nExample: Reply with ${prefix}vv`
                 }, { quoted: message });
                 return;
             }
 
+            const quoted = msgContent.extendedTextMessage.contextInfo.quotedMessage;
+            
             let mediaMessage = null;
             let isImage = false;
             let isVideo = false;
             let isAudio = false;
+            let mediaCaption = '';
 
-            // Handle view once extraction
-            if (quoted.viewOnceMessageMessage) {
-                const innerMsg = quoted.viewOnceMessageMessage.message;
-                if (innerMsg.imageMessage) {
-                    mediaMessage = innerMsg.imageMessage;
-                    isImage = true;
-                } else if (innerMsg.videoMessage) {
-                    mediaMessage = innerMsg.videoMessage;
-                    isVideo = true;
-                } else if (innerMsg.audioMessage || innerMsg.voiceMessage) {
-                    mediaMessage = innerMsg.audioMessage || innerMsg.voiceMessage;
-                    isAudio = true;
+            if (quoted.viewOnceMessageV2 || quoted.viewOnceMessage || quoted.viewOnceMessageV2Extension) {
+                const viewOnceMsg = quoted.viewOnceMessageV2?.message || 
+                                   quoted.viewOnceMessage?.message || 
+                                   quoted.viewOnceMessageV2Extension?.message;
+                
+                if (viewOnceMsg) {
+                    if (viewOnceMsg.imageMessage) {
+                        mediaMessage = {
+                            message: { imageMessage: viewOnceMsg.imageMessage },
+                            key: message.key
+                        };
+                        isImage = true;
+                        mediaCaption = viewOnceMsg.imageMessage.caption || '';
+                    } else if (viewOnceMsg.videoMessage) {
+                        mediaMessage = {
+                            message: { videoMessage: viewOnceMsg.videoMessage },
+                            key: message.key
+                        };
+                        isVideo = true;
+                        mediaCaption = viewOnceMsg.videoMessage.caption || '';
+                    } else if (viewOnceMsg.audioMessage) {
+                        mediaMessage = {
+                            message: { audioMessage: viewOnceMsg.audioMessage },
+                            key: message.key
+                        };
+                        isAudio = true;
+                        mediaCaption = viewOnceMsg.audioMessage.caption || '';
+                    }
                 }
             } else {
-                // Fallback for regular quoted media (non-view once)
                 if (quoted.imageMessage) {
-                    mediaMessage = quoted.imageMessage;
+                    mediaMessage = {
+                        message: quoted,
+                        key: message.key
+                    };
                     isImage = true;
+                    mediaCaption = quoted.imageMessage.caption || '';
                 } else if (quoted.videoMessage) {
-                    mediaMessage = quoted.videoMessage;
+                    mediaMessage = {
+                        message: quoted,
+                        key: message.key
+                    };
                     isVideo = true;
-                } else if (quoted.audioMessage || quoted.voiceMessage) {
-                    mediaMessage = quoted.audioMessage || quoted.voiceMessage;
+                    mediaCaption = quoted.videoMessage.caption || '';
+                } else if (quoted.audioMessage) {
+                    mediaMessage = {
+                        message: quoted,
+                        key: message.key
+                    };
                     isAudio = true;
+                    mediaCaption = quoted.audioMessage.caption || '';
                 }
             }
 
             if (!mediaMessage) {
                 await sock.sendMessage(from, {
-                    text: `❌ *Error*\nReply to an image, video, or audio (view once preferred) to extract.`
+                    text: `No media found in the quoted message. Reply to a view-once image, video, or audio.`
                 }, { quoted: message });
                 return;
             }
 
-            // React
             await sock.sendMessage(from, {
-                react: { text: '👁️', key: message.key }
+                react: { text: '⏳', key: message.key }
             });
 
-            // Download/extract to temp
-            const tempFile = path.join(TEMP_DIR, `${Date.now()}.tmp`);
-            const savedPath = await sock.downloadAndSaveMediaMessage(mediaMessage, tempFile);
-            
-            const mediaBuffer = fs.readFileSync(savedPath);
+            const buffer = await downloadMedia(mediaMessage);
+
+            if (!buffer || buffer.length === 0) {
+                await sock.sendMessage(from, {
+                    text: `Failed to download media. Please try again.`
+                }, { quoted: message });
+                return;
+            }
+
             const { fileTypeFromBuffer } = await import('file-type');
-            const detectedType = await fileTypeFromBuffer(mediaBuffer);
+            const detectedType = await fileTypeFromBuffer(buffer);
 
             if (!detectedType) {
-                cleanTempFile(savedPath);
                 await sock.sendMessage(from, {
-                    text: `❌ *Error*\nInvalid media file - could not extract.`
+                    text: `Could not detect file type. Invalid media file.`
                 }, { quoted: message });
                 return;
             }
 
             let sendOptions = {};
-            const caption = mediaMessage.caption || 'Extracted from View Once';
+            const caption = mediaCaption || 'Extracted from View Once';
 
             if (isImage || detectedType.mime.startsWith('image/')) {
                 sendOptions = {
-                    image: mediaBuffer,
+                    image: buffer,
                     mimetype: detectedType.mime,
-                    caption: caption,
-                    viewOnce: false
+                    caption: caption
                 };
             } else if (isVideo || detectedType.mime.startsWith('video/')) {
                 sendOptions = {
-                    video: mediaBuffer,
+                    video: buffer,
                     mimetype: detectedType.mime,
-                    caption: caption,
-                    viewOnce: false
+                    caption: caption
                 };
             } else if (isAudio || detectedType.mime.startsWith('audio/')) {
                 sendOptions = {
-                    audio: mediaBuffer,
-                    mimetype: detectedType.mime || 'audio/ogg', // Default to ogg for voice notes
-                    ptt: false, // Send as normal audio, not voice note
-                    caption: caption
+                    audio: buffer,
+                    mimetype: detectedType.mime,
+                    ptt: false
                 };
             } else {
-                cleanTempFile(savedPath);
                 await sock.sendMessage(from, {
-                    text: `❌ *Error*\nUnsupported type. Only images/videos/audio can be extracted.`
+                    text: `Unsupported media type: ${detectedType.mime}`
                 }, { quoted: message });
                 return;
             }
 
-            // Send extracted media immediately (as normal, non-view once)
             await sock.sendMessage(from, sendOptions, { quoted: message });
 
-            // Success react
             await sock.sendMessage(from, {
                 react: { text: '✅', key: message.key }
             });
 
-            cleanTempFile(savedPath);
-
         } catch (error) {
             console.error('VV command error:', error);
+            
             await sock.sendMessage(from, {
-                text: `❌ *Error*\nFailed to extract media: ${error.message}`
+                text: `Failed to extract media: ${error.message}`
             }, { quoted: message });
+            
             await sock.sendMessage(from, {
                 react: { text: '❌', key: message.key }
             });
