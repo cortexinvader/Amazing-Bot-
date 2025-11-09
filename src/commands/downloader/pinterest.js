@@ -1,15 +1,17 @@
 import axios from 'axios';
 
-const pinterestCache = new Map(); // Optional, but for quick, not needed
-const SEARCH_TIMEOUT = 300000; // 5 min
+const pinterestCache = new Map();
+const SEARCH_TIMEOUT = 300000;
+const MAX_IMAGES = 50;
+const MIN_IMAGES = 1;
 
 export default {
     name: 'pinterest',
     aliases: ['pin'],
     category: 'downloader',
     description: 'Search for images on Pinterest',
-    usage: 'pinterest <query>',
-    example: 'pinterest wallpaper',
+    usage: 'pinterest <query> [count]',
+    example: 'pinterest wallpaper 5\npinterest nature',
     cooldown: 5,
     permissions: ['user'],
     supportsReply: true,
@@ -17,67 +19,65 @@ export default {
     minArgs: 1,
 
     async execute({ sock, message, args, from, sender, prefix }) {
-        const query = args.join(' ').trim();
-
-        if (!query) {
-            return await sock.sendMessage(from, {
-                text: `╭──⦿【 🖼️ PINTEREST SEARCH 】
-│
-│ 💡 𝗨𝘀𝗮𝗴𝗲:
-│    ${prefix}pinterest <search term>
-│
-│ 📝 𝗘𝘅𝗮𝗺𝗽𝗹𝗲𝘀:
-│    ${prefix}pinterest wallpaper
-│    ${prefix}pinterest nature
-│    ${prefix}pinterest anime
-│
-│ 🔄 𝗥𝗲𝘀𝗲𝗮𝗿𝗰𝗵:
-│    Reply to results for more
-│
-╰────────────⦿`
-            }, { quoted: message });
-        }
-
         try {
+            let count = 5;
+            let query = args.join(' ').trim();
+
+            const lastArg = args[args.length - 1];
+            const parsedCount = parseInt(lastArg);
+            
+            if (!isNaN(parsedCount) && parsedCount >= MIN_IMAGES && parsedCount <= MAX_IMAGES) {
+                count = parsedCount;
+                query = args.slice(0, -1).join(' ').trim();
+            }
+
+            if (!query) {
+                return await sock.sendMessage(from, {
+                    text: `Usage: ${prefix}pinterest <search> [count]\n\nExamples:\n${prefix}pinterest wallpaper\n${prefix}pinterest nature 10\n\nCount: 1-${MAX_IMAGES} images (default: 5)\n\nReply to results for more images`
+                }, { quoted: message });
+            }
+
             await sock.sendMessage(from, {
                 react: { text: '🔍', key: message.key }
             });
 
             const statusMsg = await sock.sendMessage(from, {
-                text: `⏳ Searching Pinterest for "${query}"...`
+                text: `Searching Pinterest for "${query}"...\nRequested: ${count} images`
             }, { quoted: message });
 
-            const apiUrl = `https://api.ccprojectsapis-jonell.gleeze.com/api/pin?title=${encodeURIComponent(query)}&count=10`;
+            const apiUrl = `https://api.ccprojectsapis-jonell.gleeze.com/api/pin?title=${encodeURIComponent(query)}&count=${count}`;
             const { data } = await axios.get(apiUrl, {
-                timeout: 10000,
+                timeout: 15000,
                 headers: {
                     'User-Agent': 'Mozilla/5.0'
                 }
             });
 
-            const images = data.data || [];
+            if (!data || !data.data || !Array.isArray(data.data)) {
+                throw new Error('Invalid response from Pinterest API');
+            }
+
+            const images = data.data.filter(img => img && typeof img === 'string');
+            
             if (images.length === 0) {
                 await sock.sendMessage(from, {
-                    text: `❌ No images found for "${query}"`,
+                    text: `No images found for "${query}"\n\nTry a different search term`,
                     edit: statusMsg.key
                 }, { quoted: message });
                 return;
             }
 
-            const caption = `🖼️ *Pinterest: ${query}*\n\nFound ${images.length} images.\n💡 Reply for more results!`;
+            const caption = `Pinterest: ${query}\n\nShowing ${images.length} of ${count} requested images\n\nReply with a number (1-${MAX_IMAGES}) or new search term for more`;
 
-            // Send first image with caption
-            const firstImage = { image: { url: images[0] }, caption };
+            const sentMsg = await sock.sendMessage(from, {
+                image: { url: images[0] },
+                caption
+            }, { quoted: message });
 
-            const sentMsg = await sock.sendMessage(from, firstImage, { quoted: message });
-
-            // Send remaining images as album (sequential send)
             for (let i = 1; i < images.length; i++) {
                 await sock.sendMessage(from, {
                     image: { url: images[i] }
-                }, { 
-                    quoted: sentMsg 
-                });
+                }, { quoted: sentMsg });
             }
 
             await sock.sendMessage(from, {
@@ -92,21 +92,13 @@ export default {
             console.error('Pinterest command error:', error);
 
             const errorMsg = error.code === 'ECONNABORTED'
-                ? 'Request timeout'
+                ? 'Request timeout - try again'
                 : error.response?.status === 429
-                ? 'Rate limit exceeded'
+                ? 'Rate limit exceeded - wait a moment'
                 : error.message || 'Unknown error';
 
             await sock.sendMessage(from, {
-                text: `╭──⦿【 ❌ ERROR 】
-│
-│ ⚠️ Failed to fetch Pinterest images
-│
-│ 📝 Error: ${errorMsg}
-│
-│ 🔄 Try again later
-│
-╰────────────⦿`
+                text: `Failed to fetch Pinterest images\n\nError: ${errorMsg}\n\nTry again in a moment`
             }, { quoted: message });
 
             await sock.sendMessage(from, {
@@ -143,41 +135,56 @@ export default {
                     return;
                 }
 
-                const newQuery = replyText.trim();
-                const searchQuery = newQuery || originalQuery;
+                const input = replyText.trim();
+                
+                if (!input) {
+                    return;
+                }
 
-                // Simulate executing the command with the query
-                // Here, we can call this.execute but need to mock options
-                // For simplicity, reuse the logic or call execute
+                let searchQuery = originalQuery;
+                let count = 5;
 
-                // Quick way: trigger a new search with searchQuery
+                const parsedNumber = parseInt(input);
+                if (!isNaN(parsedNumber) && parsedNumber >= MIN_IMAGES && parsedNumber <= MAX_IMAGES) {
+                    count = parsedNumber;
+                } else {
+                    searchQuery = input;
+                }
+
                 try {
                     await sock.sendMessage(from, {
                         react: { text: '🔍', key: replyMessage.key }
                     });
 
                     const statusMsg = await sock.sendMessage(from, {
-                        text: `⏳ Searching Pinterest for "${searchQuery}"...`
+                        text: `Searching Pinterest for "${searchQuery}"...\nRequested: ${count} images`
                     }, { quoted: replyMessage });
 
-                    const apiUrl = `https://api.ccprojectsapis-jonell.gleeze.com/api/pin?title=${encodeURIComponent(searchQuery)}&count=10`;
+                    const apiUrl = `https://api.ccprojectsapis-jonell.gleeze.com/api/pin?title=${encodeURIComponent(searchQuery)}&count=${count}`;
                     const { data } = await axios.get(apiUrl, {
-                        timeout: 10000,
+                        timeout: 15000,
                         headers: {
                             'User-Agent': 'Mozilla/5.0'
                         }
                     });
 
-                    const images = data.data || [];
+                    if (!data || !data.data || !Array.isArray(data.data)) {
+                        throw new Error('Invalid response from Pinterest API');
+                    }
+
+                    const images = data.data.filter(img => img && typeof img === 'string');
+                    
                     if (images.length === 0) {
                         await sock.sendMessage(from, {
-                            text: `❌ No images found for "${searchQuery}"`,
+                            text: `No images found for "${searchQuery}"`,
                             edit: statusMsg.key
                         }, { quoted: replyMessage });
+                        clearTimeout(replyTimeout);
+                        delete global.replyHandlers[messageId];
                         return;
                     }
 
-                    const caption = `🖼️ *Pinterest: ${searchQuery}*\n\nFound ${images.length} images.\n💡 Reply for more!`;
+                    const caption = `Pinterest: ${searchQuery}\n\nShowing ${images.length} of ${count} requested images\n\nReply with a number (1-${MAX_IMAGES}) or new search term for more`;
 
                     const newSentMsg = await sock.sendMessage(from, {
                         image: { url: images[0] },
@@ -187,9 +194,7 @@ export default {
                     for (let i = 1; i < images.length; i++) {
                         await sock.sendMessage(from, {
                             image: { url: images[i] }
-                        }, { 
-                            quoted: newSentMsg 
-                        });
+                        }, { quoted: newSentMsg });
                     }
 
                     await sock.sendMessage(from, {
@@ -207,7 +212,7 @@ export default {
                     console.error('Pinterest reply error:', error);
 
                     await sock.sendMessage(from, {
-                        text: `❌ Failed to fetch more images. Try again!`
+                        text: `Failed to fetch more images: ${error.message}`
                     }, { quoted: replyMessage });
 
                     clearTimeout(replyTimeout);
