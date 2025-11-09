@@ -1,28 +1,17 @@
 import axios from 'axios';
-import config from '../../config.js';
-
-function cleanResponse(text) {
-    // Remove code block formatting to flatten output (removes boxes in WhatsApp)
-    return text.replace(/```[\s\S]*?```/g, (match) => {
-        const lines = match.split('\n');
-        // Remove first (```lang) and last (```) lines, join the rest
-        const content = lines.slice(1, -1).join('\n').trim();
-        return content || '';
-    });
-}
 
 export default {
     name: 'bibleai',
-    aliases: ['bible', 'bibleai'],
+    aliases: ['bible', biblegpt],
     category: 'ai',
-    description: 'Chat with Bible GPT - Bible-themed AI responses',
-    usage: 'biblegpt <query>',
+    description: 'Chat with BibleGPT AI (Bible-themed responses)',
+    usage: 'biblegpt <prompt>',
     example: 'biblegpt What does the Bible say about love?',
     cooldown: 3,
     permissions: ['user'],
-    args: false,
+    args: true,
     minArgs: 0,
-    maxArgs: 0,
+    maxArgs: Infinity,
     typing: true,
     premium: false,
     hidden: false,
@@ -33,97 +22,40 @@ export default {
     supportsButtons: false,
 
     async execute(options) {
-        const {
-            sock,
-            message,
-            args,
-            from,
-            sender,
-            prefix
-        } = options;
+        const { sock, message, args, from } = options;
+        let prompt = args.join(' ').trim();
+
+        if (!prompt) {
+            return sock.sendMessage(from, { text: 'Please provide a prompt for BibleGPT.' }, { quoted: message });
+        }
 
         try {
-            let query = args.join(' ').trim();
+            await sock.sendMessage(from, { react: { text: '📖', key: message.key } });
 
-            // Handle quoted message if no direct query
-            const quotedMsg = message.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-            if (quotedMsg && !query) {
-                const quotedText = quotedMsg.conversation ||
-                                 quotedMsg.extendedTextMessage?.text ||
-                                 quotedMsg.imageMessage?.caption ||
-                                 quotedMsg.videoMessage?.caption || '';
-                if (quotedText) {
-                    query = quotedText;
-                }
-            }
-
-            if (!query) {
-                return await sock.sendMessage(from, {
-                    text: `Usage: ${prefix}biblegpt <your question>\n\nExample: ${prefix}biblegpt What is forgiveness?`
-                }, { quoted: message });
-            }
-
-            // React to user's message
-            await sock.sendMessage(from, {
-                react: { text: '📖', key: message.key }
-            });
-
-            // Send processing message
-            const statusMsg = await sock.sendMessage(from, {
-                text: '⏳ Consulting Bible GPT...'
-            }, { quoted: message });
-
-            // API call
-            const apiUrl = `https://arychauhann.onrender.com/api/biblegpt?prompt=${encodeURIComponent(query)}`;
-            const { data } = await axios.get(apiUrl, {
+            const response = await axios.get(`https://arychauhann.onrender.com/api/biblegpt?prompt=${encodeURIComponent(prompt)}`, {
                 timeout: 30000,
-                headers: {
-                    'User-Agent': 'Mozilla/5.0'
-                }
+                headers: { 'User-Agent': 'Mozilla/5.0' }
             });
 
-            let aiResponse = data.response ||
-                             data.content ||
-                             data.reply ||
-                             data.answer ||
-                             data.text ||
-                             data.prompt_response ||
-                             'No response received';
+            const data = response.data;
+            let aiResponse = data.result || data.response || data.text || 'No response from BibleGPT.';
 
-            if (!aiResponse || aiResponse === 'No response received') {
-                throw new Error('Empty response from Bible GPT');
+            if (aiResponse === 'No response from BibleGPT.') {
+                throw new Error('Empty response');
             }
 
-            // Clean the AI response
-            aiResponse = cleanResponse(aiResponse);
-
-            // Edit the status message
             await sock.sendMessage(from, {
-                text: aiResponse,
-                edit: statusMsg.key
+                text: aiResponse
             }, { quoted: message });
 
-            // Success react
-            await sock.sendMessage(from, {
-                react: { text: '✅', key: message.key }
-            });
+            await sock.sendMessage(from, { react: { text: '✅', key: message.key } });
 
         } catch (error) {
-            console.error('BibleGPT command error:', error);
-
-            const errorMsg = error.code === 'ECONNABORTED'
-                ? 'Request timeout - AI took too long to respond'
-                : error.response?.status === 429
-                ? 'Rate limit exceeded - try again in a moment'
-                : error.message || 'Unknown error occurred';
-
+            console.error('BibleGPT error:', error);
             await sock.sendMessage(from, {
-                text: `Failed to get Bible GPT response\n\nError: ${errorMsg}\nTry again in a moment`
+                text: 'Error: Could not get response from BibleGPT.'
             }, { quoted: message });
-
-            await sock.sendMessage(from, {
-                react: { text: '❌', key: message.key }
-            });
+            await sock.sendMessage(from, { react: { text: '❌', key: message.key } });
         }
     }
 };
