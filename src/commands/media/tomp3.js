@@ -1,6 +1,8 @@
 import fs from 'fs';
 import path from 'path';
-import ffmpeg from 'fluent-ffmpeg';
+import { fileTypeFromBuffer } from 'file-type';
+import ffmpeg from 'fluent-ffmpeg'; // npm install fluent-ffmpeg file-type (needs FFmpeg)
+import { downloadContentFromMessage } from '@whiskeysockets/baileys'; // Import directly
 import config from '../../config.js';
 
 const TEMP_DIR = path.join(process.cwd(), 'temp');
@@ -14,31 +16,25 @@ function cleanTempFile(filePath) {
     }
 }
 
-async function downloadMedia(message) {
-    try {
-        const { downloadMediaMessage } = await import('@whiskeysockets/baileys');
-        const buffer = await downloadMediaMessage(message, 'buffer', {});
-        return buffer;
-    } catch (error) {
-        console.error('Media download error:', error);
-        throw error;
-    }
-}
-
-async function convertToMp3(inputBuffer, fileTypeExt) {
+async function convertToMp3(inputBuffer, fileTypeExt, isVideo = false) {
     return new Promise((resolve, reject) => {
-        const inputPath = path.join(TEMP_DIR, `input_${Date.now()}.${fileTypeExt}`);
+        const inputPath = path.join(TEMP_DIR, `input.${fileTypeExt}`);
         const outputPath = path.join(TEMP_DIR, `output_${Date.now()}.mp3`);
 
         fs.writeFileSync(inputPath, inputBuffer);
 
-        ffmpeg(inputPath)
+        let command = ffmpeg(inputPath)
             .audioCodec('libmp3lame')
             .audioBitrate(128)
-            .format('mp3')
+            .format('mp3');
+
+        if (isVideo) {
+            command = command.noVideo(); // Extract audio only
+        }
+
+        command
             .on('error', (err) => {
                 cleanTempFile(inputPath);
-                cleanTempFile(outputPath);
                 reject(err);
             })
             .on('end', () => {
@@ -52,12 +48,12 @@ async function convertToMp3(inputBuffer, fileTypeExt) {
 }
 
 export default {
-    name: 'tomp3',
+    name: 'tom p3',
     aliases: ['mp3', 'toaudio'],
     category: 'media',
-    description: 'Convert replied voice/video/audio to MP3',
-    usage: 'tomp3 [reply to voice/video/audio]',
-    example: 'Reply to voice with tomp3',
+    description: 'Convert replied voice/video/audio to MP3 (extracts audio from videos)',
+    usage: 'tom p3 [reply to voice/video/audio]',
+    example: 'Reply to voice/video with tom p3',
     cooldown: 5,
     permissions: ['user'],
     args: false,
@@ -74,98 +70,72 @@ export default {
 
     async execute({ sock, message, from, prefix }) {
         try {
-            let mediaMessage = null;
-            let mediaCaption = '';
+            let mediaMsg = message.message;
+            let isVideo = false;
 
-            const msgContent = message.message;
-            
-            if (!msgContent) {
+            // Get media from direct or quoted
+            if (message.message.extendedTextMessage?.contextInfo?.quotedMessage) {
+                mediaMsg = message.message.extendedTextMessage.contextInfo.quotedMessage;
+            }
+
+            const mediaKey = Object.keys(mediaMsg)[0];
+            if (!mediaKey) {
                 await sock.sendMessage(from, {
-                    text: `Reply to voice, audio, or video to convert to MP3\n\nExample: Reply with ${prefix}tomp3`
+                    text: `❌ *Error*\nReply to voice, audio, or video to convert to MP3!\n\n💡 Example: Reply with \`${prefix}tom p3\``
                 }, { quoted: message });
                 return;
             }
 
-            if (msgContent.audioMessage) {
-                mediaMessage = message;
-                mediaCaption = msgContent.audioMessage.caption || '';
-            } else if (msgContent.videoMessage) {
-                mediaMessage = message;
-                mediaCaption = msgContent.videoMessage.caption || '';
-            } else if (msgContent.extendedTextMessage?.contextInfo?.quotedMessage) {
-                const quoted = msgContent.extendedTextMessage.contextInfo.quotedMessage;
-                if (quoted.audioMessage) {
-                    mediaMessage = {
-                        message: quoted,
-                        key: message.key
-                    };
-                    mediaCaption = quoted.audioMessage.caption || '';
-                } else if (quoted.videoMessage) {
-                    mediaMessage = {
-                        message: quoted,
-                        key: message.key
-                    };
-                    mediaCaption = quoted.videoMessage.caption || '';
-                }
-            }
-
-            if (!mediaMessage) {
+            const mediaType = mediaMsg[mediaKey];
+            if (mediaType.audioMessage || mediaType.voiceMessage) {
+                // Audio/voice
+            } else if (mediaType.videoMessage) {
+                isVideo = true;
+            } else {
                 await sock.sendMessage(from, {
-                    text: `Reply to voice, audio, or video to convert to MP3\n\nExample: Reply with ${prefix}tomp3`
+                    text: `❌ *Error*\nUnsupported media. Use voice, audio, or video.`
                 }, { quoted: message });
                 return;
             }
 
+            // React
             await sock.sendMessage(from, {
-                react: { text: '⏳', key: message.key }
+                react: { text: '🎵', key: message.key }
             });
 
-            const buffer = await downloadMedia(mediaMessage);
+            // Download with correct method
+            const mediaBuffer = await downloadContentFromMessage(mediaMsg, 'buffer');
+            const fileType = await fileTypeFromBuffer(mediaBuffer);
+            const supportedExts = ['ogg', 'mp3', 'm4a', 'wav', 'mp4', 'webm'];
 
-            if (!buffer || buffer.length === 0) {
+            if (!fileType || !supportedExts.includes(fileType.ext)) {
                 await sock.sendMessage(from, {
-                    text: `Failed to download media. Please try again.`
+                    text: `❌ *Error*\nUnsupported format. Try OGG/MP3 for audio or MP4 for video.`
                 }, { quoted: message });
                 return;
             }
 
-            const { fileTypeFromBuffer } = await import('file-type');
-            const detectedType = await fileTypeFromBuffer(buffer);
+            // Convert
+            const mp3Buffer = await convertToMp3(mediaBuffer, fileType.ext, isVideo);
 
-            if (!detectedType) {
-                await sock.sendMessage(from, {
-                    text: `Could not detect file type. Please use a valid audio or video file.`
-                }, { quoted: message });
-                return;
-            }
-
-            const supportedExts = ['ogg', 'opus', 'mp4', 'webm', 'm4a', 'mp3', 'wav', 'avi', 'mov', 'mkv', 'flv'];
-            if (!supportedExts.includes(detectedType.ext)) {
-                await sock.sendMessage(from, {
-                    text: `Unsupported format: ${detectedType.ext}\n\nSupported formats: OGG, MP4, WEBM, M4A, WAV`
-                }, { quoted: message });
-                return;
-            }
-
-            const mp3Buffer = await convertToMp3(buffer, detectedType.ext);
-
+            // Send MP3
             await sock.sendMessage(from, {
                 audio: mp3Buffer,
                 mimetype: 'audio/mpeg',
-                ptt: false
+                ptt: false, // Normal audio
+                caption: mediaType.caption ? `MP3: ${mediaType.caption}` : 'Converted to MP3'
             }, { quoted: message });
 
+            // Success react
             await sock.sendMessage(from, {
                 react: { text: '✅', key: message.key }
             });
 
         } catch (error) {
             console.error('ToMP3 command error:', error);
-            
             await sock.sendMessage(from, {
-                text: `Failed to convert to MP3: ${error.message}\n\nMake sure FFmpeg is installed on your system.`
+                text: `❌ *Error*\nFailed to convert to MP3: ${error.message}\n\n💡 Check FFmpeg install & media format.`
             }, { quoted: message });
-            
             await sock.sendMessage(from, {
                 react: { text: '❌', key: message.key }
             });
