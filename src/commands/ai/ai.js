@@ -15,10 +15,8 @@ const systemPrompts = {
 };
 
 function cleanResponse(text) {
-    // Remove code block formatting to flatten output (removes boxes in WhatsApp)
     return text.replace(/```[\s\S]*?```/g, (match) => {
         const lines = match.split('\n');
-        // Remove first (```lang) and last (```) lines, join the rest
         const content = lines.slice(1, -1).join('\n').trim();
         return content || '';
     });
@@ -59,7 +57,6 @@ export default {
         try {
             let query = args.join(' ').trim();
 
-            // Handle quoted message if no direct query (only for non-reply continuations)
             const quotedMsg = message.message?.extendedTextMessage?.contextInfo?.quotedMessage;
             if (quotedMsg && !query && !isReply) {
                 const quotedText = quotedMsg.conversation ||
@@ -77,7 +74,6 @@ export default {
                 }, { quoted: message });
             }
 
-            // Handle mode setting
             if (query.toLowerCase().startsWith('set ')) {
                 const modeInput = query.slice(4).trim().toLowerCase();
                 let mode = null;
@@ -98,7 +94,6 @@ export default {
                 }, { quoted: message });
             }
 
-            // Handle clear/reset
             if (query.toLowerCase() === 'clear' || query.toLowerCase() === 'reset') {
                 aiCache.delete(sender);
                 return await sock.sendMessage(from, {
@@ -106,24 +101,20 @@ export default {
                 }, { quoted: message });
             }
 
-            // React to user's message
             await sock.sendMessage(from, {
                 react: { text: '🤖', key: message.key }
             });
 
-            // Always send processing message (for both initial and replies, like the first version)
             const statusMsg = await sock.sendMessage(from, {
                 text: '⏳ Processing your query...'
             }, { quoted: message });
 
-            // Initialize or get history
             if (!aiCache.has(sender)) {
                 aiCache.set(sender, []);
             }
             let history = aiCache.get(sender);
             const recentHistory = history.slice(-AI_CONTEXT_LIMIT);
 
-            // Build conversation context
             let conversationContext = '';
             if (recentHistory.length > 0) {
                 conversationContext = recentHistory.map(msg =>
@@ -131,14 +122,11 @@ export default {
                 ).join('\n') + '\n';
             }
 
-            // Get current mode and system prompt
             const userMode = aiModes.get(sender) || 'normal';
             const systemPrompt = systemPrompts[userMode];
 
-            // Full prompt
             const fullPrompt = `${systemPrompt}\n\n${conversationContext}Human: ${query}\nAssistant:`;
 
-            // API call
             const apiUrl = `https://ab-blackboxai.abrahamdw882.workers.dev/?q=${encodeURIComponent(fullPrompt)}`;
             const { data } = await axios.get(apiUrl, {
                 timeout: AI_TIMEOUT,
@@ -158,10 +146,8 @@ export default {
                 throw new Error('Empty response from AI');
             }
 
-            // Clean the AI response to remove markdown code blocks (flattens boxes)
             aiResponse = cleanResponse(aiResponse);
 
-            // Update history
             history.push({ role: 'user', content: query });
             history.push({ role: 'assistant', content: aiResponse });
 
@@ -170,24 +156,20 @@ export default {
             }
             aiCache.set(sender, history);
 
-            // Response text (reduced formatting to avoid visual clutter)
             const messageCount = Math.floor(history.length / 2);
             const contextInfo = history.length > 2 ? `\n\n💬 Context: ${messageCount} message${messageCount > 1 ? 's' : ''}` : '';
             const modeEmojis = { normal: '🤖', god: '⚡', naughty: '😈', roast: '🔥' };
             const responseText = `${aiResponse}${contextInfo}\n\n💡 Reply to continue conversation\n🗑️ ${prefix}ai clear to reset\n${modeEmojis[userMode]} Mode: ${userMode.charAt(0).toUpperCase() + userMode.slice(1)}\n🎭 ${prefix}ai set <mode> to change`;
 
-            // Always edit the status message
             const sentMsg = await sock.sendMessage(from, {
                 text: responseText,
                 edit: statusMsg.key
             }, { quoted: message });
 
-            // Setup reply handler for future continuations (ensures prefix-less replies work via global handler)
             if (sentMsg && sentMsg.key && sentMsg.key.id) {
                 this.setupReplyHandler(sock, from, sentMsg.key.id, sender, prefix);
             }
 
-            // Success react
             await sock.sendMessage(from, {
                 react: { text: '✅', key: message.key }
             });
@@ -212,13 +194,11 @@ export default {
     },
 
     setupReplyHandler(sock, from, messageId, authorizedSender, prefix) {
-        // Clear any existing handler for this message ID
         if (global.replyHandlers && global.replyHandlers[messageId]) {
             clearTimeout(global.replyHandlers[messageId].timeout);
             delete global.replyHandlers[messageId];
         }
 
-        // Timeout for reply handler
         const replyTimeout = setTimeout(() => {
             if (global.replyHandlers && global.replyHandlers[messageId]) {
                 delete global.replyHandlers[messageId];
@@ -234,7 +214,6 @@ export default {
             authorizedSender: authorizedSender,
             timeout: replyTimeout,
             handler: async (replyText, replyMessage) => {
-                // Check if reply is from authorized sender (like the first version)
                 const replySender = replyMessage.key.participant || replyMessage.key.remoteJid;
                 if (replySender !== authorizedSender) {
                     return;
@@ -249,7 +228,6 @@ export default {
                     return;
                 }
 
-                // Handle clear/reset in handler (like first version, for optimization)
                 if (query.toLowerCase() === 'clear' || query.toLowerCase() === 'reset') {
                     aiCache.delete(authorizedSender);
                     await sock.sendMessage(from, {
@@ -260,7 +238,6 @@ export default {
                     return;
                 }
 
-                // Handle mode setting in handler (like first version)
                 if (query.toLowerCase().startsWith('set ')) {
                     const modeInput = query.slice(4).trim().toLowerCase();
                     let mode = null;
@@ -288,19 +265,16 @@ export default {
                     }
                 }
 
-                // For regular queries, call execute as reply (no duplication)
-                const args = [query]; // Pass as single arg to preserve full query
                 await this.execute({
                     sock,
                     message: replyMessage,
-                    args,
+                    args: query.split(' '),
                     from,
                     sender: authorizedSender,
                     prefix,
                     isReply: true
                 });
 
-                // Clean up old handler after processing
                 clearTimeout(replyTimeout);
                 delete global.replyHandlers[messageId];
             }
