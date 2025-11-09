@@ -119,9 +119,9 @@ async function handleAIQuery(query, sender, from, quoted, prefix, sock, isReply 
     const userMode = aiModes.get(sender) || 'normal';
     const systemPrompt = systemPrompts[userMode];
 
-    const fullPrompt = `${systemPrompt}\n\n${conversationContext}Human: ${query}\nAssistant:`;
+    const userMessage = `${conversationContext}Human: ${query}`;
 
-    const apiUrl = `https://ab-blackboxai.abrahamdw882.workers.dev/?q=${encodeURIComponent(fullPrompt)}`;
+    const apiUrl = `https://api.mrfrankofc.gleeze.com/api/ai/gpt3?prompt=${encodeURIComponent(systemPrompt)}&content=${encodeURIComponent(userMessage)}`;
     const { data } = await axios.get(apiUrl, {
         timeout: AI_TIMEOUT,
         headers: {
@@ -129,8 +129,8 @@ async function handleAIQuery(query, sender, from, quoted, prefix, sock, isReply 
         }
     });
 
-    const aiResponse = data.content ||
-                     data.response ||
+    const aiResponse = data.response ||
+                     data.content ||
                      data.reply ||
                      data.answer ||
                      data.text ||
@@ -247,7 +247,7 @@ export default {
     name: 'ai',
     aliases: ['chat', 'gpt', 'openai', 'ask'],
     category: 'ai',
-    description: 'Chat with Blackbox AI - maintains conversation context',
+    description: 'Chat with GPT-3 AI - maintains conversation context',
     usage: 'ai <query>',
     example: 'ai What is quantum physics?\nai explain that in simple terms',
     cooldown: 3,
