@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
-import { fileTypeFromBuffer } from 'file-type';
+import fileTypeModule from 'file-type';
+const { fileTypeFromBuffer } = fileTypeModule;
 import sharp from 'sharp'; // npm install sharp file-type
 import ffmpeg from 'fluent-ffmpeg'; // npm install fluent-ffmpeg (needs FFmpeg)
 import config from '../../config.js';

@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
-import { fileTypeFromBuffer } from 'file-type';
+import fileTypeModule from 'file-type';
+const { fileTypeFromBuffer } = fileTypeModule;
 import ffmpeg from 'fluent-ffmpeg'; // npm install fluent-ffmpeg file-type (needs FFmpeg installed)
 import config from '../../config.js';
 

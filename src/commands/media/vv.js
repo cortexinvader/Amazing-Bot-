@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
-import { fileTypeFromBuffer } from 'file-type'; // npm install file-type
+import fileTypeModule from 'file-type';
+const { fileTypeFromBuffer } = fileTypeModule;
 import config from '../../config.js';
 
 const TEMP_DIR = path.join(process.cwd(), 'temp');
