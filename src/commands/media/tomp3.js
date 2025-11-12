@@ -2,8 +2,8 @@ import fs from 'fs';
 import path from 'path';
 import fileTypeModule from 'file-type';
 const { fileTypeFromBuffer } = fileTypeModule;
-import ffmpeg from 'fluent-ffmpeg'; // npm install fluent-ffmpeg file-type (needs FFmpeg)
-import { downloadContentFromMessage } from '@whiskeysockets/baileys'; // Import directly
+import ffmpeg from 'fluent-ffmpeg';
+import { downloadContentFromMessage } from '@whiskeysockets/baileys';
 import config from '../../config.js';
 
 const TEMP_DIR = path.join(process.cwd(), 'temp');
@@ -15,6 +15,14 @@ function cleanTempFile(filePath) {
     if (fs.existsSync(filePath)) {
         fs.unlinkSync(filePath);
     }
+}
+
+async function streamToBuffer(stream) {
+    let buffer = Buffer.from([]);
+    for await (const chunk of stream) {
+        buffer = Buffer.concat([buffer, chunk]);
+    }
+    return buffer;
 }
 
 async function convertToMp3(inputBuffer, fileTypeExt, isVideo = false) {
@@ -49,12 +57,12 @@ async function convertToMp3(inputBuffer, fileTypeExt, isVideo = false) {
 }
 
 export default {
-    name: 'tom p3',
-    aliases: ['mp3', 'toaudio'],
+    name: 'tomp3',
+    aliases: ['mp3', 'toaudio', 'tom p3'],
     category: 'media',
     description: 'Convert replied voice/video/audio to MP3 (extracts audio from videos)',
-    usage: 'tom p3 [reply to voice/video/audio]',
-    example: 'Reply to voice/video with tom p3',
+    usage: 'tomp3 [reply to voice/video/audio]',
+    example: 'Reply to voice/video with tomp3',
     cooldown: 5,
     permissions: ['user'],
     args: false,
@@ -73,39 +81,43 @@ export default {
         try {
             let mediaMsg = message.message;
             let isVideo = false;
+            let mediaObject = null;
 
-            // Get media from direct or quoted
             if (message.message.extendedTextMessage?.contextInfo?.quotedMessage) {
                 mediaMsg = message.message.extendedTextMessage.contextInfo.quotedMessage;
             }
 
-            const mediaKey = Object.keys(mediaMsg)[0];
-            if (!mediaKey) {
-                await sock.sendMessage(from, {
-                    text: `❌ *Error*\nReply to voice, audio, or video to convert to MP3!\n\n💡 Example: Reply with \`${prefix}tom p3\``
-                }, { quoted: message });
-                return;
-            }
-
-            const mediaType = mediaMsg[mediaKey];
-            if (mediaType.audioMessage || mediaType.voiceMessage) {
-                // Audio/voice
-            } else if (mediaType.videoMessage) {
+            if (mediaMsg.audioMessage) {
+                mediaObject = mediaMsg.audioMessage;
+            } else if (mediaMsg.voiceMessage) {
+                mediaObject = mediaMsg.voiceMessage;
+            } else if (mediaMsg.videoMessage) {
+                mediaObject = mediaMsg.videoMessage;
                 isVideo = true;
-            } else {
+            } else if (mediaMsg.documentMessage && mediaMsg.documentMessage.mimetype?.startsWith('audio/')) {
+                mediaObject = mediaMsg.documentMessage;
+            }
+
+            if (!mediaObject) {
                 await sock.sendMessage(from, {
-                    text: `❌ *Error*\nUnsupported media. Use voice, audio, or video.`
+                    text: `❌ *Error*\nReply to voice, audio, or video to convert to MP3!\n\n💡 Example: Reply with \`${prefix}tomp3\``
                 }, { quoted: message });
                 return;
             }
 
-            // React
             await sock.sendMessage(from, {
                 react: { text: '🎵', key: message.key }
             });
 
-            // Download with correct method
-            const mediaBuffer = await downloadContentFromMessage(mediaMsg, 'buffer');
+            let mediaType = 'audio';
+            if (mediaMsg.videoMessage) {
+                mediaType = 'video';
+            } else if (mediaMsg.documentMessage) {
+                mediaType = 'document';
+            }
+
+            const stream = await downloadContentFromMessage(mediaObject, mediaType);
+            const mediaBuffer = await streamToBuffer(stream);
             const fileType = await fileTypeFromBuffer(mediaBuffer);
             const supportedExts = ['ogg', 'mp3', 'm4a', 'wav', 'mp4', 'webm'];
 
@@ -116,18 +128,15 @@ export default {
                 return;
             }
 
-            // Convert
             const mp3Buffer = await convertToMp3(mediaBuffer, fileType.ext, isVideo);
 
-            // Send MP3
             await sock.sendMessage(from, {
                 audio: mp3Buffer,
                 mimetype: 'audio/mpeg',
-                ptt: false, // Normal audio
-                caption: mediaType.caption ? `MP3: ${mediaType.caption}` : 'Converted to MP3'
+                ptt: false,
+                caption: mediaObject.caption ? `MP3: ${mediaObject.caption}` : 'Converted to MP3'
             }, { quoted: message });
 
-            // Success react
             await sock.sendMessage(from, {
                 react: { text: '✅', key: message.key }
             });

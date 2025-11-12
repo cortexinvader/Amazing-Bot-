@@ -2,8 +2,9 @@ import fs from 'fs';
 import path from 'path';
 import fileTypeModule from 'file-type';
 const { fileTypeFromBuffer } = fileTypeModule;
-import sharp from 'sharp'; // npm install sharp file-type
-import ffmpeg from 'fluent-ffmpeg'; // npm install fluent-ffmpeg (needs FFmpeg)
+import sharp from 'sharp';
+import ffmpeg from 'fluent-ffmpeg';
+import { downloadContentFromMessage } from '@whiskeysockets/baileys';
 import config from '../../config.js';
 
 const TEMP_DIR = path.join(process.cwd(), 'temp');
@@ -15,6 +16,14 @@ function cleanTempFile(filePath) {
     if (fs.existsSync(filePath)) {
         fs.unlinkSync(filePath);
     }
+}
+
+async function streamToBuffer(stream) {
+    let buffer = Buffer.from([]);
+    for await (const chunk of stream) {
+        buffer = Buffer.concat([buffer, chunk]);
+    }
+    return buffer;
 }
 
 async function createImageStickerBuffer(mediaBuffer) {
@@ -75,9 +84,8 @@ export default {
         try {
             let mediaMessage = null;
             let isVideo = false;
+            let isSticker = false;
             let videoSeconds = 0;
-
-            // Check direct or quoted
             if (message.message?.imageMessage) {
                 mediaMessage = message.message.imageMessage;
             } else if (message.message?.videoMessage) {
@@ -94,8 +102,9 @@ export default {
                     videoSeconds = mediaMessage.seconds || 0;
                 } else if (quoted?.stickerMessage && quoted.stickerMessage.isAnimated) {
                     mediaMessage = quoted.stickerMessage;
-                    isVideo = true; // Treat animated sticker as video
-                    videoSeconds = 5; // Assume short
+                    isSticker = true;
+                    isVideo = true;
+                    videoSeconds = 5;
                 }
             }
 
@@ -113,13 +122,18 @@ export default {
                 return;
             }
 
-            // React
             await sock.sendMessage(from, {
                 react: { text: '✨', key: message.key }
             });
 
-            // Download with correct Baileys method
-            const mediaBuffer = await downloadContentFromMessage(mediaMessage, 'buffer');
+            let mediaType = 'image';
+            if (isSticker) {
+                mediaType = 'sticker';
+            } else if (isVideo) {
+                mediaType = 'video';
+            }
+            const stream = await downloadContentFromMessage(mediaMessage, mediaType);
+            const mediaBuffer = await streamToBuffer(stream);
 
             const fileType = await fileTypeFromBuffer(mediaBuffer);
 
