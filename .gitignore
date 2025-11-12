@@ -298,9 +298,6 @@ __tests__/fixtures/
 *.rar
 *.7z
 
-# Replit
-.replit
-.config/
+# Replit (keep these for project configuration)
 .upm/
-replit.nix
 .breakpoints

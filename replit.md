@@ -1,0 +1,164 @@
+# Ilom WhatsApp Bot - Replit Configuration
+
+## Project Overview
+
+This is a comprehensive WhatsApp bot built with Node.js, featuring AI integration, media processing, and extensive automation capabilities. The bot uses Baileys for WhatsApp Web multi-device connection.
+
+## Features
+
+- 🤖 AI-powered chat (OpenAI, Gemini, DeepSeek, Llama)
+- 📥 Media downloader (YouTube, Instagram, Facebook, TikTok, Twitter)
+- 🎮 Games (Akinator, Blackjack, Hangman, TicTacToe, etc.)
+- 💰 Economy system with currency and shop
+- 🖼️ Media processing (stickers, filters, compression, watermarks)
+- 👥 Group management and moderation
+- 📊 Analytics and statistics
+- 🌐 RESTful API with Swagger documentation
+- 🔒 Security features (anti-spam, anti-link, rate limiting)
+
+## Project Structure
+
+```
+├── src/
+│   ├── commands/       # Command modules (admin, ai, downloader, economy, fun, games, etc.)
+│   ├── events/         # Event handlers (messages, groups, connections)
+│   ├── handlers/       # Core handlers (message, command, group, media)
+│   ├── services/       # Business logic services
+│   ├── middleware/     # Express middleware (auth, rate limiting, security)
+│   ├── models/         # Database models
+│   ├── plugins/        # Feature plugins
+│   ├── utils/          # Utility functions
+│   └── api/            # REST API routes
+├── media/              # Media storage (stickers, downloads, profile)
+├── temp/               # Temporary files
+├── logs/               # Application logs
+├── cache/              # Session and cache data
+└── backups/            # Automated backups
+```
+
+## Technology Stack
+
+- **Runtime:** Node.js 20+
+- **WhatsApp Library:** @whiskeysockets/baileys
+- **Web Server:** Express.js
+- **Database:** MongoDB (cloud-hosted)
+- **Media Processing:** FFmpeg, Sharp, Jimp, Canvas
+- **AI Integration:** OpenAI, Google Gemini
+- **Cache:** Node-Cache, Redis (optional)
+
+## Configuration
+
+### Environment Variables
+
+The bot requires several environment variables configured in `.env`:
+
+**Essential:**
+- `SESSION_ID` - WhatsApp session credentials
+- `OWNER_NUMBERS` - Bot owner phone numbers (comma-separated)
+- `MONGODB_URL` - MongoDB connection string
+- `PORT` - Server port (5000 for Replit)
+- `PREFIX` - Command prefix (default: .)
+
+**Optional API Keys:**
+- `OPENAI_API_KEY` - For AI chat features
+- `GEMINI_API_KEY` - For Gemini AI integration
+- `WEATHER_API_KEY` - For weather commands
+- `NEWS_API_KEY` - For news commands
+- `YOUTUBE_API_KEY` - For YouTube search
+
+**Security:**
+- `JWT_SECRET` - JWT token secret
+- `SESSION_SECRET` - Express session secret
+- `ENCRYPTION_KEY` - Data encryption key
+
+### Replit-Specific Configuration
+
+- **Port:** The bot is configured to run on port 5000 (Replit requirement)
+- **Host:** Binds to 0.0.0.0 for external access
+- **Database:** Uses MongoDB Atlas (cloud database)
+- **Media Processing:** FFmpeg and image libraries pre-installed
+
+## Running the Bot
+
+The bot starts automatically via the configured workflow. To manually start:
+
+```bash
+npm start
+```
+
+For development with auto-reload:
+
+```bash
+npm run dev
+```
+
+## First-Time Setup
+
+1. **Get WhatsApp Session:**
+   - Run the bot for the first time
+   - Scan the QR code with your WhatsApp app
+   - Session credentials are automatically saved
+
+2. **Configure Owner Number:**
+   - Update `OWNER_NUMBERS` in `.env` with your WhatsApp number
+   - Format: country code + number (e.g., 2348180146181)
+
+3. **Database Connection:**
+   - The bot uses MongoDB for data persistence
+   - Connection string is pre-configured in `.env`
+
+## User Preferences
+
+- **Port Configuration:** Always use port 5000 for Replit compatibility
+- **Database:** MongoDB Atlas for production reliability
+- **Session Storage:** Persistent session in cache directory
+- **Media Storage:** Local file system with automatic cleanup
+
+## Recent Changes
+
+- **2025-01-12:** Migrated from Vercel to Replit
+  - Updated port configuration to 5000
+  - Installed FFmpeg and media processing dependencies
+  - Configured workflow for automatic startup
+  - Updated documentation for Replit environment
+
+## API Endpoints
+
+The bot exposes a REST API on the configured port:
+
+- `GET /` - Health check and bot info
+- `GET /api/health` - Detailed health status
+- `POST /api/messages` - Send messages
+- `GET /api/stats` - Bot statistics
+- `GET /api/docs` - Swagger API documentation
+
+## Security Notes
+
+- All sensitive data (session, credentials) are in `.env` (not committed to git)
+- API endpoints protected with rate limiting
+- Authentication middleware for protected routes
+- Input validation on all API endpoints
+
+## Troubleshooting
+
+**Bot won't connect to WhatsApp:**
+- Check SESSION_ID is properly configured
+- Verify internet connection
+- Delete cache/auth_info_baileys and scan QR again
+
+**Database connection errors:**
+- Verify MONGODB_URL is correct
+- Check MongoDB Atlas cluster is active
+- Ensure IP whitelist allows Replit connections
+
+**Media processing errors:**
+- FFmpeg is pre-installed on Replit
+- Check temp directory has write permissions
+- Verify media file size limits
+
+## Support
+
+For issues or questions:
+- Check documentation in `/docs` directory
+- Review command templates in `COMMAND_TEMPLATE.md`
+- Check logs in `/logs` directory
