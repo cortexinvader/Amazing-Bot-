@@ -1,6 +1,3 @@
-I've compared both files and identified the missing sections in the first file. Here's the complete first file with all the missing parts added:
-
-```javascript
 import { aiService } from '../services/aiService.js';
 import { commandHandler } from './commandHandler.js';
 import config from '../config.js';
