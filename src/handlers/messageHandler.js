@@ -364,19 +364,6 @@ class MessageHandler {
                 await this.handleQuotedMessage(sock, message, messageContent.quoted, user);
             }
 
-            const quotedMessageId = message.message?.extendedTextMessage?.contextInfo?.stanzaId;
-            if (quotedMessageId && global.replyHandlers && global.replyHandlers[quotedMessageId]) {
-                const replyHandler = global.replyHandlers[quotedMessageId];
-                await replyHandler.handler(messageContent.text, message);
-                return;
-            }
-
-            if (global.chatHandlers && global.chatHandlers[sender]) {
-                const chatHandler = global.chatHandlers[sender];
-                await chatHandler.handler(messageContent.text, message);
-                return;
-            }
-
             await this.handleMentions(sock, message, messageContent.text, isGroup);
 
             await handleAntiLink(sock, message);
@@ -386,6 +373,21 @@ class MessageHandler {
             const isCommand = await this.processCommand(
                 sock, message, messageContent.text, user, group, isGroup
             );
+
+            if (!isCommand) {
+                const quotedMessageId = message.message?.extendedTextMessage?.contextInfo?.stanzaId;
+                if (quotedMessageId && global.replyHandlers && global.replyHandlers[quotedMessageId]) {
+                    const replyHandler = global.replyHandlers[quotedMessageId];
+                    await replyHandler.handler(messageContent.text, message);
+                    return;
+                }
+
+                if (global.chatHandlers && global.chatHandlers[sender]) {
+                    const chatHandler = global.chatHandlers[sender];
+                    await chatHandler.handler(messageContent.text, message);
+                    return;
+                }
+            }
 
             await handleLevelUp(sock, message, isCommand);
 
