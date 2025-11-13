@@ -6,8 +6,30 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const rootDir = path.join(__dirname, '..');
 
+async function removeBaileysBranding() {
+    try {
+        const baileysIndexPath = path.join(rootDir, 'node_modules', '@whiskeysockets', 'baileys', 'lib', 'index.js');
+        
+        if (await fs.pathExists(baileysIndexPath)) {
+            let content = await fs.readFile(baileysIndexPath, 'utf8');
+            
+            const brandingRegex = /^const chalk = require\("chalk"\);[\s\S]*?console\.log\(\);/m;
+            
+            if (brandingRegex.test(content)) {
+                content = content.replace(brandingRegex, '');
+                await fs.writeFile(baileysIndexPath, content);
+                console.log('✅ Removed Baileys branding');
+            }
+        }
+    } catch (error) {
+        console.log('⚠️  Could not remove Baileys branding:', error.message);
+    }
+}
+
 async function postInstall() {
     console.log('\n🔧 Running post-install setup...\n');
+    
+    await removeBaileysBranding();
 
     const dirs = [
         'temp/downloads', 'temp/uploads', 'temp/stickers',
