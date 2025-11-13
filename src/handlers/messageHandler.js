@@ -109,21 +109,26 @@ class MessageHandler {
     }
 
     async processCommand(sock, message, text, user, group, isGroup) {
+        if (!text || text.trim() === '') return false;
+
         const from = message.key.remoteJid;
         const sender = message.key.participant || from;
         
         const prefixUsed = this.detectPrefix(text);
-        if (!prefixUsed && !this.shouldProcessNoPrefix(text, isGroup, group, sender)) {
+        const shouldProcessNoPrefix = this.shouldProcessNoPrefix(text, isGroup, group, sender);
+        
+        if (!prefixUsed && !shouldProcessNoPrefix) {
             return false;
         }
 
-        const commandText = prefixUsed ? text.slice(prefixUsed.length) : text;
-        const args = commandText.trim().split(/\s+/);
+        const commandText = prefixUsed ? text.slice(prefixUsed.length).trim() : text.trim();
+        const args = commandText.split(/\s+/);
         const commandName = args.shift()?.toLowerCase();
 
         if (!commandName) return false;
 
         const command = commandHandler.getCommand(commandName);
+        
         if (!command) {
             if (prefixUsed) {
                 await this.handleUnknownCommand(sock, message, commandName);
@@ -131,13 +136,19 @@ class MessageHandler {
             return false;
         }
 
-        logger.info(`Command executed: ${commandName} by ${user.phone || user.jid} in ${isGroup ? 'group' : 'private'}`);
+        logger.info(`Command detected: ${commandName} by ${user.phone || user.jid} in ${isGroup ? 'group' : 'private'}`);
         
-        await commandHandler.handleCommand(sock, message, commandName, args);
-        return true;
+        try {
+            await commandHandler.handleCommand(sock, message, commandName, args);
+            return true;
+        } catch (error) {
+            logger.error(`Error executing command ${commandName}:`, error);
+            return false;
+        }
     }
 
     detectPrefix(text) {
+        if (!text) return null;
         if (text.startsWith(config.prefix)) {
             return config.prefix;
         }
@@ -185,7 +196,7 @@ class MessageHandler {
     }
 
     async handleAutoReply(sock, message, text, user, isGroup) {
-        if (!this.autoReplyEnabled || isGroup) return;
+        if (!this.autoReplyEnabled || isGroup) return false;
 
         const autoReplies = cache.get('autoReplies') || {};
         const lowerText = text.toLowerCase();
@@ -201,8 +212,8 @@ class MessageHandler {
     }
 
     async handleChatBot(sock, message, text, user, isGroup) {
-        if (!this.chatBotEnabled) return;
-        if (isGroup && !text.includes('@' + sock.user.id.split(':')[0])) return;
+        if (!this.chatBotEnabled) return false;
+        if (isGroup && !text.includes('@' + sock.user.id.split(':')[0])) return false;
 
         try {
             const response = await aiService.generateResponse(text, user, isGroup);
