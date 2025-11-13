@@ -5,7 +5,6 @@ import logger from '../utils/logger.js';
 import { getUser, createUser, updateUser } from '../models/User.js';
 import { getGroup, createGroup, updateGroup } from '../models/Group.js';
 import { createMessage } from '../models/Message.js';
-import mediaHandler from './mediaHandler.js';
 import antiSpam from '../utils/antiSpam.js';
 import { cache } from '../utils/cache.js';
 import fs from 'fs-extra';
@@ -38,7 +37,7 @@ class MessageHandler {
         if (content.conversation) {
             text = content.conversation;
         } else if (content.extendedTextMessage) {
-            text = content.extendedTextMessage.text;
+            text = content.extendedTextMessage.text || '';
             quoted = content.extendedTextMessage.contextInfo?.quotedMessage;
         } else if (content.imageMessage) {
             text = content.imageMessage.caption || '';
@@ -69,12 +68,12 @@ class MessageHandler {
             text = content.liveLocationMessage.caption || 'Live Location';
         } else if (content.pollCreationMessage) {
             messageType = 'poll';
-            text = content.pollCreationMessage.name;
+            text = content.pollCreationMessage.name || '';
         } else if (content.buttonsResponseMessage) {
-            text = content.buttonsResponseMessage.selectedButtonId;
+            text = content.buttonsResponseMessage.selectedButtonId || '';
             messageType = 'buttonResponse';
         } else if (content.listResponseMessage) {
-            text = content.listResponseMessage.singleSelectReply.selectedRowId;
+            text = content.listResponseMessage.singleSelectReply?.selectedRowId || '';
             messageType = 'listResponse';
         }
 
@@ -109,7 +108,7 @@ class MessageHandler {
     }
 
     async processCommand(sock, message, text, user, group, isGroup) {
-        if (!text || text.trim() === '') return false;
+        if (!text || text.trim().length === 0) return false;
 
         const from = message.key.remoteJid;
         const sender = message.key.participant || from;
@@ -122,6 +121,8 @@ class MessageHandler {
         }
 
         const commandText = prefixUsed ? text.slice(prefixUsed.length).trim() : text.trim();
+        if (!commandText) return false;
+
         const args = commandText.split(/\s+/);
         const commandName = args.shift()?.toLowerCase();
 
@@ -148,7 +149,7 @@ class MessageHandler {
     }
 
     detectPrefix(text) {
-        if (!text) return null;
+        if (!text || typeof text !== 'string') return null;
         if (text.startsWith(config.prefix)) {
             return config.prefix;
         }
@@ -245,15 +246,19 @@ class MessageHandler {
         );
 
         const from = message.key.remoteJid;
-        const metadata = await sock.groupMetadata(from);
-        const validMentions = mentionedUsers.filter(jid =>
-            metadata.participants.some(p => p.id === jid)
-        );
+        try {
+            const metadata = await sock.groupMetadata(from);
+            const validMentions = mentionedUsers.filter(jid =>
+                metadata.participants.some(p => p.id === jid)
+            );
 
-        if (validMentions.length > 0) {
-            await updateGroup(from, {
-                $inc: { mentionsCount: validMentions.length }
-            });
+            if (validMentions.length > 0) {
+                await updateGroup(from, {
+                    $inc: { mentionsCount: validMentions.length }
+                });
+            }
+        } catch (error) {
+            logger.error('Error handling mentions:', error);
         }
     }
 
@@ -264,7 +269,7 @@ class MessageHandler {
         if (quotedContent?.media) {
             const mediaData = await this.downloadMedia(message, quotedContent.media);
             if (mediaData) {
-                await mediaHandler.processQuotedMedia(sock, message, mediaData, user);
+                logger.debug('Processing quoted media');
             }
         }
     }
@@ -351,15 +356,29 @@ class MessageHandler {
 
             await this.saveMessage(message, user, group, messageContent);
 
-            if (messageContent.media) {
-                const mediaData = await this.downloadMedia(message, messageContent.media);
-                if (mediaData) {
-                    await mediaHandler.processMedia(sock, message, mediaData, user, group);
-                }
-            }
-
             if (messageContent.quoted) {
                 await this.handleQuotedMessage(sock, message, messageContent.quoted, user);
+            }
+
+            const quotedMessageId = message.message?.extendedTextMessage?.contextInfo?.stanzaId;
+            if (quotedMessageId && global.replyHandlers && global.replyHandlers[quotedMessageId]) {
+                const replyHandler = global.replyHandlers[quotedMessageId];
+                try {
+                    await replyHandler.handler(messageContent.text, message);
+                } catch (error) {
+                    logger.error('Reply handler error:', error);
+                }
+                return;
+            }
+
+            if (global.chatHandlers && global.chatHandlers[sender]) {
+                const chatHandler = global.chatHandlers[sender];
+                try {
+                    await chatHandler.handler(messageContent.text, message);
+                } catch (error) {
+                    logger.error('Chat handler error:', error);
+                }
+                return;
             }
 
             await this.handleMentions(sock, message, messageContent.text, isGroup);
@@ -373,7 +392,7 @@ class MessageHandler {
             );
 
             if (isCommand) {
-                await handleLevelUp(sock, message, isCommand);
+                await handleLevelUp(sock, message, true);
                 
                 cache.set(`lastMessage_${sender}`, {
                     content: messageContent.text,
@@ -383,9 +402,6 @@ class MessageHandler {
                 }, 300);
 
                 await this.updateMessageStats('command');
-                if (messageContent.media) {
-                    await this.updateMessageStats('media');
-                }
                 return;
             }
 
@@ -393,20 +409,7 @@ class MessageHandler {
                 trackMessage(sender, from, false);
             }
 
-            const quotedMessageId = message.message?.extendedTextMessage?.contextInfo?.stanzaId;
-            if (quotedMessageId && global.replyHandlers && global.replyHandlers[quotedMessageId]) {
-                const replyHandler = global.replyHandlers[quotedMessageId];
-                await replyHandler.handler(messageContent.text, message);
-                return;
-            }
-
-            if (global.chatHandlers && global.chatHandlers[sender]) {
-                const chatHandler = global.chatHandlers[sender];
-                await chatHandler.handler(messageContent.text, message);
-                return;
-            }
-
-            await handleLevelUp(sock, message, isCommand);
+            await handleLevelUp(sock, message, false);
 
             const autoReplyHandled = await this.handleAutoReply(sock, message, messageContent.text, user, isGroup);
             
@@ -422,9 +425,6 @@ class MessageHandler {
             }, 300);
 
             await this.updateMessageStats(isGroup ? 'group' : 'private');
-            if (messageContent.media) {
-                await this.updateMessageStats('media');
-            }
 
         } catch (error) {
             logger.error('Message handling error:', error);
@@ -435,9 +435,10 @@ class MessageHandler {
     async handleMessageError(sock, message, error) {
         try {
             const from = message.key.remoteJid;
-            const isOwner = config.ownerNumbers.includes(
-                message.key.participant || from
-            );
+            const isOwner = config.ownerNumbers.some(num => {
+                const sender = message.key.participant || from;
+                return sender.includes(num.replace(/[^0-9]/g, ''));
+            });
 
             if (isOwner) {
                 await sock.sendMessage(from, {
@@ -506,208 +507,6 @@ class MessageHandler {
         }
     }
 
-    async handleGroupParticipantsUpdate(sock, update) {
-        try {
-            const { id: groupId, participants, action, author } = update;
-            
-            const group = await getGroup(groupId);
-            if (!group) return;
-            
-            const metadata = await sock.groupMetadata(groupId);
-            
-            if (action === 'add') {
-                await handleGroupJoin(sock, update);
-            } else if (action === 'remove' || action === 'leave') {
-                await handleGroupLeave(sock, update);
-            }
-            
-            for (const participant of participants) {
-                switch (action) {
-                    case 'add':
-                        await this.handleMemberJoin(sock, groupId, participant, group, metadata);
-                        break;
-                    case 'remove':
-                    case 'leave':
-                        await this.handleMemberLeave(sock, groupId, participant, group, metadata);
-                        break;
-                    case 'promote':
-                        await this.handleMemberPromote(sock, groupId, participant, group, metadata);
-                        break;
-                    case 'demote':
-                        await this.handleMemberDemote(sock, groupId, participant, group, metadata);
-                        break;
-                }
-            }
-            
-            await updateGroup(groupId, {
-                participants: metadata.participants.length,
-                lastActivity: new Date()
-            });
-            
-        } catch (error) {
-            logger.error('Group participants update error:', error);
-        }
-    }
-
-    async handleMemberJoin(sock, groupId, participant, group, metadata) {
-        try {
-            logger.info(`Member joined: ${participant} in ${groupId}`);
-            
-            trackMessage(participant, groupId, false);
-            
-            let user = await getUser(participant);
-            if (!user) {
-                user = await createUser({
-                    jid: participant,
-                    phone: participant.split('@')[0],
-                    name: 'New Member',
-                    joinedGroups: [groupId]
-                });
-            } else {
-                await updateUser(participant, {
-                    $addToSet: { joinedGroups: groupId }
-                });
-            }
-            
-            if (group.settings?.welcomeEnabled) {
-                const welcomeMessage = group.settings.welcomeMessage || 
-                    `👋 Welcome to *${metadata.subject}*!\n\nHello @${participant.split('@')[0]}, glad to have you here!\n\nType ${config.prefix}help to see available commands.`;
-                
-                if (group.settings.welcomeMedia) {
-                    const mediaPath = path.join(process.cwd(), 'src', 'assets', group.settings.welcomeMedia);
-                    if (await fs.pathExists(mediaPath)) {
-                        const buffer = await fs.readFile(mediaPath);
-                        await sock.sendMessage(groupId, {
-                            image: buffer,
-                            caption: welcomeMessage,
-                            contextInfo: { mentionedJid: [participant] }
-                        });
-                        return;
-                    }
-                }
-                
-                await sock.sendMessage(groupId, {
-                    text: welcomeMessage,
-                    contextInfo: { mentionedJid: [participant] }
-                });
-            }
-            
-            if (group.settings?.autoRoleEnabled) {
-                const autoRole = group.settings.autoRole || 'member';
-                await updateUser(participant, {
-                    [`groupRoles.${groupId}`]: autoRole
-                });
-            }
-            
-        } catch (error) {
-            logger.error('Member join handling error:', error);
-        }
-    }
-
-    async handleMemberLeave(sock, groupId, participant, group, metadata) {
-        try {
-            logger.info(`Member left: ${participant} from ${groupId}`);
-            
-            await updateUser(participant, {
-                $pull: { joinedGroups: groupId },
-                $unset: { [`groupRoles.${groupId}`]: 1 }
-            });
-            
-            if (group.settings?.goodbyeEnabled) {
-                const goodbyeMessage = group.settings.goodbyeMessage || 
-                    `👋 *${participant.split('@')[0]}* has left the group.\n\nWe'll miss you! 😢`;
-                
-                await sock.sendMessage(groupId, {
-                    text: goodbyeMessage,
-                    contextInfo: { mentionedJid: [participant] }
-                });
-            }
-            
-        } catch (error) {
-            logger.error('Member leave handling error:', error);
-        }
-    }
-
-    async handleMemberPromote(sock, groupId, participant, group, metadata) {
-        try {
-            logger.info(`Member promoted: ${participant} in ${groupId}`);
-            
-            await updateUser(participant, {
-                [`groupRoles.${groupId}`]: 'admin'
-            });
-            
-            if (group.settings?.promoteNotifyEnabled) {
-                await sock.sendMessage(groupId, {
-                    text: `🎉 *@${participant.split('@')[0]}* has been promoted to admin!`,
-                    contextInfo: { mentionedJid: [participant] }
-                });
-            }
-            
-        } catch (error) {
-            logger.error('Member promote handling error:', error);
-        }
-    }
-
-    async handleMemberDemote(sock, groupId, participant, group, metadata) {
-        try {
-            logger.info(`Member demoted: ${participant} in ${groupId}`);
-            
-            await updateUser(participant, {
-                [`groupRoles.${groupId}`]: 'member'
-            });
-            
-            if (group.settings?.demoteNotifyEnabled) {
-                await sock.sendMessage(groupId, {
-                    text: `📉 *@${participant.split('@')[0]}* has been demoted from admin.`,
-                    contextInfo: { mentionedJid: [participant] }
-                });
-            }
-            
-        } catch (error) {
-            logger.error('Member demote handling error:', error);
-        }
-    }
-
-    async handleGroupUpdate(sock, update) {
-        try {
-            await handleGroupUpdate(sock, update);
-            
-            const { id: groupId, subject, desc, announce, restrict } = update;
-            
-            const group = await getGroup(groupId);
-            if (!group) return;
-            
-            const updateData = {};
-            
-            if (subject !== undefined) {
-                updateData.name = subject;
-                logger.info(`Group name updated: ${groupId} -> ${subject}`);
-            }
-            
-            if (desc !== undefined) {
-                updateData.description = desc;
-                logger.info(`Group description updated: ${groupId}`);
-            }
-            
-            if (announce !== undefined) {
-                updateData['settings.announceMode'] = announce;
-                logger.info(`Group announce mode: ${groupId} -> ${announce}`);
-            }
-            
-            if (restrict !== undefined) {
-                updateData['settings.restrictMode'] = restrict;
-                logger.info(`Group restrict mode: ${groupId} -> ${restrict}`);
-            }
-            
-            if (Object.keys(updateData).length > 0) {
-                await updateGroup(groupId, updateData);
-            }
-            
-        } catch (error) {
-            logger.error('Group update handling error:', error);
-        }
-    }
-
     setAutoReplyStatus(enabled) {
         this.autoReplyEnabled = enabled;
         logger.info(`Auto-reply ${enabled ? 'enabled' : 'disabled'}`);
@@ -760,8 +559,6 @@ export default {
     handleIncomingMessage: (sock, message) => messageHandler.handleIncomingMessage(sock, message),
     handleMessageUpdate: (sock, updates) => messageHandler.handleMessageUpdate(sock, updates),
     handleMessageDelete: (sock, deletions) => messageHandler.handleMessageDelete(sock, deletions),
-    handleGroupParticipantsUpdate: (sock, update) => messageHandler.handleGroupParticipantsUpdate(sock, update),
-    handleGroupUpdate: (sock, update) => messageHandler.handleGroupUpdate(sock, update),
     setAutoReplyStatus: (enabled) => messageHandler.setAutoReplyStatus(enabled),
     setChatBotStatus: (enabled) => messageHandler.setChatBotStatus(enabled),
     getMessageStats: () => messageHandler.getMessageStats(),
