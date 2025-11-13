@@ -24,6 +24,12 @@ import mediaHandler from './src/handlers/mediaHandler.js';
 import errorHandler from './src/handlers/errorHandler.js';
 import config from './src/config.js';
 import constants from './src/constants.js';
+
+console.log(chalk.cyan('⚙️  Configuration loaded:'));
+console.log(chalk.gray(`   - Public Mode: ${chalk.bold(config.publicMode ? 'ENABLED' : 'DISABLED')}`));
+console.log(chalk.gray(`   - Prefix: ${chalk.bold(config.prefix)}`));
+console.log(chalk.gray(`   - Owner Numbers: ${chalk.bold(config.ownerNumbers.length)}`));
+console.log(chalk.gray(`   - Database: ${chalk.bold(config.database.enabled ? 'ENABLED' : 'DISABLED')}`));
 import { loadPlugins, getActiveCount } from './src/utils/pluginManager.js';
 import { startScheduler } from './src/utils/scheduler.js';
 import { initializeCache } from './src/utils/cache.js';
@@ -88,29 +94,48 @@ async function processSessionCredentials() {
 
             if (sessionId.startsWith('sypher™--')) {
                 try {
-                    const sessdata = sessionId.replace("sypher™--", "");
+                    logger.info('📥 Detected sypher™ session format, downloading from Mega.nz...');
+                    const sessdata = sessionId.replace("sypher™--", "").trim();
+                    
+                    if (!sessdata || sessdata.length < 10) {
+                        throw new Error('Invalid sypher session ID format');
+                    }
+                    
                     const filer = File.fromURL(`https://mega.nz/file/${sessdata}`);
+                    
                     await new Promise((resolve, reject) => {
+                        const timeout = setTimeout(() => {
+                            reject(new Error('Mega.nz download timeout after 30 seconds'));
+                        }, 30000);
+                        
                         filer.download((err, data) => {
+                            clearTimeout(timeout);
+                            
                             if (err) {
-                                logger.error("Failed to load creds from Mega");
+                                logger.error('❌ Failed to download from Mega.nz:', err.message);
                                 reject(err);
+                            } else if (!data || data.length === 0) {
+                                logger.error('❌ Downloaded data is empty');
+                                reject(new Error('Empty session data'));
                             } else {
-                                fs.writeFile(path.join(SESSION_PATH, 'creds.json'), data, err => {
-                                    if (err) {
-                                        logger.error("Failed to write creds from Mega");
-                                        reject(err);
+                                fs.writeFile(path.join(SESSION_PATH, 'creds.json'), data, writeErr => {
+                                    if (writeErr) {
+                                        logger.error('❌ Failed to write creds.json:', writeErr.message);
+                                        reject(writeErr);
                                     } else {
-                                        logger.success("Session downloaded from Mega.nz");
+                                        logger.info('✅ Session successfully downloaded from Mega.nz');
+                                        logger.info(`📦 Session data size: ${data.length} bytes`);
                                         resolve();
                                     }
                                 });
                             }
                         });
                     });
+                    
                     return true;
                 } catch (error) {
-                    logger.warn('⚠️ Failed to download session from Mega:', error.message);
+                    logger.warn(`⚠️ Sypher session download failed: ${error.message}`);
+                    logger.info('💡 Falling back to alternative session formats...');
                 }
             }
 
