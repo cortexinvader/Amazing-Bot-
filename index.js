@@ -24,12 +24,6 @@ import mediaHandler from './src/handlers/mediaHandler.js';
 import errorHandler from './src/handlers/errorHandler.js';
 import config from './src/config.js';
 import constants from './src/constants.js';
-
-console.log(chalk.cyan('⚙️  Configuration loaded:'));
-console.log(chalk.gray(`   - Public Mode: ${chalk.bold(config.publicMode ? 'ENABLED' : 'DISABLED')}`));
-console.log(chalk.gray(`   - Prefix: ${chalk.bold(config.prefix)}`));
-console.log(chalk.gray(`   - Owner Numbers: ${chalk.bold(config.ownerNumbers.length)}`));
-console.log(chalk.gray(`   - Database: ${chalk.bold(config.database.enabled ? 'ENABLED' : 'DISABLED')}`));
 import { loadPlugins, getActiveCount } from './src/utils/pluginManager.js';
 import { startScheduler } from './src/utils/scheduler.js';
 import { initializeCache } from './src/utils/cache.js';
@@ -317,12 +311,39 @@ async function handleConnectionEvents(sock, connectionUpdate) {
             logger.error('❌ Connection replaced, another new session opened, please close current session first');
             process.exit(0);
         } else if (statusCode === DisconnectReason.loggedOut) {
-            logger.error('❌ Device logged out, please delete session and scan again');
+            logger.error('❌ WhatsApp session expired or invalid');
+            logger.info('🗑️  Clearing old session data...');
             await fs.remove(SESSION_PATH).catch(() => {});
             await fs.ensureDir(SESSION_PATH);
             await fs.ensureDir(path.join(SESSION_PATH, 'keys'));
-            logger.info('🔄 Please restart the bot to scan QR code');
-            process.exit(0);
+            logger.info('✅ Session cleared successfully');
+            logger.info('');
+            logger.info(chalk.cyan.bold('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'));
+            logger.info(chalk.yellow.bold('  📱 WHATSAPP PAIRING REQUIRED'));
+            logger.info(chalk.cyan.bold('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'));
+            logger.info('');
+            logger.info(chalk.white('  To connect your WhatsApp bot, you have 2 options:'));
+            logger.info('');
+            logger.info(chalk.green('  Option 1: Scan QR Code'));
+            logger.info(chalk.gray('  1. Restart the bot (it will exit now)'));
+            logger.info(chalk.gray('  2. A QR code will appear in the terminal'));
+            logger.info(chalk.gray('  3. Open WhatsApp > Linked Devices > Link a Device'));
+            logger.info(chalk.gray('  4. Scan the QR code'));
+            logger.info('');
+            logger.info(chalk.green('  Option 2: Use Session ID'));
+            logger.info(chalk.gray('  1. Get a valid SESSION_ID from your WhatsApp pairing'));
+            logger.info(chalk.gray('  2. Update the SESSION_ID in your .env file'));
+            logger.info(chalk.gray('  3. Restart the bot'));
+            logger.info('');
+            logger.info(chalk.cyan('  Supported formats:'));
+            logger.info(chalk.gray('  - Ilom~ format: Ilom~base64encodeddata'));
+            logger.info(chalk.gray('  - Sypher format: sypher™--meganzfileid'));
+            logger.info(chalk.gray('  - Base64 format: direct base64 string'));
+            logger.info(chalk.gray('  - JSON format: direct JSON object'));
+            logger.info('');
+            logger.info(chalk.cyan.bold('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'));
+            logger.info('');
+            setTimeout(() => process.exit(0), 2000);
         } else if (statusCode === DisconnectReason.restartRequired) {
             logger.info('⚠️  Restart required, restarting....');
             setTimeout(establishWhatsAppConnection, 5000);
@@ -644,6 +665,13 @@ async function loadSavedSettings() {
 async function initializeBot() {
     try {
         await displayStartupBanner();
+        
+        console.log(chalk.cyan('\n⚙️  Configuration Status:'));
+        console.log(chalk.gray(`   ├─ Public Mode: ${chalk.bold(config.publicMode ? chalk.green('✓ ENABLED') : chalk.red('✗ DISABLED'))}`));
+        console.log(chalk.gray(`   ├─ Command Prefix: ${chalk.bold(chalk.yellow(config.prefix))}`));
+        console.log(chalk.gray(`   ├─ Owner Numbers: ${chalk.bold(chalk.cyan(config.ownerNumbers.length + ' configured'))}`));
+        console.log(chalk.gray(`   ├─ Database: ${chalk.bold(config.database.enabled ? chalk.green('✓ ENABLED') : chalk.red('✗ DISABLED'))}`));
+        console.log(chalk.gray(`   └─ Session ID: ${chalk.bold(process.env.SESSION_ID ? chalk.green('✓ Present') : chalk.yellow('⚠ Missing (will generate QR)'))}\n`));
 
         logger.info('Creating project directory structure...');
         await createDirectoryStructure();
