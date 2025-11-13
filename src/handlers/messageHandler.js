@@ -327,8 +327,6 @@ class MessageHandler {
 
             let group = null;
             if (isGroup) {
-                trackMessage(sender, from, false);
-
                 group = await getGroup(from);
                 if (!group) {
                     try {
@@ -374,29 +372,46 @@ class MessageHandler {
                 sock, message, messageContent.text, user, group, isGroup
             );
 
-            if (!isCommand) {
-                const quotedMessageId = message.message?.extendedTextMessage?.contextInfo?.stanzaId;
-                if (quotedMessageId && global.replyHandlers && global.replyHandlers[quotedMessageId]) {
-                    const replyHandler = global.replyHandlers[quotedMessageId];
-                    await replyHandler.handler(messageContent.text, message);
-                    return;
-                }
+            if (isCommand) {
+                await handleLevelUp(sock, message, isCommand);
+                
+                cache.set(`lastMessage_${sender}`, {
+                    content: messageContent.text,
+                    timestamp: Date.now(),
+                    messageType: messageContent.messageType,
+                    isGroup
+                }, 300);
 
-                if (global.chatHandlers && global.chatHandlers[sender]) {
-                    const chatHandler = global.chatHandlers[sender];
-                    await chatHandler.handler(messageContent.text, message);
-                    return;
+                await this.updateMessageStats('command');
+                if (messageContent.media) {
+                    await this.updateMessageStats('media');
                 }
+                return;
+            }
+
+            if (isGroup) {
+                trackMessage(sender, from, false);
+            }
+
+            const quotedMessageId = message.message?.extendedTextMessage?.contextInfo?.stanzaId;
+            if (quotedMessageId && global.replyHandlers && global.replyHandlers[quotedMessageId]) {
+                const replyHandler = global.replyHandlers[quotedMessageId];
+                await replyHandler.handler(messageContent.text, message);
+                return;
+            }
+
+            if (global.chatHandlers && global.chatHandlers[sender]) {
+                const chatHandler = global.chatHandlers[sender];
+                await chatHandler.handler(messageContent.text, message);
+                return;
             }
 
             await handleLevelUp(sock, message, isCommand);
 
-            if (!isCommand) {
-                const autoReplyHandled = await this.handleAutoReply(sock, message, messageContent.text, user, isGroup);
-                
-                if (!autoReplyHandled) {
-                    await this.handleChatBot(sock, message, messageContent.text, user, isGroup);
-                }
+            const autoReplyHandled = await this.handleAutoReply(sock, message, messageContent.text, user, isGroup);
+            
+            if (!autoReplyHandled) {
+                await this.handleChatBot(sock, message, messageContent.text, user, isGroup);
             }
 
             cache.set(`lastMessage_${sender}`, {
@@ -406,7 +421,7 @@ class MessageHandler {
                 isGroup
             }, 300);
 
-            await this.updateMessageStats(isCommand ? 'command' : (isGroup ? 'group' : 'private'));
+            await this.updateMessageStats(isGroup ? 'group' : 'private');
             if (messageContent.media) {
                 await this.updateMessageStats('media');
             }
