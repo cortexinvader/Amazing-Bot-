@@ -598,6 +598,13 @@ async function createConfigurationFiles() {
 
 async function loadSavedSettings() {
     try {
+        const mongoose = await import('mongoose');
+        
+        if (mongoose.default.connection.readyState !== 1) {
+            logger.info('⏩ Skipping settings load (database not connected)');
+            return;
+        }
+
         const prefixSetting = await Settings.findOne({ key: 'prefix' }).catch(() => null);
 
         if (prefixSetting && prefixSetting.value) {
@@ -605,7 +612,7 @@ async function loadSavedSettings() {
             logger.info(`✅ Loaded saved prefix: ${config.prefix}`);
         }
     } catch (error) {
-        logger.warn('Could not load saved settings (database may not be connected)');
+        logger.warn('Could not load saved settings:', error.message);
     }
 }
 

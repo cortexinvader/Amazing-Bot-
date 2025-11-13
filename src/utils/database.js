@@ -38,8 +38,9 @@ class DatabaseManager {
                 logger.info('🔧 Development/Replit mode: Skipping database connection');
                 this.isConnected = true;
                 this.reconnectAttempts = 0;
+                mongoose.set('bufferCommands', false);
                 logger.info('✅ Database (simulated) connected successfully');
-                return { readyState: 1 }; // Mock connection
+                return { readyState: 0, simulated: true }; // Mock connection
             }
             
             mongoose.set('strictQuery', false);
