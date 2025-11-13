@@ -109,26 +109,21 @@ class MessageHandler {
     }
 
     async processCommand(sock, message, text, user, group, isGroup) {
-        if (!text || text.trim() === '') return false;
-
         const from = message.key.remoteJid;
         const sender = message.key.participant || from;
         
         const prefixUsed = this.detectPrefix(text);
-        const shouldProcessNoPrefix = this.shouldProcessNoPrefix(text, isGroup, group, sender);
-        
-        if (!prefixUsed && !shouldProcessNoPrefix) {
+        if (!prefixUsed && !this.shouldProcessNoPrefix(text, isGroup, group, sender)) {
             return false;
         }
 
-        const commandText = prefixUsed ? text.slice(prefixUsed.length).trim() : text.trim();
-        const args = commandText.split(/\s+/);
+        const commandText = prefixUsed ? text.slice(prefixUsed.length) : text;
+        const args = commandText.trim().split(/\s+/);
         const commandName = args.shift()?.toLowerCase();
 
         if (!commandName) return false;
 
         const command = commandHandler.getCommand(commandName);
-        
         if (!command) {
             if (prefixUsed) {
                 await this.handleUnknownCommand(sock, message, commandName);
@@ -136,19 +131,13 @@ class MessageHandler {
             return false;
         }
 
-        logger.info(`Command detected: ${commandName} by ${user.phone || user.jid} in ${isGroup ? 'group' : 'private'}`);
+        logger.info(`Command executed: ${commandName} by ${user.phone || user.jid} in ${isGroup ? 'group' : 'private'}`);
         
-        try {
-            await commandHandler.handleCommand(sock, message, commandName, args);
-            return true;
-        } catch (error) {
-            logger.error(`Error executing command ${commandName}:`, error);
-            return false;
-        }
+        await commandHandler.handleCommand(sock, message, commandName, args);
+        return true;
     }
 
     detectPrefix(text) {
-        if (!text) return null;
         if (text.startsWith(config.prefix)) {
             return config.prefix;
         }
@@ -196,7 +185,7 @@ class MessageHandler {
     }
 
     async handleAutoReply(sock, message, text, user, isGroup) {
-        if (!this.autoReplyEnabled || isGroup) return false;
+        if (!this.autoReplyEnabled || isGroup) return;
 
         const autoReplies = cache.get('autoReplies') || {};
         const lowerText = text.toLowerCase();
@@ -212,8 +201,8 @@ class MessageHandler {
     }
 
     async handleChatBot(sock, message, text, user, isGroup) {
-        if (!this.chatBotEnabled) return false;
-        if (isGroup && !text.includes('@' + sock.user.id.split(':')[0])) return false;
+        if (!this.chatBotEnabled) return;
+        if (isGroup && !text.includes('@' + sock.user.id.split(':')[0])) return;
 
         try {
             const response = await aiService.generateResponse(text, user, isGroup);
@@ -389,25 +378,12 @@ class MessageHandler {
 
             await handleLevelUp(sock, message, isCommand);
 
-            if (!isCommand) {
-                const autoReplyHandled = await this.handleAutoReply(sock, message, messageContent.text, user, isGroup);
-                
-                if (!autoReplyHandled) {
-                    await this.handleChatBot(sock, message, messageContent.text, user, isGroup);
-                }
-            }
-
             cache.set(`lastMessage_${sender}`, {
                 content: messageContent.text,
                 timestamp: Date.now(),
                 messageType: messageContent.messageType,
                 isGroup
             }, 300);
-
-            await this.updateMessageStats(isCommand ? 'command' : (isGroup ? 'group' : 'private'));
-            if (messageContent.media) {
-                await this.updateMessageStats('media');
-            }
 
         } catch (error) {
             logger.error('Message handling error:', error);
@@ -491,7 +467,7 @@ class MessageHandler {
 
     async handleGroupParticipantsUpdate(sock, update) {
         try {
-            const { id: groupId, participants, action, author } = update;
+            const { id: groupId, participants, action } = update;
             
             const group = await getGroup(groupId);
             if (!group) return;
