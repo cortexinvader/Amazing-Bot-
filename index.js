@@ -15,7 +15,7 @@ const __dirname = dirname(__filename);
 
 import { connectToDatabase } from './src/utils/database.js';
 import logger from './src/utils/logger.js';
-import messageHandler from './src/handlers/messageHandler.js';
+import { messageHandler } from './src/handlers/messageHandler.js';
 import { commandHandler } from './src/handlers/commandHandler.js';
 import eventHandler from './src/handlers/eventHandler.js';
 import callHandler from './src/handlers/callHandler.js';
@@ -380,10 +380,15 @@ async function setupEventHandlers(sock, saveCreds) {
         saveCreds();
     });
 
-    sock.ev.on('messages.upsert', async ({ messages, type }) => {
+    sock.ev.on('messages.upsert', async (upsert) => {
+        const { messages, type } = upsert;
         if (type === 'notify') {
             for (const message of messages) {
-                await messageHandler.handleIncomingMessage(sock, message);
+                try {
+                    await messageHandler.handleIncomingMessage(sock, message);
+                } catch (error) {
+                    logger.error('Error processing message:', error);
+                }
             }
         }
     });
