@@ -6,30 +6,30 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const rootDir = path.join(__dirname, '..');
 
-async function removeBaileysBranding() {
+async function patchBaileysDependencies() {
     try {
         const baileysIndexPath = path.join(rootDir, 'node_modules', '@whiskeysockets', 'baileys', 'lib', 'index.js');
         
         if (await fs.pathExists(baileysIndexPath)) {
             let content = await fs.readFile(baileysIndexPath, 'utf8');
             
-            const brandingRegex = /^const chalk = require\("chalk"\);[\s\S]*?console\.log\(\);/m;
-            
-            if (brandingRegex.test(content)) {
-                content = content.replace(brandingRegex, '');
-                await fs.writeFile(baileysIndexPath, content);
-                console.log('✅ Removed Baileys branding');
+            if (!content.startsWith('const chalk = require("chalk");')) {
+                const fixedContent = 'const chalk = require("chalk");\nconst gradient = require("gradient-string");\n' + content;
+                await fs.writeFile(baileysIndexPath, fixedContent);
+                console.log('✅ Patched Baileys chalk dependencies');
+            } else {
+                console.log('✅ Baileys patch already applied');
             }
         }
     } catch (error) {
-        console.log('⚠️  Could not remove Baileys branding:', error.message);
+        console.log('⚠️  Could not patch Baileys:', error.message);
     }
 }
 
 async function postInstall() {
     console.log('\n🔧 Running post-install setup...\n');
     
-    await removeBaileysBranding();
+    await patchBaileysDependencies();
 
     const dirs = [
         'temp/downloads', 'temp/uploads', 'temp/stickers',
