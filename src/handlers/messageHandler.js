@@ -531,6 +531,20 @@ class MessageHandler {
 
     async updateMessageStats(type) {
         const stats = await this.getMessageStats();
+        
+        if (!stats || typeof stats !== 'object') {
+            logger.warn('Invalid stats object, reinitializing');
+            const newStats = {
+                totalMessages: 1,
+                commandsExecuted: type === 'command' ? 1 : 0,
+                mediaProcessed: type === 'media' ? 1 : 0,
+                groupMessages: type === 'group' ? 1 : 0,
+                privateMessages: type === 'private' ? 1 : 0
+            };
+            cache.set('messageStats', newStats, 3600);
+            return;
+        }
+        
         stats.totalMessages++;
         
         switch (type) {

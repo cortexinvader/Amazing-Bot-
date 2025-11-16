@@ -21,7 +21,7 @@ const config = {
         .map(num => num.includes('@') ? num : `${num.trim()}@s.whatsapp.net`),
 
     publicMode: process.env.PUBLIC_MODE === 'true',
-    selfMode: process.env.SELF_MODE === 'true',
+    selfMode: process.env.SELF_MODE !== 'false',
     autoOnline: process.env.AUTO_ONLINE !== 'false',
     autoRead: process.env.AUTO_READ === 'true',
     autoTyping: process.env.AUTO_TYPING === 'true',
