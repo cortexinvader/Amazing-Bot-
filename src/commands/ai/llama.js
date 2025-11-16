@@ -1,18 +1,16 @@
-import axios from 'axios';
-
 export default {
     name: 'llama2',
     aliases: ['llama'],
     category: 'ai',
-    description: 'Chat with Llama 2 AI model',
+    description: 'Chat with Llama AI (Currently Disabled)',
     usage: 'llama2 <prompt>',
     example: 'llama2 What is AI?',
     cooldown: 3,
     permissions: ['user'],
-    args: true,
+    args: false,
     minArgs: 0,
     maxArgs: Infinity,
-    typing: true,
+    typing: false,
     premium: false,
     hidden: false,
     ownerOnly: false,
@@ -22,40 +20,20 @@ export default {
     supportsButtons: false,
 
     async execute(options) {
-        const { sock, message, args, from } = options;
-        let prompt = args.join(' ').trim();
-
-        if (!prompt) {
-            return sock.sendMessage(from, { text: 'Please provide a prompt for Llama 2.' }, { quoted: message });
-        }
+        const { sock, message, from } = options;
 
         try {
-            await sock.sendMessage(from, { react: { text: '🤖', key: message.key } });
-
-            const response = await axios.get(`https://arychauhann.onrender.com/api/llama2?prompt=${encodeURIComponent(prompt)}`, {
-                timeout: 30000,
-                headers: { 'User-Agent': 'Mozilla/5.0' }
-            });
-
-            const data = response.data;
-            let aiResponse = data.result || data.response || data.text || 'No response from Llama 2.';
-
-            if (aiResponse === 'No response from Llama 2.') {
-                throw new Error('Empty response');
-            }
+            await sock.sendMessage(from, { react: { text: '⚠️', key: message.key } });
 
             await sock.sendMessage(from, {
-                text: aiResponse
+                text: '❌ *Llama AI Temporarily Disabled*\n\nThis AI service is currently unavailable.\n\nContact the bot owner for more information.'
             }, { quoted: message });
-
-            await sock.sendMessage(from, { react: { text: '✅', key: message.key } });
 
         } catch (error) {
             console.error('Llama2 error:', error);
             await sock.sendMessage(from, {
-                text: 'Error: Could not get response from Llama 2. The endpoint might be unavailable.'
+                text: 'Error: Llama AI is currently disabled.'
             }, { quoted: message });
-            await sock.sendMessage(from, { react: { text: '❌', key: message.key } });
         }
     }
 };

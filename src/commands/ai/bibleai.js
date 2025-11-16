@@ -1,18 +1,16 @@
-import axios from 'axios';
-
 export default {
     name: 'bibleai',
     aliases: ['bible', 'biblegpt'],
     category: 'ai',
-    description: 'Chat with BibleGPT AI (Bible-themed responses)',
+    description: 'Chat with BibleGPT AI (Currently Disabled)',
     usage: 'biblegpt <prompt>',
     example: 'biblegpt What does the Bible say about love?',
     cooldown: 3,
     permissions: ['user'],
-    args: true,
+    args: false,
     minArgs: 0,
     maxArgs: Infinity,
-    typing: true,
+    typing: false,
     premium: false,
     hidden: false,
     ownerOnly: false,
@@ -22,40 +20,20 @@ export default {
     supportsButtons: false,
 
     async execute(options) {
-        const { sock, message, args, from } = options;
-        let prompt = args.join(' ').trim();
-
-        if (!prompt) {
-            return sock.sendMessage(from, { text: 'Please provide a prompt for BibleGPT.' }, { quoted: message });
-        }
+        const { sock, message, from } = options;
 
         try {
-            await sock.sendMessage(from, { react: { text: '📖', key: message.key } });
-
-            const response = await axios.get(`https://arychauhann.onrender.com/api/biblegpt?prompt=${encodeURIComponent(prompt)}`, {
-                timeout: 30000,
-                headers: { 'User-Agent': 'Mozilla/5.0' }
-            });
-
-            const data = response.data;
-            let aiResponse = data.result || data.response || data.text || 'No response from BibleGPT.';
-
-            if (aiResponse === 'No response from BibleGPT.') {
-                throw new Error('Empty response');
-            }
+            await sock.sendMessage(from, { react: { text: '⚠️', key: message.key } });
 
             await sock.sendMessage(from, {
-                text: aiResponse
+                text: '❌ *BibleGPT AI Temporarily Disabled*\n\nThis AI service is currently unavailable.\n\nContact the bot owner for more information.'
             }, { quoted: message });
-
-            await sock.sendMessage(from, { react: { text: '✅', key: message.key } });
 
         } catch (error) {
             console.error('BibleGPT error:', error);
             await sock.sendMessage(from, {
-                text: 'Error: Could not get response from BibleGPT.'
+                text: 'Error: BibleGPT AI is currently disabled.'
             }, { quoted: message });
-            await sock.sendMessage(from, { react: { text: '❌', key: message.key } });
         }
     }
 };
