@@ -4,7 +4,7 @@ export default {
     category: 'general',
     description: 'Send a message directly to the bot owner',
     usage: 'callad <your message> OR reply to a message with callad',
-    example: 'callad I need help with the bot\nReply to a message: callad',
+    example: 'callad I need help with the bot',
     cooldown: 60,
     permissions: [],
 
@@ -14,7 +14,7 @@ export default {
             
             if (!config.ownerNumbers || config.ownerNumbers.length === 0) {
                 return await sock.sendMessage(from, {
-                    text: '╭──⦿【 ❌ ERROR 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: Owner contact not configured\n│\n│ 💡 Bot owner needs to set OWNER_NUMBERS\n╰────────⦿'
+                    text: '❌ Owner contact not configured\n\n💡 Bot owner needs to set OWNER_NUMBERS in environment variables.'
                 }, { quoted: message });
             }
             
@@ -23,7 +23,7 @@ export default {
             
             if (!quotedMessage && !messageText) {
                 return await sock.sendMessage(from, {
-                    text: '╭──⦿【 ℹ️ USAGE 】\n│ 𝗖𝗼𝗺𝗺𝗮𝗻𝗱: callad\n│\n│ 📝 Usage:\n│    • callad <message>\n│    • Reply to message: callad\n│\n│ 📌 Example:\n│    callad I need help with bot\n│\n╰────────⦿'
+                    text: '📞 *CALLAD - Contact Owner*\n\n📝 Usage:\n• callad <message>\n• Reply to a message with: callad\n\n📌 Example:\ncallad I need help with the bot'
                 }, { quoted: message });
             }
             
@@ -40,27 +40,13 @@ export default {
             if (isGroup) {
                 try {
                     const groupMetadata = await sock.groupMetadata(from);
-                    groupInfo = `\n│ 👥 𝗚𝗿𝗼𝘂𝗽: ${groupMetadata.subject}\n│ 🔗 𝗚𝗿𝗼𝘂𝗽 𝗜𝗗: ${from}`;
+                    groupInfo = `\n👥 Group: ${groupMetadata.subject}\n🔗 Group ID: ${from}`;
                 } catch (error) {
-                    groupInfo = `\n│ 🔗 𝗚𝗿𝗼𝘂𝗽 𝗜𝗗: ${from}`;
+                    groupInfo = `\n🔗 Group ID: ${from}`;
                 }
             }
             
-            let ownerMessage = `╭━━━━⦿【 📩 NEW MESSAGE FROM USER 】⦿━━━━╮
-│
-│ 👤 𝗙𝗿𝗼𝗺: ${senderName}
-│ 📱 𝗡𝘂𝗺𝗯𝗲𝗿: @${senderNumber}
-│ 💬 𝗖𝗵𝗮𝘁 𝗧𝘆𝗽𝗲: ${chatType}${groupInfo}
-│ 🕐 𝗧𝗶𝗺𝗲: ${timestamp}
-│
-│ ━━━━━━━━━━━━━━━━━━━━━━━━
-│
-│ 💬 𝗠𝗲𝘀𝘀𝗮𝗴𝗲:
-│ "${messageText || 'See quoted message below'}"
-│
-╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯
-
-💡 Reply to this message to respond to the user`;
+            let ownerMessage = `📩 *NEW MESSAGE FROM USER*\n\n👤 From: ${senderName}\n📱 Number: @${senderNumber}\n💬 Chat Type: ${chatType}${groupInfo}\n🕐 Time: ${timestamp}\n\n━━━━━━━━━━━━━━━━━━\n\n💬 Message:\n"${messageText || 'See quoted message below'}"\n\n💡 Reply to this message to respond to the user`;
             
             const ownerJid = config.ownerNumbers[0];
             
@@ -106,7 +92,7 @@ export default {
                 });
             }
             
-            const successMessage = `╭──⦿【 ✅ MESSAGE SENT 】\n│\n│ 📨 Your message has been sent to the bot owner\n│ ⏰ Sent at: ${timestamp}\n│\n│ 💡 The owner will respond when available\n│ 🙏 Thank you for contacting us!\n│\n╰────────────⦿`;
+            const successMessage = `✅ *MESSAGE SENT*\n\n📨 Your message has been sent to the bot owner\n⏰ Sent at: ${timestamp}\n\n💡 The owner will respond when available\n🙏 Thank you for contacting us!`;
             
             await sock.sendMessage(from, {
                 text: successMessage
@@ -124,7 +110,7 @@ export default {
             logger.error('Error in callad command:', error);
             
             await sock.sendMessage(from, {
-                text: '╭──⦿【 ❌ ERROR 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: Failed to send message\n│\n│ 💡 Please try again later\n╰────────⦿'
+                text: '❌ *ERROR*\n\nFailed to send message to owner.\n\n💡 Please try again later.'
             }, { quoted: message });
             
             await sock.sendMessage(from, {
