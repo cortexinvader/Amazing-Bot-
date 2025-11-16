@@ -1,0 +1,28 @@
+diff --git a/node_modules/@whiskeysockets/baileys/lib/index.js b/node_modules/@whiskeysockets/baileys/lib/index.js
+index 7b8606d..df4be24 100644
+--- a/node_modules/@whiskeysockets/baileys/lib/index.js
++++ b/node_modules/@whiskeysockets/baileys/lib/index.js
+@@ -2,15 +2,15 @@
+ const chalk = require('chalk');
+ console.clear();
+ console.log(chalk.blueBright(`
+-░█▀▀░█░█░█▀▄░▀▀█░█▀▀░█▀▄░█▀█
+-░▀▀█░█░█░█▀▄░▄▀░░█▀▀░█▀▄░█░█
+-░▀▀▀░▀▀▀░▀▀░░▀▀▀░▀▀▀░▀░▀░▀▀▀
++██╗██╗      ██████╗ ███╗   ███╗
++██║██║     ██╔═══██╗████╗ ████║
++██║██║     ██║   ██║██╔████╔██║
++██║██║     ██║   ██║██║╚██╔╝██║
++██║███████╗╚██████╔╝██║ ╚═╝ ██║
++╚═╝╚══════╝ ╚═════╝ ╚═╝     ╚═╝
+ 
+-WhatsApp : 263719647303
+-Telegram  : @mrfrankofc
+-
+-#Angularsockets #Subzero-MD`));
+-console.log(chalk.green('Powered By Mr Frank OFC \n'));
++#ILOM-Bot`));
++console.log(chalk.green('Powered by Raphael \n'));
+ var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+     if (k2 === undefined) k2 = k;
+     var desc = Object.getOwnPropertyDescriptor(m, k);
