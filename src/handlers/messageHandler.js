@@ -401,7 +401,11 @@ class MessageHandler {
                     isGroup
                 }, 300);
 
-                await this.updateMessageStats('command');
+                try {
+                    await this.updateMessageStats('command');
+                } catch (statsError) {
+                    logger.error('Stats update error:', statsError);
+                }
                 return;
             }
 
@@ -424,29 +428,32 @@ class MessageHandler {
                 isGroup
             }, 300);
 
-            await this.updateMessageStats(isGroup ? 'group' : 'private');
+            try {
+                await this.updateMessageStats(isGroup ? 'group' : 'private');
+            } catch (statsError) {
+                logger.error('Stats update error:', statsError);
+            }
 
         } catch (error) {
-            logger.error('Message handling error:', error);
-            await this.handleMessageError(sock, message, error);
+            logger.error('Message handling error:', {
+                error: error.message,
+                stack: error.stack,
+                from: message?.key?.remoteJid,
+                messageId: message?.key?.id
+            });
         }
     }
 
     async handleMessageError(sock, message, error) {
         try {
-            const from = message.key.remoteJid;
-            const isOwner = config.ownerNumbers.some(num => {
-                const sender = message.key.participant || from;
-                return sender.includes(num.replace(/[^0-9]/g, ''));
+            logger.error('Message processing error:', {
+                error: error.message,
+                stack: error.stack,
+                from: message?.key?.remoteJid,
+                messageId: message?.key?.id
             });
-
-            if (isOwner) {
-                await sock.sendMessage(from, {
-                    text: `⚠️ *Message Processing Error*\n\n*Error:* ${error.message}\n*Stack:* ${error.stack?.substring(0, 500)}...`
-                });
-            }
         } catch (err) {
-            logger.error('Failed to send error message:', err);
+            logger.error('Error logging failed:', err);
         }
     }
 
@@ -517,52 +524,63 @@ class MessageHandler {
         logger.info(`ChatBot ${enabled ? 'enabled' : 'disabled'}`);
     }
 
-    async getMessageStats() {
-        const stats = cache.get('messageStats') || {
+    initializeStats() {
+        const defaultStats = {
             totalMessages: 0,
             commandsExecuted: 0,
             mediaProcessed: 0,
             groupMessages: 0,
             privateMessages: 0
         };
+        cache.set('messageStats', defaultStats, 3600);
+        return defaultStats;
+    }
+
+    async getMessageStats() {
+        let stats = cache.get('messageStats');
+        
+        if (!stats || typeof stats !== 'object' || stats.totalMessages === undefined) {
+            stats = this.initializeStats();
+        }
         
         return stats;
     }
 
     async updateMessageStats(type) {
-        const stats = await this.getMessageStats();
-        
-        if (!stats || typeof stats !== 'object') {
-            logger.warn('Invalid stats object, reinitializing');
-            const newStats = {
-                totalMessages: 1,
-                commandsExecuted: type === 'command' ? 1 : 0,
-                mediaProcessed: type === 'media' ? 1 : 0,
-                groupMessages: type === 'group' ? 1 : 0,
-                privateMessages: type === 'private' ? 1 : 0
-            };
-            cache.set('messageStats', newStats, 3600);
-            return;
+        try {
+            let stats = cache.get('messageStats');
+            
+            if (!stats || typeof stats !== 'object' || stats.totalMessages === undefined) {
+                stats = {
+                    totalMessages: 0,
+                    commandsExecuted: 0,
+                    mediaProcessed: 0,
+                    groupMessages: 0,
+                    privateMessages: 0
+                };
+            }
+            
+            stats.totalMessages = (stats.totalMessages || 0) + 1;
+            
+            switch (type) {
+                case 'command':
+                    stats.commandsExecuted = (stats.commandsExecuted || 0) + 1;
+                    break;
+                case 'media':
+                    stats.mediaProcessed = (stats.mediaProcessed || 0) + 1;
+                    break;
+                case 'group':
+                    stats.groupMessages = (stats.groupMessages || 0) + 1;
+                    break;
+                case 'private':
+                    stats.privateMessages = (stats.privateMessages || 0) + 1;
+                    break;
+            }
+            
+            cache.set('messageStats', stats, 3600);
+        } catch (error) {
+            logger.error('Failed to update message stats:', error);
         }
-        
-        stats.totalMessages++;
-        
-        switch (type) {
-            case 'command':
-                stats.commandsExecuted++;
-                break;
-            case 'media':
-                stats.mediaProcessed++;
-                break;
-            case 'group':
-                stats.groupMessages++;
-                break;
-            case 'private':
-                stats.privateMessages++;
-                break;
-        }
-        
-        cache.set('messageStats', stats, 3600);
     }
 }
 
@@ -577,5 +595,6 @@ export default {
     setChatBotStatus: (enabled) => messageHandler.setChatBotStatus(enabled),
     getMessageStats: () => messageHandler.getMessageStats(),
     extractMessageContent: (message) => messageHandler.extractMessageContent(message),
-    downloadMedia: (message, media) => messageHandler.downloadMedia(message, media)
+    downloadMedia: (message, media) => messageHandler.downloadMedia(message, media),
+    initializeStats: () => messageHandler.initializeStats()
 };

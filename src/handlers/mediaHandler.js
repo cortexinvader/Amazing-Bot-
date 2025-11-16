@@ -390,31 +390,35 @@ class MessageHandler {
                 isGroup
             }, 300);
 
-            await this.updateMessageStats(isCommand ? 'command' : (isGroup ? 'group' : 'private'));
-            if (messageContent.media) {
-                await this.updateMessageStats('media');
+            try {
+                await this.updateMessageStats(isCommand ? 'command' : (isGroup ? 'group' : 'private'));
+                if (messageContent.media) {
+                    await this.updateMessageStats('media');
+                }
+            } catch (statsError) {
+                logger.error('Stats update error:', statsError);
             }
 
         } catch (error) {
-            logger.error('Message handling error:', error);
-            await this.handleMessageError(sock, message, error);
+            logger.error('Message handling error:', {
+                error: error.message,
+                stack: error.stack,
+                from: message?.key?.remoteJid,
+                messageId: message?.key?.id
+            });
         }
     }
 
     async handleMessageError(sock, message, error) {
         try {
-            const from = message.key.remoteJid;
-            const isOwner = config.ownerNumbers.includes(
-                message.key.participant || from
-            );
-
-            if (isOwner) {
-                await sock.sendMessage(from, {
-                    text: `⚠️ *Message Processing Error*\n\n*Error:* ${error.message}\n*Stack:* ${error.stack?.substring(0, 500)}...`
-                });
-            }
+            logger.error('Message processing error:', {
+                error: error.message,
+                stack: error.stack,
+                from: message?.key?.remoteJid,
+                messageId: message?.key?.id
+            });
         } catch (err) {
-            logger.error('Failed to send error message:', err);
+            logger.error('Error logging failed:', err);
         }
     }
 
@@ -498,25 +502,40 @@ class MessageHandler {
     }
 
     async updateMessageStats(type) {
-        const stats = await this.getMessageStats();
-        stats.totalMessages++;
-        
-        switch (type) {
-            case 'command':
-                stats.commandsExecuted++;
-                break;
-            case 'media':
-                stats.mediaProcessed++;
-                break;
-            case 'group':
-                stats.groupMessages++;
-                break;
-            case 'private':
-                stats.privateMessages++;
-                break;
+        try {
+            let stats = cache.get('messageStats');
+            
+            if (!stats || typeof stats !== 'object' || stats.totalMessages === undefined) {
+                stats = {
+                    totalMessages: 0,
+                    commandsExecuted: 0,
+                    mediaProcessed: 0,
+                    groupMessages: 0,
+                    privateMessages: 0
+                };
+            }
+            
+            stats.totalMessages = (stats.totalMessages || 0) + 1;
+            
+            switch (type) {
+                case 'command':
+                    stats.commandsExecuted = (stats.commandsExecuted || 0) + 1;
+                    break;
+                case 'media':
+                    stats.mediaProcessed = (stats.mediaProcessed || 0) + 1;
+                    break;
+                case 'group':
+                    stats.groupMessages = (stats.groupMessages || 0) + 1;
+                    break;
+                case 'private':
+                    stats.privateMessages = (stats.privateMessages || 0) + 1;
+                    break;
+            }
+            
+            cache.set('messageStats', stats, 3600);
+        } catch (error) {
+            logger.error('Failed to update message stats:', error);
         }
-        
-        cache.set('messageStats', stats, 3600);
     }
 }
 
