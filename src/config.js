@@ -21,7 +21,7 @@ const config = {
         .map(num => num.includes('@') ? num : `${num.trim()}@s.whatsapp.net`),
 
     publicMode: process.env.PUBLIC_MODE === 'true',
-    selfMode: process.env.SELF_MODE !== 'false',
+    selfMode: process.env.SELF_MODE !== 'true',
     autoOnline: process.env.AUTO_ONLINE !== 'false',
     autoRead: process.env.AUTO_READ === 'true',
     autoTyping: process.env.AUTO_TYPING === 'true',
@@ -73,7 +73,7 @@ const config = {
 
     features: {
         autoReply: process.env.AUTO_REPLY_ENABLED === 'true',
-        chatBot: process.env.CHAT_BOT_ENABLED === 'true',
+        chatBot: process.env.CHAT_BOT_ENABLED === 'false',
         antiSpam: process.env.ANTI_SPAM_ENABLED !== 'false',
         antiLink: process.env.ANTI_LINK_ENABLED === 'true',
         welcome: process.env.WELCOME_ENABLED === 'true',
