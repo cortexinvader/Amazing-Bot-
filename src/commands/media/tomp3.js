@@ -3,7 +3,6 @@ import path from 'path';
 import fileTypeModule from 'file-type';
 const { fileTypeFromBuffer } = fileTypeModule;
 import ffmpeg from 'fluent-ffmpeg';
-import { downloadContentFromMessage } from '@whiskeysockets/baileys';
 import config from '../../config.js';
 
 const TEMP_DIR = path.join(process.cwd(), 'temp');
@@ -116,6 +115,7 @@ export default {
                 mediaType = 'document';
             }
 
+            const { downloadContentFromMessage } = await import('@whiskeysockets/baileys');
             const stream = await downloadContentFromMessage(mediaObject, mediaType);
             const mediaBuffer = await streamToBuffer(stream);
             const fileType = await fileTypeFromBuffer(mediaBuffer);

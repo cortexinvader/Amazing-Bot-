@@ -4,7 +4,6 @@ import fileTypeModule from 'file-type';
 const { fileTypeFromBuffer } = fileTypeModule;
 import sharp from 'sharp';
 import ffmpeg from 'fluent-ffmpeg';
-import { downloadContentFromMessage } from '@whiskeysockets/baileys';
 import config from '../../config.js';
 
 const TEMP_DIR = path.join(process.cwd(), 'temp');
@@ -132,6 +131,7 @@ export default {
             } else if (isVideo) {
                 mediaType = 'video';
             }
+            const { downloadContentFromMessage } = await import('@whiskeysockets/baileys');
             const stream = await downloadContentFromMessage(mediaMessage, mediaType);
             const mediaBuffer = await streamToBuffer(stream);
 

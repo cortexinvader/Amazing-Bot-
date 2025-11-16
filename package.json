@@ -51,7 +51,7 @@
     "dev": "nodemon index.js",
     "test": "jest --coverage",
     "build": "npm install",
-    "postinstall": "(patch-package || true) && node scripts/postinstall.js",
+    "postinstall": "node scripts/postinstall.js",
     "setup": "bash scripts/install.sh",
     "cleanup": "node scripts/cleanup.js",
     "backup": "bash scripts/backup.sh",

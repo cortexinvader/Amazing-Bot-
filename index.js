@@ -69,7 +69,8 @@ async function displayStartupBanner() {
 
     const gradient = (await import('gradient-string')).default;
     console.log(gradient.rainbow(banner));
-    console.log(chalk.cyan.bold('\n🧠 Amazing Bot 🧠 v1 created by Ilom\n'));
+    console.log(chalk.cyan.bold('\n🧠 Amazing Bot 🧠 v1 created by Ilom'));
+    console.log(chalk.green.bold('Powered by Raphael\n'));
     console.log(chalk.yellow('═'.repeat(65)));
     console.log(chalk.green('🚀 Initializing Ilom WhatsApp Bot System...'));
     console.log(chalk.yellow('═'.repeat(65)));
@@ -251,8 +252,20 @@ async function sendBotStatusUpdate(sock) {
 }
 
 async function handleConnectionEvents(sock, connectionUpdate) {
+    const originalLog = console.log;
+    const originalClear = console.clear;
+    const originalWrite = process.stdout.write;
+    
+    console.log = () => {};
+    console.clear = () => {};
+    process.stdout.write = () => {};
+    
     const baileys = await import('@whiskeysockets/baileys');
     const { DisconnectReason } = baileys;
+    
+    console.log = originalLog;
+    console.clear = originalClear;
+    process.stdout.write = originalWrite;
     const { connection, lastDisconnect, qr, receivedPendingNotifications } = connectionUpdate;
 
     if (qr) {
@@ -440,7 +453,20 @@ async function setupEventHandlers(sock, saveCreds) {
 async function establishWhatsAppConnection() {
     try {
         logger.info('📡 Initializing WhatsApp connection...');
+        
+        const originalLog = console.log;
+        const originalClear = console.clear;
+        const originalWrite = process.stdout.write;
+        
+        console.log = () => {};
+        console.clear = () => {};
+        process.stdout.write = () => {};
+        
         const { makeWASocket, Browsers, useMultiFileAuthState, fetchLatestBaileysVersion, makeCacheableSignalKeyStore } = await import('@whiskeysockets/baileys');
+        
+        console.log = originalLog;
+        console.clear = originalClear;
+        process.stdout.write = originalWrite;
 
         logger.info('🔑 Loading authentication state...');
         const { state, saveCreds } = await useMultiFileAuthState(SESSION_PATH);
