@@ -26,8 +26,53 @@ class MessageHandler {
     }
 
     extractMessageContent(message) {
-        const content = message.message;
+        let content = message.message;
         if (!content) return null;
+
+        const wrapperKeys = [
+            'ephemeralMessage',
+            'viewOnceMessage',
+            'viewOnceMessageV2',
+            'viewOnceMessageV2Extension',
+            'deviceSentMessage',
+            'documentWithCaptionMessage',
+            'protocolMessage',
+            'buttonsMessage',
+            'templateMessage',
+            'interactiveResponseMessage'
+        ];
+
+        let unwrapCount = 0;
+        const maxUnwraps = 15;
+        const unwrapPath = [];
+
+        while (unwrapCount < maxUnwraps && content) {
+            let unwrapped = false;
+            
+            for (const wrapper of wrapperKeys) {
+                if (content[wrapper]?.message) {
+                    unwrapPath.push(wrapper);
+                    content = content[wrapper].message;
+                    unwrapped = true;
+                    unwrapCount++;
+                    break;
+                }
+            }
+            
+            if (!unwrapped && content.message && typeof content.message === 'object') {
+                unwrapPath.push('message');
+                content = content.message;
+                unwrapped = true;
+                unwrapCount++;
+            }
+            
+            if (!unwrapped) break;
+        }
+
+        if (!content) {
+            logger.debug('Message unwrapping resulted in null content', { unwrapPath });
+            return null;
+        }
 
         let text = '';
         let messageType = 'text';
@@ -75,6 +120,15 @@ class MessageHandler {
         } else if (content.listResponseMessage) {
             text = content.listResponseMessage.singleSelectReply?.selectedRowId || '';
             messageType = 'listResponse';
+        }
+
+        if (!text && messageType === 'text') {
+            logger.debug('No text extracted from message', { 
+                contentKeys: Object.keys(content),
+                unwrapCount,
+                unwrapPath,
+                sampleContent: JSON.stringify(content).substring(0, 200)
+            });
         }
 
         return { text: text.trim(), messageType, media, quoted };
