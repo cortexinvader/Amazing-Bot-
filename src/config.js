@@ -72,8 +72,8 @@ const config = {
     },
 
     features: {
-        autoReply: process.env.AUTO_REPLY_ENABLED === 'true',
-        chatBot: process.env.CHAT_BOT_ENABLED === 'false',
+        autoReply: process.env.AUTO_REPLY_ENABLED === 'false',
+        chatBot: process.env.CHAT_BOT_ENABLED === 'true',
         antiSpam: process.env.ANTI_SPAM_ENABLED !== 'false',
         antiLink: process.env.ANTI_LINK_ENABLED === 'true',
         welcome: process.env.WELCOME_ENABLED === 'true',
