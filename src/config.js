@@ -10,6 +10,8 @@ const config = {
 
     prefix: process.env.PREFIX || '.',
     ownerNoPrefix: process.env.OWNER_NO_PREFIX === 'true',
+    noPrefixEnabled: process.env.NO_PREFIX_ENABLED === 'true',
+    privateNoPrefixEnabled: process.env.PRIVATE_NO_PREFIX_ENABLED === 'true',
 
     ownerNumbers: (process.env.OWNER_NUMBERS || 'YOUR_PHONE_NUMBER').split(',').map(num => 
         num.includes('@') ? num : `${num.trim()}@s.whatsapp.net`
@@ -21,7 +23,7 @@ const config = {
         .map(num => num.includes('@') ? num : `${num.trim()}@s.whatsapp.net`),
 
     publicMode: process.env.PUBLIC_MODE === 'true',
-    selfMode: process.env.SELF_MODE !== 'true',
+    selfMode: process.env.SELF_MODE === 'true',
     autoOnline: process.env.AUTO_ONLINE !== 'false',
     autoRead: process.env.AUTO_READ === 'true',
     autoTyping: process.env.AUTO_TYPING === 'true',
