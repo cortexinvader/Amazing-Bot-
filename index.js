@@ -761,4 +761,10 @@ async function initializeBot() {
     }
 }
 
-initializeBot();
+initializeBot().then(() => {
+    logger.info('✨ Bot is now running continuously...');
+    return new Promise(() => {});
+}).catch(error => {
+    logger.error('Fatal error:', error);
+    process.exit(1);
+});
