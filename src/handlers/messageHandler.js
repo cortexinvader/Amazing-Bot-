@@ -12,9 +12,6 @@ import path from 'path';
 import handleAutoReaction from '../events/autoReaction.js';
 import handleAntiLink from '../plugins/antiLink.js';
 import handleLevelUp from '../events/levelUp.js';
-import handleGroupJoin from '../events/groupJoin.js';
-import handleGroupLeave from '../events/groupLeave.js';
-import handleGroupUpdate from '../events/groupUpdate.js';
 import { trackMessage } from '../commands/utility/profile.js';
 
 class MessageHandler {
@@ -26,32 +23,26 @@ class MessageHandler {
     }
 
     extractMessageContent(message) {
-        let content = message.message;
-        if (!content) return null;
+        if (!message || !message.message) return null;
 
+        let content = message.message;
         const wrapperKeys = [
             'ephemeralMessage',
             'viewOnceMessage',
             'viewOnceMessageV2',
             'viewOnceMessageV2Extension',
             'deviceSentMessage',
-            'documentWithCaptionMessage',
-            'protocolMessage',
-            'buttonsMessage',
-            'templateMessage',
-            'interactiveResponseMessage'
+            'documentWithCaptionMessage'
         ];
 
         let unwrapCount = 0;
-        const maxUnwraps = 15;
-        const unwrapPath = [];
+        const maxUnwraps = 10;
 
-        while (unwrapCount < maxUnwraps && content) {
+        while (unwrapCount < maxUnwraps) {
             let unwrapped = false;
             
             for (const wrapper of wrapperKeys) {
                 if (content[wrapper]?.message) {
-                    unwrapPath.push(wrapper);
                     content = content[wrapper].message;
                     unwrapped = true;
                     unwrapCount++;
@@ -59,19 +50,7 @@ class MessageHandler {
                 }
             }
             
-            if (!unwrapped && content.message && typeof content.message === 'object') {
-                unwrapPath.push('message');
-                content = content.message;
-                unwrapped = true;
-                unwrapCount++;
-            }
-            
             if (!unwrapped) break;
-        }
-
-        if (!content) {
-            logger.debug('Message unwrapping resulted in null content', { unwrapPath });
-            return null;
         }
 
         let text = '';
@@ -120,15 +99,9 @@ class MessageHandler {
         } else if (content.listResponseMessage) {
             text = content.listResponseMessage.singleSelectReply?.selectedRowId || '';
             messageType = 'listResponse';
-        }
-
-        if (!text && messageType === 'text') {
-            logger.debug('No text extracted from message', { 
-                contentKeys: Object.keys(content),
-                unwrapCount,
-                unwrapPath,
-                sampleContent: JSON.stringify(content).substring(0, 200)
-            });
+        } else if (content.templateButtonReplyMessage) {
+            text = content.templateButtonReplyMessage.selectedId || '';
+            messageType = 'templateButtonReply';
         }
 
         return { text: text.trim(), messageType, media, quoted };
@@ -162,7 +135,9 @@ class MessageHandler {
     }
 
     async processCommand(sock, message, text, user, group, isGroup) {
-        if (!text || text.trim().length === 0) return false;
+        if (!text || typeof text !== 'string' || text.trim().length === 0) {
+            return false;
+        }
 
         const from = message.key.remoteJid;
         const sender = message.key.participant || from;
@@ -175,12 +150,16 @@ class MessageHandler {
         }
 
         const commandText = prefixUsed ? text.slice(prefixUsed.length).trim() : text.trim();
-        if (!commandText) return false;
+        if (!commandText || commandText.length === 0) {
+            return false;
+        }
 
         const args = commandText.split(/\s+/);
         const commandName = args.shift()?.toLowerCase();
 
-        if (!commandName) return false;
+        if (!commandName || commandName.length === 0) {
+            return false;
+        }
 
         const command = commandHandler.getCommand(commandName);
         
@@ -191,13 +170,13 @@ class MessageHandler {
             return false;
         }
 
-        logger.info(`Command detected: ${commandName} by ${user.phone || user.jid} in ${isGroup ? 'group' : 'private'}`);
+        logger.info(`Command: ${commandName} | User: ${user.phone || sender.split('@')[0]} | Chat: ${isGroup ? 'group' : 'private'}`);
         
         try {
             await commandHandler.handleCommand(sock, message, commandName, args);
             return true;
         } catch (error) {
-            logger.error(`Error executing command ${commandName}:`, error);
+            logger.error(`Command execution error [${commandName}]:`, error);
             return false;
         }
     }
@@ -244,7 +223,7 @@ class MessageHandler {
         response += `│ 📚 𝗧𝗶𝗽: Type ${config.prefix}help for all commands\n`;
         response += `╰────────⦿\n\n`;
         response += `╭─────────────⦿\n`;
-        response += `│💫 | [ Ilom Bot 🍀 ]\n`;
+        response += `│💫 | [ ${config.botName} 🍀 ]\n`;
         response += `╰────────────⦿`;
         
         await sock.sendMessage(from, { text: response }, { quoted: message });
@@ -268,7 +247,7 @@ class MessageHandler {
 
     async handleChatBot(sock, message, text, user, isGroup) {
         if (!this.chatBotEnabled) return false;
-        if (isGroup && !text.includes('@' + sock.user.id.split(':')[0])) return false;
+        if (isGroup && sock.user && !text.includes('@' + sock.user.id.split(':')[0])) return false;
 
         try {
             const response = await aiService.generateResponse(text, user, isGroup);
@@ -323,7 +302,7 @@ class MessageHandler {
         if (quotedContent?.media) {
             const mediaData = await this.downloadMedia(message, quotedContent.media);
             if (mediaData) {
-                logger.debug('Processing quoted media');
+                logger.debug('Quoted media processed');
             }
         }
     }
@@ -354,11 +333,14 @@ class MessageHandler {
 
     async handleIncomingMessage(sock, message) {
         try {
+            if (!message || !message.key) return;
+            
             const selfListeningEnabled = config.selfMode || false;
-            if (!message) return;
             if (message.key.fromMe && !selfListeningEnabled) return;
             
             const from = message.key.remoteJid;
+            if (!from || from === 'status@broadcast') return;
+
             const sender = message.key.participant || from;
             const isGroup = from.endsWith('@g.us');
             
@@ -372,7 +354,7 @@ class MessageHandler {
             if (!user) {
                 user = await createUser({
                     jid: sender,
-                    phone: sender.split('@')[0],
+                    phone: sender.split('@')[0].replace(/:\d+$/, ''),
                     name: message.pushName || 'Unknown',
                     isGroup: false
                 });
@@ -455,11 +437,7 @@ class MessageHandler {
                     isGroup
                 }, 300);
 
-                try {
-                    await this.updateMessageStats('command');
-                } catch (statsError) {
-                    logger.error('Stats update error:', statsError);
-                }
+                await this.updateMessageStats('command');
                 return;
             }
 
@@ -482,11 +460,7 @@ class MessageHandler {
                 isGroup
             }, 300);
 
-            try {
-                await this.updateMessageStats(isGroup ? 'group' : 'private');
-            } catch (statsError) {
-                logger.error('Stats update error:', statsError);
-            }
+            await this.updateMessageStats(isGroup ? 'group' : 'private');
 
         } catch (error) {
             logger.error('Message handling error:', {
@@ -495,19 +469,6 @@ class MessageHandler {
                 from: message?.key?.remoteJid,
                 messageId: message?.key?.id
             });
-        }
-    }
-
-    async handleMessageError(sock, message, error) {
-        try {
-            logger.error('Message processing error:', {
-                error: error.message,
-                stack: error.stack,
-                from: message?.key?.remoteJid,
-                messageId: message?.key?.id
-            });
-        } catch (err) {
-            logger.error('Error logging failed:', err);
         }
     }
 
@@ -578,23 +539,18 @@ class MessageHandler {
         logger.info(`ChatBot ${enabled ? 'enabled' : 'disabled'}`);
     }
 
-    initializeStats() {
-        const defaultStats = {
-            totalMessages: 0,
-            commandsExecuted: 0,
-            mediaProcessed: 0,
-            groupMessages: 0,
-            privateMessages: 0
-        };
-        cache.set('messageStats', defaultStats, 3600);
-        return defaultStats;
-    }
-
     async getMessageStats() {
         let stats = cache.get('messageStats');
         
-        if (!stats || typeof stats !== 'object' || stats.totalMessages === undefined) {
-            stats = this.initializeStats();
+        if (!stats || typeof stats !== 'object') {
+            stats = {
+                totalMessages: 0,
+                commandsExecuted: 0,
+                mediaProcessed: 0,
+                groupMessages: 0,
+                privateMessages: 0
+            };
+            cache.set('messageStats', stats, 3600);
         }
         
         return stats;
@@ -602,17 +558,7 @@ class MessageHandler {
 
     async updateMessageStats(type) {
         try {
-            let stats = cache.get('messageStats');
-            
-            if (!stats || typeof stats !== 'object' || stats.totalMessages === undefined) {
-                stats = {
-                    totalMessages: 0,
-                    commandsExecuted: 0,
-                    mediaProcessed: 0,
-                    groupMessages: 0,
-                    privateMessages: 0
-                };
-            }
+            let stats = await this.getMessageStats();
             
             stats.totalMessages = (stats.totalMessages || 0) + 1;
             
@@ -649,6 +595,5 @@ export default {
     setChatBotStatus: (enabled) => messageHandler.setChatBotStatus(enabled),
     getMessageStats: () => messageHandler.getMessageStats(),
     extractMessageContent: (message) => messageHandler.extractMessageContent(message),
-    downloadMedia: (message, media) => messageHandler.downloadMedia(message, media),
-    initializeStats: () => messageHandler.initializeStats()
+    downloadMedia: (message, media) => messageHandler.downloadMedia(message, media)
 };
