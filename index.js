@@ -393,9 +393,12 @@ async function setupEventHandlers(sock, saveCreds) {
         saveCreds();
     });
 
+    console.log('✅ Setting up messages.upsert event handler...');
     sock.ev.on('messages.upsert', async (upsert) => {
+        console.log(`🔔 messages.upsert EVENT FIRED | Type: ${upsert.type} | Messages: ${upsert.messages?.length || 0}`);
         const { messages, type } = upsert;
         if (type === 'notify') {
+            console.log(`📬 Processing ${messages.length} notify message(s)...`);
             for (const message of messages) {
                 try {
                     await messageHandler.handleIncomingMessage(sock, message);
@@ -403,6 +406,8 @@ async function setupEventHandlers(sock, saveCreds) {
                     logger.error('Error processing message:', error);
                 }
             }
+        } else {
+            console.log(`⏭️  Skipping message type: ${type}`);
         }
     });
 
