@@ -9,6 +9,11 @@ class CallHandler {
     }
 
     async handleIncomingCall(sock, callEvents) {
+        if (!config.events.callAutoReject) {
+            logger.debug('Call auto-reject is disabled in config');
+            return;
+        }
+
         for (const call of callEvents) {
             try {
                 const { from, id, status, isVideo, isGroup } = call;
@@ -26,7 +31,7 @@ class CallHandler {
                     continue;
                 }
                 
-                if (this.autoReject) {
+                if (this.autoReject && config.events.callAutoReject) {
                     await sock.rejectCall(id, from);
                     
                     const rejectMessage = `╭──⦿【 📞 CALL REJECTED 】

@@ -468,16 +468,20 @@ class MessageHandler {
 
             await this.handleMentions(sock, message, messageContent.text, isGroup);
 
-            try {
-                await handleAntiLink(sock, message);
-            } catch (error) {
-                logger.error('Anti-link error:', error);
+            if (config.features.antiLink) {
+                try {
+                    await handleAntiLink(sock, message);
+                } catch (error) {
+                    logger.error('Anti-link error:', error);
+                }
             }
             
-            try {
-                await handleAutoReaction(sock, message);
-            } catch (error) {
-                logger.error('Auto-reaction error:', error);
+            if (config.events.autoReaction) {
+                try {
+                    await handleAutoReaction(sock, message);
+                } catch (error) {
+                    logger.error('Auto-reaction error:', error);
+                }
             }
 
             const isCommand = await this.processCommand(
@@ -487,10 +491,12 @@ class MessageHandler {
             if (isCommand) {
                 console.log(`✅ COMMAND EXECUTED`);
                 logger.debug(`Command processed successfully`);
-                try {
-                    await handleLevelUp(sock, message, true);
-                } catch (error) {
-                    logger.error('Level up error:', error);
+                if (config.events.levelUp) {
+                    try {
+                        await handleLevelUp(sock, message, true);
+                    } catch (error) {
+                        logger.error('Level up error:', error);
+                    }
                 }
                 
                 cache.set(`lastMessage_${sender}`, {
@@ -512,10 +518,12 @@ class MessageHandler {
                 }
             }
 
-            try {
-                await handleLevelUp(sock, message, false);
-            } catch (error) {
-                logger.error('Level up error:', error);
+            if (config.events.levelUp) {
+                try {
+                    await handleLevelUp(sock, message, false);
+                } catch (error) {
+                    logger.error('Level up error:', error);
+                }
             }
 
             const autoReplyHandled = await this.handleAutoReply(sock, message, messageContent.text, user, isGroup);
@@ -582,16 +590,18 @@ class MessageHandler {
                         logger.error('Track delete error:', error);
                     }
 
-                    const group = await getGroup(remoteJid);
-                    if (group?.settings?.antiDelete) {
-                        const cachedMessage = cache.get(`message_${id}`);
-                        if (cachedMessage) {
-                            await sock.sendMessage(remoteJid, {
-                                text: `🗑️ *Anti-Delete*\n\n*Deleted by:* @${deletedBy.split('@')[0]}\n*Content:* ${cachedMessage.content}\n*Time:* ${new Date(cachedMessage.timestamp).toLocaleString()}`,
-                                contextInfo: {
-                                    mentionedJid: [deletedBy]
-                                }
-                            });
+                    if (config.features.antiDelete) {
+                        const group = await getGroup(remoteJid);
+                        if (group?.settings?.antiDelete) {
+                            const cachedMessage = cache.get(`message_${id}`);
+                            if (cachedMessage) {
+                                await sock.sendMessage(remoteJid, {
+                                    text: `🗑️ *Anti-Delete*\n\n*Deleted by:* @${deletedBy.split('@')[0]}\n*Content:* ${cachedMessage.content}\n*Time:* ${new Date(cachedMessage.timestamp).toLocaleString()}`,
+                                    contextInfo: {
+                                        mentionedJid: [deletedBy]
+                                    }
+                                });
+                            }
                         }
                     }
                 }

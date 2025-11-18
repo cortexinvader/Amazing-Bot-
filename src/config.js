@@ -74,15 +74,15 @@ const config = {
     },
 
     features: {
-        autoReply: process.env.AUTO_REPLY_ENABLED === 'false',
+        autoReply: process.env.AUTO_REPLY_ENABLED !== 'false',
         chatBot: process.env.CHAT_BOT_ENABLED === 'true',
         antiSpam: process.env.ANTI_SPAM_ENABLED !== 'false',
-        antiLink: process.env.ANTI_LINK_ENABLED === 'true',
-        welcome: process.env.WELCOME_ENABLED === 'true',
-        goodbye: process.env.GOODBYE_ENABLED === 'true',
+        antiLink: process.env.ANTI_LINK_ENABLED !== 'false',
+        welcome: process.env.WELCOME_ENABLED !== 'false',
+        goodbye: process.env.GOODBYE_ENABLED !== 'false',
         autoSticker: process.env.AUTO_STICKER_ENABLED === 'true',
         autoRead: process.env.AUTO_READ_ENABLED === 'true',
-        antiDelete: process.env.ANTI_DELETE_ENABLED === 'true',
+        antiDelete: process.env.ANTI_DELETE_ENABLED !== 'false',
         backup: process.env.AUTO_BACKUP_ENABLED === 'true'
     },
 

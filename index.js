@@ -412,17 +412,23 @@ async function setupEventHandlers(sock, saveCreds) {
     });
 
     sock.ev.on('messages.update', async (messageUpdates) => {
-        await messageHandler.handleMessageUpdate(sock, messageUpdates);
+        if (config.events.messageUpdate) {
+            await messageHandler.handleMessageUpdate(sock, messageUpdates);
+        }
     });
 
     sock.ev.on('messages.delete', async (deletedMessages) => {
-        await messageHandler.handleMessageDelete(sock, deletedMessages);
+        if (config.events.messageDelete) {
+            await messageHandler.handleMessageDelete(sock, deletedMessages);
+        }
     });
 
     sock.ev.on('messages.reaction', async (reactions) => {
-        const handleReaction = (await import('./src/events/messageReaction.js')).default;
-        for (const reaction of reactions) {
-            await handleReaction(sock, reaction);
+        if (config.events.messageReaction) {
+            const handleReaction = (await import('./src/events/messageReaction.js')).default;
+            for (const reaction of reactions) {
+                await handleReaction(sock, reaction);
+            }
         }
     });
 
@@ -447,10 +453,12 @@ async function setupEventHandlers(sock, saveCreds) {
     });
 
     sock.ev.on('contacts.update', async (contactUpdates) => {
-        try {
-            await eventHandler.handleContactUpdate(sock, contactUpdates);
-        } catch (error) {
-            logger.error('Contact update error:', error);
+        if (config.events.contactUpdate) {
+            try {
+                await eventHandler.handleContactUpdate(sock, contactUpdates);
+            } catch (error) {
+                logger.error('Contact update error:', error);
+            }
         }
     });
 }
