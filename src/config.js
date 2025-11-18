@@ -86,6 +86,21 @@ const config = {
         backup: process.env.AUTO_BACKUP_ENABLED === 'true'
     },
 
+    events: {
+        callAutoReject: process.env.EVENT_CALL_AUTO_REJECT !== 'false',
+        groupJoin: process.env.EVENT_GROUP_JOIN !== 'false',
+        groupLeave: process.env.EVENT_GROUP_LEAVE !== 'false',
+        groupUpdate: process.env.EVENT_GROUP_UPDATE !== 'false',
+        groupPromote: process.env.EVENT_GROUP_PROMOTE !== 'false',
+        groupDemote: process.env.EVENT_GROUP_DEMOTE !== 'false',
+        messageReaction: process.env.EVENT_MESSAGE_REACTION !== 'false',
+        autoReaction: process.env.EVENT_AUTO_REACTION === 'true',
+        levelUp: process.env.EVENT_LEVEL_UP !== 'false',
+        contactUpdate: process.env.EVENT_CONTACT_UPDATE === 'true',
+        messageUpdate: process.env.EVENT_MESSAGE_UPDATE !== 'false',
+        messageDelete: process.env.EVENT_MESSAGE_DELETE !== 'false'
+    },
+
     limits: {
         messageLength: parseInt(process.env.MAX_MESSAGE_LENGTH) || 4096,
         mediaSize: parseInt(process.env.MAX_MEDIA_SIZE) || 50 * 1024 * 1024,
