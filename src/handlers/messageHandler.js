@@ -18,8 +18,8 @@ class MessageHandler {
     constructor() {
         this.messageQueue = [];
         this.processing = false;
-        this.autoReplyEnabled = true;
-        this.chatBotEnabled = true;
+        this.autoReplyEnabled = config.features.autoReply !== false;
+        this.chatBotEnabled = config.features.chatBot === true;
     }
 
     extractMessageContent(message) {
@@ -526,9 +526,21 @@ class MessageHandler {
                 }
             }
 
-            const autoReplyHandled = await this.handleAutoReply(sock, message, messageContent.text, user, isGroup);
+            if (this.autoReplyEnabled) {
+                const autoReplyHandled = await this.handleAutoReply(sock, message, messageContent.text, user, isGroup);
+                if (autoReplyHandled) {
+                    cache.set(`lastMessage_${sender}`, {
+                        content: messageContent.text,
+                        timestamp: Date.now(),
+                        messageType: messageContent.messageType,
+                        isGroup
+                    }, 300);
+                    await this.updateMessageStats(isGroup ? 'group' : 'private');
+                    return;
+                }
+            }
             
-            if (!autoReplyHandled) {
+            if (this.chatBotEnabled && config.apis.openai?.apiKey) {
                 await this.handleChatBot(sock, message, messageContent.text, user, isGroup);
             }
 
