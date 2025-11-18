@@ -71,6 +71,20 @@ The bot requires several environment variables configured in `.env`:
 - `SESSION_SECRET` - Express session secret
 - `ENCRYPTION_KEY` - Data encryption key
 
+**Event Handlers (Enable/Disable Events):**
+- `EVENT_CALL_AUTO_REJECT` - Auto-reject incoming calls (default: true)
+- `EVENT_GROUP_JOIN` - Handle group member joins (default: true)
+- `EVENT_GROUP_LEAVE` - Handle group member leaves (default: true)
+- `EVENT_GROUP_UPDATE` - Handle group updates (default: true)
+- `EVENT_GROUP_PROMOTE` - Handle member promotions (default: true)
+- `EVENT_GROUP_DEMOTE` - Handle member demotions (default: true)
+- `EVENT_MESSAGE_REACTION` - Handle message reactions (default: true)
+- `EVENT_AUTO_REACTION` - Auto-react to messages (default: false)
+- `EVENT_LEVEL_UP` - Handle user level ups (default: true)
+- `EVENT_CONTACT_UPDATE` - Handle contact updates (default: false)
+- `EVENT_MESSAGE_UPDATE` - Handle message updates (default: true)
+- `EVENT_MESSAGE_DELETE` - Handle message deletions (default: true)
+
 ### Replit-Specific Configuration
 
 - **Port:** The bot is configured to run on port 5000 (Replit requirement)
@@ -115,6 +129,16 @@ npm run dev
 - **Media Storage:** Local file system with automatic cleanup
 
 ## Recent Changes
+
+- **2025-11-18:** Fixed command handling and added event configuration system
+  - ✅ Fixed PUBLIC_MODE to properly allow all users to execute commands
+  - ✅ Added comprehensive event configuration toggles (12 event types)
+  - ✅ Updated all handlers to respect config toggles (callHandler, groupHandler, messageHandler)
+  - ✅ Fixed feature defaults for antiLink, welcome, goodbye, antiDelete
+  - ✅ Events can now be enabled/disabled via environment variables
+  - ✅ Added EVENT_* variables to .env.example with documentation
+  - ✅ Verified 179 commands load properly and respond to users
+  - ✅ All event handlers properly gate functionality based on config
 
 - **2025-11-14:** Fixed command processing and optimized deployment
   - Fixed message handler binding (changed to named export for proper `this` context)
