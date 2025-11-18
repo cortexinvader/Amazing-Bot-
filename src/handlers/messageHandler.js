@@ -164,7 +164,10 @@ class MessageHandler {
         const prefixUsed = this.detectPrefix(trimmedText);
         const shouldProcessNoPrefix = this.shouldProcessNoPrefix(trimmedText, isGroup, group, sender);
         
+        console.log(`🔍 PREFIX CHECK | Text: "${trimmedText.substring(0, 50)}" | Prefix: ${prefixUsed || 'none'} | NoPrefix: ${shouldProcessNoPrefix}`);
+        
         if (!prefixUsed && !shouldProcessNoPrefix) {
+            console.log(`❌ NOT A COMMAND - No prefix detected`);
             return false;
         }
 
@@ -173,6 +176,7 @@ class MessageHandler {
             : trimmedText.trim();
 
         if (!commandText || commandText.length === 0) {
+            console.log(`❌ NOT A COMMAND - Empty command text`);
             return false;
         }
 
@@ -180,11 +184,14 @@ class MessageHandler {
         const commandName = splitArgs.shift()?.toLowerCase();
 
         if (!commandName || commandName.length === 0) {
+            console.log(`❌ NOT A COMMAND - No command name`);
             return false;
         }
 
         const args = splitArgs;
         const command = commandHandler.getCommand(commandName);
+        
+        console.log(`🔎 COMMAND LOOKUP | Name: "${commandName}" | Found: ${command ? 'YES' : 'NO'}`);
         
         if (!command) {
             if (prefixUsed) {
@@ -193,6 +200,7 @@ class MessageHandler {
             return false;
         }
 
+        console.log(`⚡ EXECUTING COMMAND: ${commandName} | User: ${sender.split('@')[0]}`);
         logger.info(`Executing command: ${commandName} | User: ${sender.split('@')[0]} | Type: ${isGroup ? 'group' : 'private'}`);
         
         try {
@@ -328,9 +336,11 @@ class MessageHandler {
             
             const messageContent = this.extractMessageContent(message);
             if (!messageContent || !messageContent.text) {
+                console.log(`⚠️  Message skipped - No text content`);
                 return;
             }
 
+            console.log(`📨 NEW MESSAGE | From: ${sender.split('@')[0]} | Text: "${messageContent.text.substring(0, 100)}"`);
             logger.debug(`Message received | From: ${sender.split('@')[0]} | Chat: ${isGroup ? 'group' : 'private'} | Text: ${messageContent.text.substring(0, 50)}`);
 
             const spamCheck = await antiSpam.checkSpam(sender, message);
@@ -433,6 +443,7 @@ class MessageHandler {
             );
 
             if (isCommand) {
+                console.log(`✅ COMMAND EXECUTED`);
                 logger.debug(`Command processed successfully`);
                 if (config.events.levelUp) {
                     try {
