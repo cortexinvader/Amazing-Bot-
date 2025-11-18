@@ -130,6 +130,14 @@ npm run dev
 
 ## Recent Changes
 
+- **2025-11-18:** Removed chatbot and auto-reply features for command-only responses
+  - ✅ Removed auto-reply functionality from message handler
+  - ✅ Removed chatbot AI automatic responses to non-command messages
+  - ✅ Bot now ONLY responds to commands (179 commands available)
+  - ✅ Improved performance by removing unnecessary AI service calls
+  - ✅ Users must use command prefix (-) to interact with the bot
+  - ✅ AI features still available via explicit commands (chatgpt, gemini, deepseek, llama, etc.)
+
 - **2025-11-18:** Fixed command handling and added event configuration system
   - ✅ Fixed PUBLIC_MODE to properly allow all users to execute commands
   - ✅ Added comprehensive event configuration toggles (12 event types)

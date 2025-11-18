@@ -1,4 +1,3 @@
-import { aiService } from '../services/aiService.js';
 import { commandHandler } from './commandHandler.js';
 import config from '../config.js';
 import logger from '../utils/logger.js';
@@ -18,8 +17,6 @@ class MessageHandler {
     constructor() {
         this.messageQueue = [];
         this.processing = false;
-        this.autoReplyEnabled = config.features.autoReply !== false;
-        this.chatBotEnabled = config.features.chatBot === true;
     }
 
     extractMessageContent(message) {
@@ -252,49 +249,6 @@ class MessageHandler {
         }
     }
 
-    async handleAutoReply(sock, message, text, user, isGroup) {
-        if (!this.autoReplyEnabled || isGroup) return false;
-
-        const autoReplies = cache.get('autoReplies') || {};
-        const lowerText = text.toLowerCase();
-        
-        for (const [trigger, reply] of Object.entries(autoReplies)) {
-            if (lowerText.includes(trigger.toLowerCase())) {
-                try {
-                    await sock.sendMessage(message.key.remoteJid, { text: reply });
-                    return true;
-                } catch (error) {
-                    logger.error('Auto reply failed:', error);
-                }
-            }
-        }
-
-        return false;
-    }
-
-    async handleChatBot(sock, message, text, user, isGroup) {
-        if (!this.chatBotEnabled) return false;
-        if (isGroup && sock.user && !text.includes('@' + sock.user.id.split(':')[0])) return false;
-
-        try {
-            const response = await aiService.generateResponse(text, user, isGroup);
-            
-            if (response) {
-                await sock.sendMessage(message.key.remoteJid, { 
-                    text: response,
-                    contextInfo: {
-                        mentionedJid: isGroup ? [user.jid] : undefined
-                    }
-                });
-                return true;
-            }
-        } catch (error) {
-            logger.error('ChatBot error:', error);
-        }
-
-        return false;
-    }
-
     async handleMentions(sock, message, text, isGroup) {
         if (!isGroup || !text.includes('@')) return;
 
@@ -524,24 +478,6 @@ class MessageHandler {
                 } catch (error) {
                     logger.error('Level up error:', error);
                 }
-            }
-
-            if (this.autoReplyEnabled) {
-                const autoReplyHandled = await this.handleAutoReply(sock, message, messageContent.text, user, isGroup);
-                if (autoReplyHandled) {
-                    cache.set(`lastMessage_${sender}`, {
-                        content: messageContent.text,
-                        timestamp: Date.now(),
-                        messageType: messageContent.messageType,
-                        isGroup
-                    }, 300);
-                    await this.updateMessageStats(isGroup ? 'group' : 'private');
-                    return;
-                }
-            }
-            
-            if (this.chatBotEnabled && config.apis.openai?.apiKey) {
-                await this.handleChatBot(sock, message, messageContent.text, user, isGroup);
             }
 
             cache.set(`lastMessage_${sender}`, {
