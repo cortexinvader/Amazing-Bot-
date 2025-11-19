@@ -208,9 +208,15 @@ class CommandHandler {
                 return false;
             });
             
-            if (!participant) return false;
+            if (!participant) {
+                logger.debug(`Participant not found in group: ${participantJid}`);
+                return false;
+            }
             
-            return participant.admin === 'admin' || participant.admin === 'superadmin';
+            const isAdmin = participant.admin === 'admin' || participant.admin === 'superadmin';
+            logger.debug(`Admin check for ${participantPhone}: ${isAdmin} (role: ${participant.admin || 'none'})`);
+            
+            return isAdmin;
         } catch (error) {
             logger.error('Error checking group admin status:', error);
             return false;
@@ -239,9 +245,15 @@ class CommandHandler {
                 return false;
             });
             
-            if (!botParticipant) return false;
+            if (!botParticipant) {
+                logger.debug(`Bot not found in group participants`);
+                return false;
+            }
             
-            return botParticipant.admin === 'admin' || botParticipant.admin === 'superadmin';
+            const isAdmin = botParticipant.admin === 'admin' || botParticipant.admin === 'superadmin';
+            logger.debug(`Bot admin status in group: ${isAdmin} (role: ${botParticipant.admin || 'none'})`);
+            
+            return isAdmin;
         } catch (error) {
             logger.error('Error checking bot admin status:', error);
             return false;
@@ -257,7 +269,7 @@ class CommandHandler {
         const isOwner = this.isOwner(senderJid);
         const isSudo = this.isSudo(senderJid);
         
-        logger.debug(`Permission check - Command: ${command.name}, Sender: ${senderJid}, Is Owner: ${isOwner}, Is Sudo: ${isSudo}, Permissions: ${command.permissions.join(', ')}`);
+        logger.debug(`Permission check - Command: ${command.name}, Sender: ${senderJid}, Is Owner: ${isOwner}, Is Sudo: ${isSudo}, Is Admin: ${isGroupAdmin}, Permissions: ${command.permissions.join(', ')}`);
         
         for (const permission of command.permissions) {
             switch (permission) {
@@ -265,7 +277,7 @@ class CommandHandler {
                     if (isOwner || isSudo) return true;
                     break;
                 case 'admin':
-                    if (isOwner || isGroupAdmin) return true;
+                    if (isOwner || isSudo || isGroupAdmin) return true;
                     break;
                 case 'premium':
                     if ((user && user.isPremium) || isOwner || isSudo) return true;
@@ -403,6 +415,8 @@ class CommandHandler {
                 
                 isGroupAdmin = await this.isGroupAdmin(sock, from, actualSender);
                 isBotAdmin = await this.isBotAdmin(sock, from);
+                
+                logger.info(`🔍 Admin Status | User: ${this.extractPhone(actualSender)} | isGroupAdmin: ${isGroupAdmin} | isBotAdmin: ${isBotAdmin}`);
             }
             
             const isOwner = this.isOwner(actualSender);
@@ -426,9 +440,9 @@ class CommandHandler {
                 return true;
             }
             
-            if (command.adminOnly && !isGroupAdmin && !isOwner) {
+            if (command.adminOnly && !isGroupAdmin && !isOwner && !isSudo) {
                 await sock.sendMessage(from, {
-                    text: `❌ *Admin Only Command*\n\nYou need to be a group admin to use this command.\n\n*Category:* ${command.category.toUpperCase()}`
+                    text: `❌ *Admin Only Command*\n\nYou need to be a group admin to use this command.\n\n*Category:* ${command.category.toUpperCase()}\n\n*Your Status:* ${isGroupAdmin ? 'Admin ✅' : 'Member ❌'}`
                 });
                 return true;
             }
@@ -447,9 +461,9 @@ class CommandHandler {
                 return true;
             }
             
-            if (command.botAdminRequired && isGroup && !isBotAdmin) {
+            if (command.botAdminRequired && isGroup && !isBotAdmin && !isOwner && !isSudo) {
                 await sock.sendMessage(from, {
-                    text: `❌ *Bot Admin Required*\n\nI need admin privileges to execute this command.\n\n*Solution:* Make me a group admin first.`
+                    text: `❌ *Bot Admin Required*\n\nI need admin privileges to execute this command.\n\n*Solution:* Make me a group admin first.\n\n*Bot Status:* ${isBotAdmin ? 'Admin ✅' : 'Member ❌'}`
                 });
                 return true;
             }
