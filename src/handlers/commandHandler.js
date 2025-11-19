@@ -1,701 +1,619 @@
-import fs from 'fs-extra';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
+import { commandHandler } from './commandHandler.js';
 import config from '../config.js';
 import logger from '../utils/logger.js';
-import { getUser, updateUser } from '../models/User.js';
-import { getGroup, updateGroup } from '../models/Group.js';
-import { logCommand } from '../models/Command.js';
-import rateLimiter from '../utils/rateLimiter.js';
+import { getUser, createUser, updateUser } from '../models/User.js';
+import { getGroup, createGroup, updateGroup } from '../models/Group.js';
+import { createMessage } from '../models/Message.js';
 import antiSpam from '../utils/antiSpam.js';
 import { cache } from '../utils/cache.js';
+import fs from 'fs-extra';
+import path from 'path';
+import handleAutoReaction from '../events/autoReaction.js';
+import handleAntiLink from '../plugins/antiLink.js';
+import handleLevelUp from '../events/levelUp.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-class CommandHandler {
+class MessageHandler {
     constructor() {
-        this.commands = new Map();
-        this.aliases = new Map();
-        this.categories = new Map();
-        this.cooldowns = new Map();
-        this.commandStats = new Map();
-        this.isInitialized = false;
+        this.messageQueue = [];
+        this.processing = false;
+        this.initializeStats();
     }
 
-    async loadCommands() {
-        if (this.isInitialized) return;
-        
-        const commandsPath = path.join(__dirname, '..', 'commands');
-        const categories = await fs.readdir(commandsPath);
-        
-        let totalCommands = 0;
-        
-        for (const category of categories) {
-            const categoryPath = path.join(commandsPath, category);
-            const stat = await fs.stat(categoryPath);
-            
-            if (!stat.isDirectory()) continue;
-            
-            const commandFiles = (await fs.readdir(categoryPath))
-                .filter(file => file.endsWith('.js'));
-            
-            this.categories.set(category, []);
-            
-            for (const file of commandFiles) {
-                try {
-                    const commandPath = path.join(categoryPath, file);
-                    const commandModule = await import(commandPath);
-                    const command = commandModule.default;
-                    
-                    if (!command || typeof command !== 'object') {
-                        logger.warn(`Command ${file} has no default export or invalid export`);
-                        continue;
-                    }
-                    
-                    if (!command.name || typeof command.name !== 'string') {
-                        logger.warn(`Command ${file} is missing name property`);
-                        continue;
-                    }
-                    
-                    if (!command.execute || typeof command.execute !== 'function') {
-                        logger.warn(`Command ${file} is missing execute function`);
-                        continue;
-                    }
-                    
-                    command.category = category;
-                    command.filePath = commandPath;
-                    
-                    this.commands.set(command.name, command);
-                    
-                    if (command.aliases && Array.isArray(command.aliases)) {
-                        for (const alias of command.aliases) {
-                            this.aliases.set(alias, command.name);
-                        }
-                    }
-                    
-                    this.categories.get(category).push(command.name);
-                    this.commandStats.set(command.name, { used: 0, errors: 0 });
-                    
-                    totalCommands++;
-                    
-                } catch (error) {
-                    logger.error(`Failed to load command ${file}:`, error);
-                }
-            }
+    initializeStats() {
+        let stats = cache.get('messageStats');
+        if (!stats || typeof stats !== 'object' || stats.totalMessages === undefined) {
+            stats = {
+                totalMessages: 0,
+                commandsExecuted: 0,
+                mediaProcessed: 0,
+                groupMessages: 0,
+                privateMessages: 0
+            };
+            cache.set('messageStats', stats, 3600);
         }
-        
-        this.isInitialized = true;
-        logger.info(`Loaded ${totalCommands} commands from ${categories.length} categories`);
     }
 
-    async reloadCommand(commandName) {
-        const command = this.commands.get(commandName) || 
-                       this.commands.get(this.aliases.get(commandName));
-        
-        if (!command) return false;
-        
+    extractMessageContent(message) {
+        if (!message || !message.message) return null;
+
+        const msg = message.message;
+        let text = '';
+        let messageType = 'text';
+        let media = null;
+        let quoted = null;
+
+        if (msg.ephemeralMessage?.message) {
+            return this.extractMessageContent({ message: msg.ephemeralMessage.message });
+        }
+
+        if (msg.viewOnceMessage?.message) {
+            return this.extractMessageContent({ message: msg.viewOnceMessage.message });
+        }
+
+        if (msg.viewOnceMessageV2?.message) {
+            return this.extractMessageContent({ message: msg.viewOnceMessageV2.message });
+        }
+
+        if (msg.documentWithCaptionMessage?.message) {
+            return this.extractMessageContent({ message: msg.documentWithCaptionMessage.message });
+        }
+
+        if (msg.conversation) {
+            text = msg.conversation;
+        } else if (msg.extendedTextMessage) {
+            text = msg.extendedTextMessage.text || '';
+            quoted = msg.extendedTextMessage.contextInfo?.quotedMessage;
+        } else if (msg.imageMessage) {
+            text = msg.imageMessage.caption || '';
+            messageType = 'image';
+            media = msg.imageMessage;
+        } else if (msg.videoMessage) {
+            text = msg.videoMessage.caption || '';
+            messageType = 'video';
+            media = msg.videoMessage;
+        } else if (msg.audioMessage) {
+            messageType = 'audio';
+            media = msg.audioMessage;
+        } else if (msg.documentMessage) {
+            text = msg.documentMessage.caption || '';messageType = 'document';
+            media = msg.documentMessage;
+        } else if (msg.stickerMessage) {
+            messageType = 'sticker';
+            media = msg.stickerMessage;
+        } else if (msg.contactMessage) {
+            messageType = 'contact';
+            text = msg.contactMessage.displayName || '';
+        } else if (msg.locationMessage) {
+            messageType = 'location';
+            text = msg.locationMessage.name || 'Location';
+        } else if (msg.liveLocationMessage) {
+            messageType = 'liveLocation';
+            text = msg.liveLocationMessage.caption || 'Live Location';
+        } else if (msg.pollCreationMessage) {
+            messageType = 'poll';
+            text = msg.pollCreationMessage.name || '';
+        } else if (msg.buttonsResponseMessage) {
+            text = msg.buttonsResponseMessage.selectedButtonId || '';
+            messageType = 'buttonResponse';
+        } else if (msg.listResponseMessage) {
+            text = msg.listResponseMessage.singleSelectReply?.selectedRowId || '';
+            messageType = 'listResponse';
+        } else if (msg.templateButtonReplyMessage) {
+            text = msg.templateButtonReplyMessage.selectedId || '';
+            messageType = 'templateButtonReply';
+        }
+
+        return { 
+            text: text.trim(), 
+            messageType, 
+            media, 
+            quoted 
+        };
+    }
+
+    async downloadMedia(message, media) {
         try {
-            delete require.cache[require.resolve(command.filePath)];
-            
-            const commandModule = await import(command.filePath + '?update=' + Date.now());
-            const newCommand = commandModule.default;
-            
-            if (!newCommand || !newCommand.name || !newCommand.execute) {
-                logger.warn(`Reloaded command ${commandName} is invalid`);
-                return false;
-            }
-            
-            this.commands.delete(command.name);
-            if (command.aliases && Array.isArray(command.aliases)) {
-                for (const alias of command.aliases) {
-                    this.aliases.delete(alias);
-                }
-            }
-            
-            newCommand.category = command.category;
-            newCommand.filePath = command.filePath;
-            
-            this.commands.set(newCommand.name, newCommand);
-            if (newCommand.aliases && Array.isArray(newCommand.aliases)) {
-                for (const alias of newCommand.aliases) {
-                    this.aliases.set(alias, newCommand.name);
-                }
-            }
-            
-            logger.info(`Reloaded command: ${commandName}`);
-            return true;
+            const { downloadMediaMessage } = await import('@whiskeysockets/baileys');
+            const buffer = await downloadMediaMessage(message, 'buffer', {});
+            const mediaType = media.mimetype?.split('/')[0] || 'unknown';
+            const extension = media.mimetype?.split('/')[1] || 'bin';
+
+            const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${extension}`;
+            const tempDir = path.join(process.cwd(), 'temp', mediaType);
+            await fs.ensureDir(tempDir);
+
+            const filePath = path.join(tempDir, fileName);
+            await fs.writeFile(filePath, buffer);
+
+            return {
+                buffer,
+                filePath,
+                fileName,
+                mimetype: media.mimetype,
+                size: buffer.length
+            };
         } catch (error) {
-            logger.error(`Failed to reload command ${commandName}:`, error);
-            return false;
+            logger.error('Failed to download media:', error);
+            return null;
         }
     }
 
-    getCommand(name) {
-        return this.commands.get(name) || 
-               this.commands.get(this.aliases.get(name));
-    }
-
-    getCommandsByCategory(category) {
-        const categoryCommands = this.categories.get(category) || [];
-        return categoryCommands.map(name => this.commands.get(name)).filter(cmd => cmd);
-    }
-
-    getAllCategories() {
-        return Array.from(this.categories.keys());
-    }
-
-    getCommandCount() {
-        return this.commands.size;
-    }
-
-    getCommandStats(commandName) {
-        return this.commandStats.get(commandName) || { used: 0, errors: 0 };
-    }
-
-    extractPhone(jid) {
-        if (!jid) return '';
-        return jid
-            .replace(/@s\.whatsapp\.net/g, '')
-            .replace(/@c\.us/g, '')
-            .replace(/@lid/g, '')
-            .replace(/:\d+/g, '')
-            .split(':')[0]
-            .split('@')[0]
-            .trim();
-    }
-
-    isOwner(jid) {
-        if (!jid) return false;
-        if (!config.ownerNumbers || !Array.isArray(config.ownerNumbers)) return false;
-        const userPhone = this.extractPhone(jid);
-        return config.ownerNumbers.some(ownerNum => {
-            const ownerPhone = this.extractPhone(ownerNum);
-            return userPhone === ownerPhone;
-        });
-    }
-    
-    isSudo(jid) {
-        if (!jid) return false;
-        if (!config.sudoers || !Array.isArray(config.sudoers)) return false;
-        const userPhone = this.extractPhone(jid);
-        return config.sudoers.some(sudoNum => {
-            const sudoPhone = this.extractPhone(sudoNum);
-            return userPhone === sudoPhone;
-        });
-    }
-
-    async isGroupAdmin(sock, groupId, participantJid) {
-        try {
-            if (!groupId || !participantJid) return false;
-            
-            const groupMetadata = await sock.groupMetadata(groupId);
-            if (!groupMetadata || !groupMetadata.participants) return false;
-            
-            const participantPhone = this.extractPhone(participantJid);
-            
-            const participant = groupMetadata.participants.find(p => {
-                if (p.id === participantJid) return true;
-                if (p.lid === participantJid) return true;
-                
-                const pPhone = this.extractPhone(p.id);
-                const pLidPhone = p.lid ? this.extractPhone(p.lid) : null;
-                
-                if (pPhone === participantPhone) return true;
-                if (pLidPhone === participantPhone) return true;
-                
-                return false;
-            });
-            
-            if (!participant) {
-                logger.debug(`Participant not found in group: ${participantJid}`);
-                return false;
-            }
-            
-            const isAdmin = participant.admin === 'admin' || participant.admin === 'superadmin';
-            logger.debug(`Admin check for ${participantPhone}: ${isAdmin} (role: ${participant.admin || 'none'})`);
-            
-            return isAdmin;
-        } catch (error) {
-            logger.error('Error checking group admin status:', error);
-            return false;
+    detectPrefix(text) {
+        if (!text || typeof text !== 'string') return null;
+        const trimmedText = text.trim();
+        if (trimmedText.startsWith(config.prefix)) {
+            return config.prefix;
         }
+        return null;
     }
 
-    async isBotAdmin(sock, groupId) {
-        try {
-            if (!groupId || !sock || !sock.user) {
-                logger.debug('Missing groupId or sock.user');
-                return false;
-            }
-            
-            const groupMetadata = await sock.groupMetadata(groupId);
-            if (!groupMetadata || !groupMetadata.participants) {
-                logger.debug('Missing group metadata or participants');
-                return false;
-            }
-            
-            const botJid = sock.user.id;
-            const botPhone = this.extractPhone(botJid);
-            
-            logger.debug(`Checking bot admin status - Bot JID: ${botJid}, Bot Phone: ${botPhone}`);
-            
-            const botParticipant = groupMetadata.participants.find(p => {
-                const pId = p.id;
-                const pLid = p.lid;
-                const pPhone = this.extractPhone(pId);
-                const pLidPhone = pLid ? this.extractPhone(pLid) : null;
-                
-                if (pId === botJid) return true;
-                if (pLid === botJid) return true;
-                if (pPhone === botPhone) return true;
-                if (pLidPhone === botPhone) return true;
-                
-                return false;
-            });
-            
-            if (!botParticipant) {
-                logger.debug(`Bot not found in group participants. Total participants: ${groupMetadata.participants.length}`);
-                return false;
-            }
-            
-            const isAdmin = botParticipant.admin === 'admin' || botParticipant.admin === 'superadmin';
-            logger.debug(`Bot admin status: ${isAdmin} (role: ${botParticipant.admin || 'none'})`);
-            
-            return isAdmin;
-        } catch (error) {
-            logger.error('Error checking bot admin status:', error);
-            return false;
-        }
-    }
-
-    async checkPermissions(command, user, group, isGroupAdmin, isBotAdmin, sender) {
-        if (!command.permissions || command.permissions.length === 0) return true;
-        
-        const senderJid = sender || (user ? user.jid : null);
-        if (!senderJid) return false;
-        
-        const isOwner = this.isOwner(senderJid);
-        const isSudo = this.isSudo(senderJid);
-        
-        logger.debug(`Permission check - Command: ${command.name}, Sender: ${senderJid}, Is Owner: ${isOwner}, Is Sudo: ${isSudo}, Is Admin: ${isGroupAdmin}, Permissions: ${command.permissions.join(', ')}`);
-        
-        for (const permission of command.permissions) {
-            switch (permission) {
-                case 'owner':
-                    if (isOwner || isSudo) return true;
-                    break;
-                case 'admin':
-                    if (isOwner || isSudo || isGroupAdmin) return true;
-                    break;
-                case 'premium':
-                    if ((user && user.isPremium) || isOwner || isSudo) return true;
-                    break;
-                case 'user':
-                    if (config.publicMode || isOwner || isSudo) return true;
-                    break;
-                case 'group':
-                    if (group) return true;
-                    break;
-                case 'private':
-                    if (!group) return true;
-                    break;
-                case 'botAdmin':
-                    if (isBotAdmin || isOwner || isSudo) return true;
-                    break;
-            }
-        }
-        
-        return false;
-    }
-
-    async checkCooldown(commandName, userId) {
-        const command = this.getCommand(commandName);
-        if (!command || !command.cooldown) return true;
-        
-        const cooldownKey = `${commandName}_${userId}`;
-        const lastUsed = this.cooldowns.get(cooldownKey);
-        
-        if (!lastUsed) {
-            this.cooldowns.set(cooldownKey, Date.now());
+    shouldProcessNoPrefix(text, isGroup, group, sender) {
+        if (config.ownerNoPrefix && commandHandler.isOwner(sender)) {
             return true;
         }
         
-        const timePassed = Date.now() - lastUsed;
-        const cooldownTime = command.cooldown * 1000;
+        if (!config.noPrefixEnabled) return false;
         
-        if (timePassed < cooldownTime) {
-            const timeLeft = Math.ceil((cooldownTime - timePassed) / 1000);
-            return { success: false, timeLeft };
+        if (isGroup) {
+            return group?.settings?.noPrefixEnabled === true;
         }
         
-        this.cooldowns.set(cooldownKey, Date.now());
-        return true;
+        return config.privateNoPrefixEnabled === true;
     }
 
-    async validateArguments(command, args, sock, message) {
-        if (command.args === false) return true;
-        
-        if (command.minArgs && args.length < command.minArgs) {
-            await sock.sendMessage(message.key.remoteJid, {
-                text: `❌ *Insufficient arguments*\n\n*Usage:* ${config.prefix}${command.usage || command.name}\n*Example:* ${command.example || `${config.prefix}${command.name}`}`
-            });
+    async processCommand(sock, message, text, user, group, isGroup) {
+        if (!text || typeof text !== 'string') {
             return false;
         }
-        
-        if (command.maxArgs && args.length > command.maxArgs) {
-            await sock.sendMessage(message.key.remoteJid, {
-                text: `❌ *Too many arguments*\n\n*Usage:* ${config.prefix}${command.usage || command.name}`
-            });
-            return false;
-        }
-        
-        return true;
-    }
 
-    async handleCommand(sock, message, commandName, args) {
+        const trimmedText = text.trim();
+        if (trimmedText.length === 0) {
+            return false;
+        }
+
+        const from = message.key.remoteJid;
+        const sender = message.key.participant || from;
+        
+        const prefixUsed = this.detectPrefix(trimmedText);
+        const shouldProcessNoPrefix = this.shouldProcessNoPrefix(trimmedText, isGroup, group, sender);
+        
+        if (!prefixUsed && !shouldProcessNoPrefix) {
+            return false;
+        }
+
+        const commandText = prefixUsed 
+            ? trimmedText.slice(prefixUsed.length).trim() 
+            : trimmedText.trim();
+
+        if (!commandText || commandText.length === 0) {
+            return false;
+        }
+
+        const splitArgs = commandText.split(/\s+/);
+        const commandName = splitArgs.shift()?.toLowerCase();
+
+        if (!commandName || commandName.length === 0) {
+            return false;
+        }
+
+        const args = splitArgs;
+        const command = commandHandler.getCommand(commandName);
+        
+        if (!command) {
+            if (prefixUsed) {
+                await this.handleUnknownCommand(sock, message, commandName);
+            }
+            return false;
+        }
+
+        logger.info(`Executing command: ${commandName} | User: ${sender.split('@')[0]} | Type: ${isGroup ? 'group' : 'private'}`);
+        
         try {
-            const command = this.getCommand(commandName);
-            if (!command) return false;
+            await commandHandler.handleCommand(sock, message, commandName, args);
+            return true;
+        } catch (error) {
+            logger.error(`Command execution failed [${commandName}]:`, error);
+            try {
+                await sock.sendMessage(from, {
+                    text: `❌ *Error*\n\nFailed to execute command: ${commandName}\n\nError: ${error.message}`
+                }, { quoted: message });
+            } catch (sendError) {
+                logger.error('Failed to send error message:', sendError);
+            }
+            return false;
+        }
+    }
+
+    async handleUnknownCommand(sock, message, commandName) {
+        const from = message.key.remoteJid;
+        const suggestions = await commandHandler.searchCommands(commandName);
+        
+        let response = `╭──⦿【 ❓ UNKNOWN COMMAND 】\n`;
+        response += `│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: "${commandName}" is not valid\n`;
+        response += `│\n`;
+        
+        if (suggestions.length > 0) {
+            response += `│ 💡 𝗗𝗶𝗱 𝘆𝗼𝘂 𝗺𝗲𝗮𝗻:\n`;
+            suggestions.slice(0, 3).forEach(cmd => {
+                response += `│    • ${config.prefix}${cmd.name}\n`;
+                response += `│      ${cmd.description}\n`;
+            });
+            response += `│\n`;
+        }
+        
+        response += `│ 📚 𝗧𝗶𝗽: Type ${config.prefix}help for all commands\n`;
+        response += `╰────────⦿\n\n`;
+        response += `╭─────────────⦿\n`;
+        response += `│💫 | [ ${config.botName} 🍀 ]\n`;
+        response += `╰────────────⦿`;
+        
+        try {
+            await sock.sendMessage(from, { text: response }, { quoted: message });
+        } catch (error) {
+            logger.error('Failed to send unknown command message:', error);
+        }
+    }
+
+    async handleMentions(sock, message, text, isGroup) {
+        if (!isGroup || !text.includes('@')) return;
+
+        const mentions = text.match(/@(\d+)/g);
+        if (!mentions) return;
+
+        const mentionedUsers = mentions.map(mention => 
+            mention.replace('@', '') + '@s.whatsapp.net'
+        );
+
+        const from = message.key.remoteJid;
+        try {
+            const metadata = await sock.groupMetadata(from);
+            const validMentions = mentionedUsers.filter(jid =>
+                metadata.participants.some(p => p.id === jid)
+            );
+
+            if (validMentions.length > 0) {
+                await updateGroup(from, {
+                    $inc: { mentionsCount: validMentions.length }
+                });
+            }
+        } catch (error) {
+            logger.error('Error handling mentions:', error);
+        }
+    }
+
+    async handleQuotedMessage(sock, message, quoted, user) {
+        if (!quoted) return;
+
+        try {
+            const quotedContent = this.extractMessageContent({ message: quoted });
+            if (quotedContent?.media) {
+                const mediaData = await this.downloadMedia(message, quotedContent.media);
+                if (mediaData) {
+                    logger.debug('Quoted media processed successfully');
+                }
+            }
+        } catch (error) {
+            logger.error('Error handling quoted message:', error);
+        }
+    }
+
+    async saveMessage(message, user, group, messageContent) {
+        try {
+            const messageData = {
+                messageId: message.key.id,
+                from: message.key.remoteJid,
+                sender: message.key.participant || message.key.remoteJid,
+                timestamp: message.messageTimestamp * 1000,
+                content: messageContent.text,
+                messageType: messageContent.messageType,
+                isGroup: !!group,
+                hasMedia: !!messageContent.media,
+                isCommand: messageContent.text.startsWith(config.prefix),
+                userData: {
+                    phone: user.phone,
+                    name: user.name
+                }
+            };
+
+            await createMessage(messageData);
+        } catch (error) {
+            logger.error('Failed to save message:', error);
+        }
+    }
+
+    async handleIncomingMessage(sock, message) {
+        try {
+            if (!message || !message.key) {
+                return;
+            }
+            
+            if (message.key.fromMe && !config.selfMode) {
+                return;
+            }
             
             const from = message.key.remoteJid;
+            if (!from || from === 'status@broadcast') {
+                return;
+            }
+
             const sender = message.key.participant || from;
             const isGroup = from.endsWith('@g.us');
             
-            const [user, group] = await Promise.all([
-                getUser(sender),
-                isGroup ? getGroup(from) : null
-            ]);
-            
+            const messageContent = this.extractMessageContent(message);
+            if (!messageContent) {
+                logger.debug(`Message skipped - No content extractable`);
+                return;
+            }
+
+            logger.info(`📨 Message from ${sender.split('@')[0]} in ${isGroup ? 'group' : 'private'}: "${messageContent.text.substring(0, 50)}${messageContent.text.length > 50 ? '...' : ''}"`);
+
+            const spamCheck = await antiSpam.checkSpam(sender, message);
+            if (spamCheck.isSpam && spamCheck.action === 'block') {
+                logger.debug(`Spam detected from ${sender.split('@')[0]}`);
+                return;
+            }
+
+            let user = await getUser(sender);
             if (!user) {
-                logger.warn(`User not found: ${sender}`);
-                return false;
+                user = await createUser({
+                    jid: sender,
+                    phone: sender.split('@')[0].replace(/:\d+$/, ''),
+                    name: message.pushName || 'Unknown',
+                    isGroup: false
+                });
+                logger.debug(`New user created: ${sender.split('@')[0]}`);
+            } else {
+                await updateUser(sender, {
+                    name: message.pushName || user.name,
+                    lastSeen: new Date(),
+                    $inc: { messageCount: 1 }
+                });
             }
 
-            const tempIsOwner = this.isOwner(sender);
-            const tempIsSudo = this.isSudo(sender);
-
-            if (user.isBanned && !tempIsOwner && !tempIsSudo) {
-                await sock.sendMessage(from, {
-                    text: `❌ *You are banned from using this bot*\n\n*Reason:* ${user.banReason || 'No reason provided'}\n*Until:* ${user.banUntil || 'Permanent'}`
-                });
-                return true;
-            }
-            
-            if (isGroup && group && group.isBanned && !tempIsOwner && !tempIsSudo) {
-                await sock.sendMessage(from, {
-                    text: `❌ *This group is banned from using bot commands*\n\n*Reason:* ${group.banReason || 'No reason provided'}`
-                });
-                return true;
-            }
-            
-            let actualSender = sender;
-            let isGroupAdmin = false;
-            let isBotAdmin = false;
-            
+            let group = null;
             if (isGroup) {
-                const groupMetadata = await sock.groupMetadata(from);
-                
-                if (sender.endsWith('@lid')) {
-                    logger.debug(`Processing LID sender: ${sender}`);
-                    
-                    for (const participant of groupMetadata.participants) {
-                        if (participant.lid === sender && participant.id && !participant.id.endsWith('@lid')) {
-                            actualSender = participant.id;
-                            logger.debug(`Resolved LID ${sender} to ${actualSender}`);
-                            break;
-                        }
+                group = await getGroup(from);
+                if (!group) {
+                    try {
+                        const metadata = await sock.groupMetadata(from);
+                        group = await createGroup({
+                            jid: from,
+                            name: metadata.subject,
+                            participants: metadata.participants.length,
+                            createdBy: metadata.owner,
+                            createdAt: new Date(metadata.creation * 1000)
+                        });
+                        logger.debug(`New group created: ${metadata.subject}`);
+                    } catch (error) {
+                        logger.error('Failed to create group:', error);
                     }
-                    
-                    if (actualSender.endsWith('@lid')) {
-                        for (const ownerNum of config.ownerNumbers) {
-                            const ownerPhone = this.extractPhone(ownerNum);
-                            for (const participant of groupMetadata.participants) {
-                                if (participant.id && this.extractPhone(participant.id) === ownerPhone && participant.lid === sender) {
-                                    actualSender = participant.id;
-                                    logger.info(`✅ Matched LID ${sender} to owner ${ownerPhone}`);
-                                    break;
-                                }
-                            }
-                            if (!actualSender.endsWith('@lid')) break;
-                        }
-                    }
+                } else {
+                    await updateGroup(from, {
+                        $inc: { messageCount: 1 },
+                        lastActivity: new Date()
+                    });
                 }
-                
-                isGroupAdmin = await this.isGroupAdmin(sock, from, actualSender);
-                isBotAdmin = await this.isBotAdmin(sock, from);
-                
-                logger.info(`🔍 Admin Status | User: ${this.extractPhone(actualSender)} | isGroupAdmin: ${isGroupAdmin} | isBotAdmin: ${isBotAdmin}`);
-            }
-            
-            const isOwner = this.isOwner(actualSender);
-            const isSudo = this.isSudo(actualSender);
-            
-            if (config.selfMode && !isOwner) {
-                return false;
-            }
-            
-            if (!config.publicMode && !isOwner && !isSudo) {
-                await sock.sendMessage(from, {
-                    text: '🔒 *Bot is in private mode*\n\nOnly the owner and bot admins can use commands right now.'
-                });
-                return true;
-            }
-            
-            if (command.ownerOnly && !isOwner && !isSudo) {
-                await sock.sendMessage(from, {
-                    text: `❌ *Owner/Bot Admin Only*\n\nThis command can only be used by the bot owner or bot admins.\n\n*Category:* ${command.category.toUpperCase()}`
-                });
-                return true;
-            }
-            
-            if (command.adminOnly && !isGroupAdmin && !isOwner && !isSudo) {
-                await sock.sendMessage(from, {
-                    text: `❌ *Admin Only Command*\n\nYou need to be a group admin to use this command.\n\n*Category:* ${command.category.toUpperCase()}\n\n*Your Status:* ${isGroupAdmin ? 'Admin ✅' : 'Member ❌'}`
-                });
-                return true;
-            }
-            
-            if (command.groupOnly && !isGroup) {
-                await sock.sendMessage(from, {
-                    text: `❌ *Group Only Command*\n\nThis command can only be used in groups.\n\n*Category:* ${command.category.toUpperCase()}`
-                });
-                return true;
-            }
-            
-            if (command.privateOnly && isGroup) {
-                await sock.sendMessage(from, {
-                    text: `❌ *Private Chat Only*\n\nThis command can only be used in private chats.\n\n*Category:* ${command.category.toUpperCase()}`
-                });
-                return true;
-            }
-            
-            if (command.botAdminRequired && isGroup && !isBotAdmin && !isOwner && !isSudo) {
-                await sock.sendMessage(from, {
-                    text: `❌ *Bot Admin Required*\n\nI need admin privileges to execute this command.\n\n*Solution:* Make me a group admin first.\n\n*Bot Status:* ${isBotAdmin ? 'Admin ✅' : 'Member ❌'}`
-                });
-                return true;
             }
 
-            const hasPermission = await this.checkPermissions(command, user, group, isGroupAdmin, isBotAdmin, actualSender);
-            if (!hasPermission) {
-                await sock.sendMessage(from, {
-                    text: `❌ *Access Denied*\n\nYou don't have permission to use this command.\n\n*Required:* ${command.permissions?.join(', ') || 'None'}\n*Category:* ${command.category.toUpperCase()}`
-                });
-                return true;
+            await this.saveMessage(message, user, group, messageContent);
+
+            if (messageContent.quoted) {
+                await this.handleQuotedMessage(sock, message, messageContent.quoted, user);
+            }
+
+            const quotedMessageId = message.message?.extendedTextMessage?.contextInfo?.stanzaId;
+            if (quotedMessageId && global.replyHandlers && global.replyHandlers[quotedMessageId]) {
+                const replyHandler = global.replyHandlers[quotedMessageId];
+                try {
+                    await replyHandler.handler(messageContent.text, message);
+                    logger.debug('Reply handler executed');
+                } catch (error) {
+                    logger.error('Reply handler error:', error);
+                }
+                return;
+            }
+
+            if (global.chatHandlers && global.chatHandlers[sender]) {
+                const chatHandler = global.chatHandlers[sender];
+                try {
+                    await chatHandler.handler(messageContent.text, message);
+                    logger.debug('Chat handler executed');
+                } catch (error) {
+                    logger.error('Chat handler error:', error);
+                }
+                return;
+            }
+
+            await this.handleMentions(sock, message, messageContent.text, isGroup);
+
+            if (config.features.antiLink) {
+                try {
+                    await handleAntiLink(sock, message);
+                } catch (error) {
+                    logger.error('Anti-link error:', error);
+                }
             }
             
-            const cooldownCheck = await this.checkCooldown(commandName, actualSender);
-            if (cooldownCheck.success === false) {
-                await sock.sendMessage(from, {
-                    text: `⏰ *Cooldown Active*\n\nPlease wait ${cooldownCheck.timeLeft} seconds before using this command again.`
-                });
-                return true;
+            if (config.events.autoReaction) {
+                try {
+                    await handleAutoReaction(sock, message);
+                } catch (error) {
+                    logger.error('Auto-reaction error:', error);
+                }
             }
-            
-            if (!isOwner && !isSudo) {
-                const rateLimitCheck = await rateLimiter.checkLimit(actualSender, commandName);
-                if (!rateLimitCheck.allowed) {
-                    await sock.sendMessage(from, {
-                        text: `🚫 *Rate Limited*\n\nToo many requests. Try again in ${Math.ceil(rateLimitCheck.resetTime / 1000)} seconds.`
-                    });
-                    return true;
+
+            const isCommand = await this.processCommand(
+                sock, message, messageContent.text, user, group, isGroup
+            );
+
+            if (isCommand) {
+                logger.info(`✅ Command processed successfully`);
+                if (config.events.levelUp) {
+                    try {
+                        await handleLevelUp(sock, message, true);
+                    } catch (error) {
+                        logger.error('Level up error:', error);
+                    }
                 }
                 
-                const spamCheck = await antiSpam.checkSpam(actualSender, message);
-                if (spamCheck.isSpam) {
-                    await sock.sendMessage(from, {
-                        text: `⚠️ *Anti-Spam Protection*\n\nSlow down! Wait ${spamCheck.waitTime} seconds.`
-                    });
-                    return true;
+                cache.set(`lastMessage_${sender}`, {
+                    content: messageContent.text,
+                    timestamp: Date.now(),
+                    messageType: messageContent.messageType,
+                    isGroup
+                }, 300);
+
+                await this.updateMessageStats('command');
+                return;
+            }
+
+            if (config.events.levelUp) {
+                try {
+                    await handleLevelUp(sock, message, false);
+                } catch (error) {
+                    logger.error('Level up error:', error);
                 }
             }
-            
-            const argsValid = await this.validateArguments(command, args, sock, message);
-            if (!argsValid) return true;
-            
-            if (command.typing !== false) {
-                await sock.sendPresenceUpdate('composing', from);
-            }
-            
-            const startTime = Date.now();
-            
-            await command.execute({
-                sock,
-                message,
-                args,
-                command: commandName,
-                user,
-                group,
-                from,
-                sender: actualSender,
-                isGroup,
-                isGroupAdmin,
-                isBotAdmin,
-                isOwner,
-                isSudo,
-                prefix: config.prefix
-            });
-            
-            const executionTime = Date.now() - startTime;
-            
-            const stats = this.commandStats.get(command.name);
-            if (stats) {
-                stats.used++;
-                this.commandStats.set(command.name, stats);
-            }
-            
-            await Promise.all([
-                logCommand(actualSender, commandName, from, isGroup, executionTime),
-                updateUser(actualSender, { $inc: { commandsUsed: 1 } }),
-                isGroup ? updateGroup(from, { $inc: { commandsUsed: 1 } }) : Promise.resolve()
-            ]);
-            
-            if (executionTime > 5000) {
-                logger.warn(`Slow command execution: ${commandName} took ${executionTime}ms`);
-            }
-            
-            cache.set(`lastCommand_${actualSender}`, {
-                command: commandName,
+
+            cache.set(`lastMessage_${sender}`, {
+                content: messageContent.text,
                 timestamp: Date.now(),
-                executionTime
+                messageType: messageContent.messageType,
+                isGroup
             }, 300);
-            
-            return true;
-            
+
+            await this.updateMessageStats(isGroup ? 'group' : 'private');
+
         } catch (error) {
-            logger.error(`Command execution error [${commandName}]:`, error);
-            
-            const stats = this.commandStats.get(commandName);
-            if (stats) {
-                stats.errors++;
-                this.commandStats.set(commandName, stats);
-            }
-            
-            await sock.sendMessage(message.key.remoteJid, {
-                text: `❌ *Command Error*\n\nAn error occurred while executing this command.\n\n*Command:* ${commandName}\n*Error:* ${error.message || 'Unknown error'}`
+            logger.error('Critical message handling error:', {
+                error: error.message,
+                stack: error.stack,
+                from: message?.key?.remoteJid,
+                messageId: message?.key?.id
             });
-            
-            return true;
-        } finally {
-            await sock.sendPresenceUpdate('paused', message.key.remoteJid);
         }
     }
 
-    async getHelpMessage(category = null, user = null) {
-        const isOwner = user && this.isOwner(user.jid);
-        const isPremium = (user && user.isPremium) || isOwner;
-        
-        if (category) {
-            const commands = this.getCommandsByCategory(category)
-                .filter(cmd => {
-                    if (!cmd) return false;
-                    if (cmd.hidden && !isOwner) return false;
-                    if (cmd.premium && !isPremium) return false;
-                    if (cmd.ownerOnly && !isOwner) return false;
-                    return true;
-                });
-            
-            if (commands.length === 0) {
-                return `❌ No commands found in category: ${category}`;
-            }
-            
-            let helpText = `╭─「 *${category.toUpperCase()} COMMANDS* 」\n`;
-            
-            commands.forEach(cmd => {
-                const usage = cmd.usage || cmd.name;
-                const desc = cmd.description || 'No description';
-                helpText += `├ ${config.prefix}${usage}\n├   ${desc}\n├\n`;
-            });
-            
-            helpText += `╰────────────────\n\n*Total:* ${commands.length} commands`;
-            return helpText;
-        }
-        
-        const categories = this.getAllCategories()
-            .filter(cat => {
-                const commands = this.getCommandsByCategory(cat);
-                return commands.some(cmd => {
-                    if (!cmd) return false;
-                    if (cmd.hidden && !isOwner) return false;
-                    if (cmd.premium && !isPremium) return false;
-                    if (cmd.ownerOnly && !isOwner) return false;
-                    return true;
-                });
-            });
-        
-        let helpText = `╭─「 *${config.botName || 'ILOM BOT'} MENU* 」\n`;
-        helpText += `├ *Version:* ${config.botVersion || '1.0.0'}\n`;
-        helpText += `├ *Prefix:* ${config.prefix}\n`;
-        helpText += `├ *Commands:* ${this.getCommandCount()}\n`;
-        helpText += `├ *Categories:* ${categories.length}\n`;
-        helpText += `╰────────────────\n\n`;
-        
-        categories.forEach(category => {
-            const commands = this.getCommandsByCategory(category)
-                .filter(cmd => cmd && (!cmd.hidden || isOwner))
-                .filter(cmd => cmd && (!cmd.premium || isPremium))
-                .filter(cmd => cmd && (!cmd.ownerOnly || isOwner));
-            
-            if (commands.length > 0) {
-                helpText += `*${category.toUpperCase()}* (${commands.length})\n`;
-                helpText += `${config.prefix}help ${category}\n\n`;
-            }
-        });
-        
-        helpText += `*Usage:* ${config.prefix}help [category]\n`;
-        helpText += `*Example:* ${config.prefix}help fun\n\n`;
-        helpText += `_🧠 Amazing Bot 🧠 v1 created by Ilom_`;
-        
-        return helpText;
-    }
-
-    getTopCommands(limit = 10) {
-        return Array.from(this.commandStats.entries())
-            .sort((a, b) => b[1].used - a[1].used)
-            .slice(0, limit)
-            .map(([name, stats]) => ({ name, ...stats }));
-    }
-
-    async searchCommands(query, user = null) {
-        const isOwner = user && this.isOwner(user.jid);
-        const isPremium = (user && user.isPremium) || isOwner;
-        
-        const results = [];
-        
-        for (const [name, command] of this.commands) {
-            if (!command) continue;
-            if (command.hidden && !isOwner) continue;
-            if (command.premium && !isPremium) continue;
-            if (command.ownerOnly && !isOwner) continue;
-            
-            const searchText = `${name} ${command.description || ''} ${command.aliases?.join(' ') || ''}`.toLowerCase();
-            
-            if (searchText.includes(query.toLowerCase())) {
-                results.push({
-                    name,
-                    category: command.category,
-                    description: command.description || 'No description',
-                    usage: command.usage || name
-                });
+    async handleMessageUpdate(sock, messageUpdates) {
+        for (const update of messageUpdates) {
+            try {
+                const { key, update: messageUpdate } = update;
+                
+                if (messageUpdate && messageUpdate.message) {
+                    logger.info(`Message updated: ${key?.id || 'unknown'}`);
+                    
+                    const updatedContent = this.extractMessageContent(messageUpdate);
+                    if (updatedContent && key?.id) {
+                        cache.set(`updatedMessage_${key.id}`, {
+                            content: updatedContent.text,
+                            timestamp: Date.now()
+                        }, 300);
+                    }
+                }
+            } catch (error) {
+                logger.error('Message update handling error:', error);
             }
         }
+    }
+
+    async handleMessageDelete(sock, deletedMessages) {
+        for (const deletion of deletedMessages) {
+            try {
+                const { fromMe, id, participant, remoteJid } = deletion;
+                
+                logger.info(`Message deleted: ${id} from ${remoteJid}`);
+                
+                const isGroup = remoteJid.endsWith('@g.us');
+                const deletedBy = participant || remoteJid;
+                
+                if (isGroup) {
+                    if (config.features.antiDelete) {
+                        const group = await getGroup(remoteJid);
+                        if (group?.settings?.antiDelete) {
+                            const cachedMessage = cache.get(`message_${id}`);
+                            if (cachedMessage) {
+                                await sock.sendMessage(remoteJid, {
+                                    text: `🗑️ *Anti-Delete*\n\n*Deleted by:* @${deletedBy.split('@')[0]}\n*Content:* ${cachedMessage.content}\n*Time:* ${new Date(cachedMessage.timestamp).toLocaleString()}`,
+                                    contextInfo: {
+                                        mentionedJid: [deletedBy]
+                                    }
+                                });
+                            }
+                        }
+                    }
+                }
+                
+                cache.del(`message_${id}`);
+                
+            } catch (error) {
+                logger.error('Message deletion handling error:', error);
+            }
+        }
+    }
+
+    async getMessageStats() {
+        this.initializeStats();
+        let stats = cache.get('messageStats');
         
-        return results;
+        if (!stats || typeof stats !== 'object' || stats.totalMessages === undefined) {
+            stats = {
+                totalMessages: 0,
+                commandsExecuted: 0,
+                mediaProcessed: 0,
+                groupMessages: 0,
+                privateMessages: 0
+            };
+            cache.set('messageStats', stats, 3600);
+        }
+        
+        return stats;
+    }
+
+    async updateMessageStats(type) {
+        try {
+            this.initializeStats();
+            let stats = cache.get('messageStats');
+            
+            if (!stats || typeof stats !== 'object' || stats.totalMessages === undefined) {
+                stats = {
+                    totalMessages: 0,
+                    commandsExecuted: 0,
+                    mediaProcessed: 0,
+                    groupMessages: 0,
+                    privateMessages: 0
+                };
+            }
+            
+            stats.totalMessages = (stats.totalMessages || 0) + 1;
+            
+            switch (type) {
+                case 'command':
+                    stats.commandsExecuted = (stats.commandsExecuted || 0) + 1;
+                    break;
+                case 'media':
+                    stats.mediaProcessed = (stats.mediaProcessed || 0) + 1;
+                    break;
+                case 'group':
+                    stats.groupMessages = (stats.groupMessages || 0) + 1;
+                    break;
+                case 'private':
+                    stats.privateMessages = (stats.privateMessages || 0) + 1;
+                    break;
+            }
+            
+            cache.set('messageStats', stats, 3600);
+        } catch (error) {
+            logger.error('Failed to update message stats:', error);
+        }
     }
 }
 
-export const commandHandler = new CommandHandler();
+export const messageHandler = new MessageHandler();
 
-export const loadCommands = () => commandHandler.loadCommands();
-export const getCommand = (name) => commandHandler.getCommand(name);
-export const handleCommand = (sock, message, commandName, args) =>
-    commandHandler.handleCommand(sock, message, commandName, args);
-export const getCommandCount = () => commandHandler.getCommandCount();
-export const reloadCommand = (name) => commandHandler.reloadCommand(name);
-export const getHelpMessage = (category, user) => commandHandler.getHelpMessage(category, user);
-export const searchCommands = (query, user) => commandHandler.searchCommands(query, user);
-export const getTopCommands = (limit) => commandHandler.getTopCommands(limit);
-export const getAllCategories = () => commandHandler.getAllCategories();
-export const getCommandsByCategory = (category) => commandHandler.getCommandsByCategory(category);
+export default {
+    messageHandler,
+    handleIncomingMessage: (sock, message) => messageHandler.handleIncomingMessage(sock, message),
+    handleMessageUpdate: (sock, updates) => messageHandler.handleMessageUpdate(sock, updates),
+    handleMessageDelete: (sock, deletions) => messageHandler.handleMessageDelete(sock, deletions),
+    getMessageStats: () => messageHandler.getMessageStats(),
+    extractMessageContent: (message) => messageHandler.extractMessageContent(message),
