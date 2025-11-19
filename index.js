@@ -393,12 +393,12 @@ async function setupEventHandlers(sock, saveCreds) {
         saveCreds();
     });
 
-    console.log('✅ Setting up messages.upsert event handler...');
+    logger.info('✅ Setting up messages.upsert event handler...');
     sock.ev.on('messages.upsert', async (upsert) => {
-        console.log(`🔔 messages.upsert EVENT FIRED | Type: ${upsert.type} | Messages: ${upsert.messages?.length || 0}`);
+        logger.debug(`🔔 messages.upsert EVENT | Type: ${upsert.type} | Messages: ${upsert.messages?.length || 0}`);
         const { messages, type } = upsert;
         if (type === 'notify') {
-            console.log(`📬 Processing ${messages.length} notify message(s)...`);
+            logger.debug(`📬 Processing ${messages.length} notify message(s)...`);
             for (const message of messages) {
                 try {
                     await messageHandler.handleIncomingMessage(sock, message);
@@ -407,7 +407,7 @@ async function setupEventHandlers(sock, saveCreds) {
                 }
             }
         } else {
-            console.log(`⏭️  Skipping message type: ${type}`);
+            logger.debug(`⏭️  Skipping message type: ${type}`);
         }
     });
 
@@ -461,8 +461,9 @@ async function setupEventHandlers(sock, saveCreds) {
             }
         }
     });
+    
+    logger.info('✅ All event handlers registered successfully');
 }
-
 async function establishWhatsAppConnection() {
     return new Promise(async (resolve, reject) => {
         try {
