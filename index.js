@@ -464,87 +464,155 @@ async function setupEventHandlers(sock, saveCreds) {
 }
 
 async function establishWhatsAppConnection() {
-    try {
-        logger.info('📡 Initializing WhatsApp connection...');
-        
-        const originalLog = console.log;
-        const originalClear = console.clear;
-        const originalWrite = process.stdout.write;
-        
-        console.log = () => {};
-        console.clear = () => {};
-        process.stdout.write = () => {};
-        
-        const { makeWASocket, Browsers, useMultiFileAuthState, fetchLatestBaileysVersion, makeCacheableSignalKeyStore } = await import('@whiskeysockets/baileys');
-        
-        console.log = originalLog;
-        console.clear = originalClear;
-        process.stdout.write = originalWrite;
+    return new Promise(async (resolve, reject) => {
+        try {
+            logger.info('📡 Initializing WhatsApp connection...');
+            
+            const originalLog = console.log;
+            const originalClear = console.clear;
+            const originalWrite = process.stdout.write;
+            
+            console.log = () => {};
+            console.clear = () => {};
+            process.stdout.write = () => {};
+            
+            const { makeWASocket, Browsers, useMultiFileAuthState, fetchLatestBaileysVersion, makeCacheableSignalKeyStore, DisconnectReason } = await import('@whiskeysockets/baileys');
+            
+            console.log = originalLog;
+            console.clear = originalClear;
+            process.stdout.write = originalWrite;
 
-        logger.info('🔑 Loading authentication state...');
-        const { state, saveCreds } = await useMultiFileAuthState(SESSION_PATH);
+            logger.info('🔑 Loading authentication state...');
+            const { state, saveCreds } = await useMultiFileAuthState(SESSION_PATH);
 
-        logger.info('📦 Fetching latest Baileys version...');
-        const { version } = await fetchLatestBaileysVersion();
-        logger.info(`✅ Baileys version: ${version.join('.')}`);
+            logger.info('📦 Fetching latest Baileys version...');
+            const { version } = await fetchLatestBaileysVersion();
+            logger.info(`✅ Baileys version: ${version.join('.')}`);
 
-        logger.info('🔌 Creating WhatsApp socket...');
-        sock = makeWASocket({
-            auth: {
-                creds: state.creds,
-                keys: makeCacheableSignalKeyStore(state.keys, P({ level: "fatal" }).child({ level: "fatal" })),
-            },
-            printQRInTerminal: true,
-            browser: Browsers.macOS("Safari"),
-            markOnlineOnConnect: true,
-            defaultQueryTimeoutMs: 60000,
-            connectTimeoutMs: 60000,
-            retryRequestDelayMs: 5000,
-            maxRetries: 5,
-            logger: P({ level: "silent" }),
-            version,
-        });
+            logger.info('🔌 Creating WhatsApp socket...');
+            sock = makeWASocket({
+                auth: {
+                    creds: state.creds,
+                    keys: makeCacheableSignalKeyStore(state.keys, P({ level: "fatal" }).child({ level: "fatal" })),
+                },
+                printQRInTerminal: true,
+                browser: Browsers.macOS("Safari"),
+                markOnlineOnConnect: true,
+                defaultQueryTimeoutMs: 60000,
+                connectTimeoutMs: 60000,
+                retryRequestDelayMs: 5000,
+                maxRetries: 5,
+                logger: P({ level: "silent" }),
+                version,
+            });
 
-        logger.info('📢 Setting up connection event handlers...');
+            logger.info('📢 Setting up connection event handlers...');
+            logger.info('🔗 Connecting to WhatsApp...');
 
-        const connectionTimeout = setTimeout(async () => {
-            logger.warn('⚠️  Connection timeout - WhatsApp connection took too long');
-            logger.info('💡 This might be due to:');
-            logger.info('   - Invalid or expired SESSION_ID');
-            logger.info('   - Network connectivity issues');
-            logger.info('   - WhatsApp server problems');
-            logger.info('🔄 Attempting to reconnect...');
+            const connectionTimeout = setTimeout(async () => {
+                logger.warn('⚠️  Connection timeout - WhatsApp connection took too long');
+                logger.info('💡 This might be due to:');
+                logger.info('   - Invalid or expired SESSION_ID');
+                logger.info('   - Network connectivity issues');
+                logger.info('   - WhatsApp server problems');
+                logger.info('🔄 Attempting to reconnect...');
 
-            if (sock && sock.end) {
-                await sock.end();
-            }
+                if (sock && sock.end) {
+                    await sock.end();
+                }
+                if (reconnectAttempts < MAX_RECONNECT) {
+                    reconnectAttempts++;
+                    setTimeout(() => establishWhatsAppConnection().then(resolve).catch(reject), 5000);
+                } else {
+                    reject(new Error('Connection timeout after multiple attempts'));
+                }
+            }, 60000);
+
+            sock.ev.on('connection.update', async (update) => {
+                const { connection, lastDisconnect, qr } = update;
+                
+                if (qr) {
+                    console.log(chalk.cyan('\n📱 QR Code received - scan with WhatsApp to connect'));
+                    logger.info('📱 QR Code generated - Scan with WhatsApp');
+                    
+                    if (qrService.isQREnabled()) {
+                        try {
+                            const qrGenerated = await qrService.generateQR(qr);
+                            if (qrGenerated) {
+                                console.log(chalk.green('✅ QR code generated and saved'));
+                                const domain = process.env.REPLIT_DOMAINS || process.env.REPL_SLUG;
+                                if (domain) {
+                                    console.log(chalk.blue(`🌐 Access QR code at: https://${domain}/qr`));
+                                } else {
+                                    console.log(chalk.blue(`🌐 Access QR code at: http://localhost:${config.server.port}/qr`));
+                                }
+                            }
+                        } catch (error) {
+                            logger.error('Error generating QR code:', error);
+                        }
+                    }
+                }
+                
+                if (connection === 'open') {
+                    clearTimeout(connectionTimeout);
+                    reconnectAttempts = 0;
+                    logger.info('✅ WhatsApp connection established successfully!');
+                    console.log(chalk.green.bold('🚀 Bot is online and ready!'));
+                    
+                    if (qrService.isQREnabled()) {
+                        await qrService.clearQR();
+                    }
+                    
+                    await sendBotStatusUpdate(sock);
+                    
+                    resolve();
+                }
+                
+                if (connection === 'close') {
+                    clearTimeout(connectionTimeout);
+                    const statusCode = lastDisconnect?.error?.output?.statusCode;
+                    
+                    logger.warn(`⚠️  Connection closed. Status code: ${statusCode}`);
+                    
+                    if (statusCode === DisconnectReason.badSession) {
+                        logger.error('❌ Bad Session File, deleting and restarting...');
+                        await fs.remove(SESSION_PATH).catch(() => {});
+                        await fs.ensureDir(SESSION_PATH);
+                        await fs.ensureDir(path.join(SESSION_PATH, 'keys'));
+                        reject(new Error('Bad session - Please restart'));
+                    } else if (statusCode === DisconnectReason.loggedOut) {
+                        logger.error('❌ WhatsApp session expired - Please update SESSION_ID');
+                        await fs.remove(SESSION_PATH).catch(() => {});
+                        await fs.ensureDir(SESSION_PATH);
+                        await fs.ensureDir(path.join(SESSION_PATH, 'keys'));
+                        reject(new Error('Logged out - Update SESSION_ID'));
+                    } else if (statusCode === DisconnectReason.connectionReplaced) {
+                        logger.error('❌ Connection replaced - Another session opened');
+                        reject(new Error('Connection replaced'));
+                    } else {
+                        logger.warn('⚠️  Connection closed, will reconnect...');
+                    }
+                }
+                
+                if (update.receivedPendingNotifications) {
+                    logger.info('📬 Received pending notifications');
+                }
+            });
+
+            await setupEventHandlers(sock, saveCreds);
+
+            global.sock = sock;
+
+        } catch (error) {
+            logger.error('Failed to establish WhatsApp connection:', error);
             if (reconnectAttempts < MAX_RECONNECT) {
                 reconnectAttempts++;
-                setTimeout(establishWhatsAppConnection, 5000);
+                setTimeout(() => establishWhatsAppConnection().then(resolve).catch(reject), 5000);
+            } else {
+                reject(error);
             }
-        }, 30000);
-
-        sock.ev.on('connection.update', (update) => {
-            logger.debug('Connection update received:', JSON.stringify(update));
-            if (update.connection === 'open' || update.connection === 'close') {
-                clearTimeout(connectionTimeout);
-            }
-            handleConnectionEvents(sock, update);
-        });
-
-        await setupEventHandlers(sock, saveCreds);
-
-        global.sock = sock;
-
-    } catch (error) {
-        logger.error('Failed to establish WhatsApp connection:', error);
-        if (reconnectAttempts < MAX_RECONNECT) {
-            reconnectAttempts++;
-            setTimeout(establishWhatsAppConnection, 5000);
-        } else {
-            process.exit(1);
         }
-    }
+    });
 }
 
 function setupProcessHandlers() {
@@ -759,7 +827,6 @@ async function initializeBot() {
         logger.info('Starting web server...');
         await startWebServer(app);
 
-        logger.info('Establishing WhatsApp connection...');
         await establishWhatsAppConnection();
 
         setupProcessHandlers();

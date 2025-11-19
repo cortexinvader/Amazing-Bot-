@@ -1,0 +1,50 @@
+23:56:22 INFO    🔗 Connecting to WhatsApp...
+23:56:22 INFO    ✨ Bot is now running continuously...
+23:56:22 INFO    Bot initialization completed successfully
+🎉 Ilom Bot is fully operational and ready to serve!
+23:56:22 INFO    📢 Setting up connection event handlers...
+23:56:22 INFO    🔌 Creating WhatsApp socket...
+23:56:22 INFO    ✅ Baileys version: 2.3000.1027934701
+✅ Setting up messages.upsert event handler...
+23:56:21 INFO    📦 Fetching latest Baileys version...
+23:56:21 INFO    🔑 Loading authentication state...
+==> Docs on specifying a port: https://render.com/docs/web-services#port-binding
+==> No open ports detected, continuing to scan...
+==> ///////////////////////////////////////////////////////////
+==> 
+==> Available at your primary URL https://amazing-bot.onrender.com
+==> 
+==> ///////////////////////////////////////////////////////////
+==> 
+==> Your service is live 🎉
+23:56:15 INFO    🌐 Web server running on http://0.0.0.0:10000
+23:56:15 INFO    Web server routes configured
+23:56:15 INFO    ✅ Loaded API route: /api/webhooks
+23:56:15 INFO    ✅ Loaded API route: /api/users
+23:56:15 INFO    ✅ Loaded API route: /api/stats
+23:56:15 INFO    ✅ Loaded API route: /api/settings
+23:56:15 INFO    ✅ Loaded API route: /api/qr
+23:56:15 INFO    ✅ Loaded API route: /api/messages
+23:56:15 INFO    ✅ Loaded API route: /api/health
+23:56:15 INFO    ✅ Loaded API route: /api/groups
+23:56:15 INFO    ✅ Loaded API route: /api/commands
+23:56:15 INFO    ✅ Loaded API route: /api/auth
+23:56:15 INFO    Web server middleware configured
+23:56:15 INFO    Starting web server...
+23:56:15 INFO    Task scheduler initialized with 7 tasks
+23:56:14 INFO    Loaded 0 saved tasks
+23:56:14 INFO    Added scheduled task: send-daily-stats (0 9 * * *)
+23:56:14 INFO    Added scheduled task: check-premium-expiry (0 0 * * *)
+23:56:14 INFO    Added scheduled task: update-user-stats (0 1 * * *)
+23:56:14 INFO    Added scheduled task: backup-database (0 3 * * 0)
+23:56:14 INFO    Added scheduled task: log-rotation (0 0 * * 0)
+23:56:14 INFO    Added scheduled task: cache-cleanup (*/30 * * * *)
+23:56:14 INFO    Added scheduled task: database-cleanup (0 2 * * *)
+23:56:14 INFO    Starting task scheduler...
+23:56:14 INFO    Plugin system initialized
+23:56:14 INFO    Loading plugin system...
+23:56:14 INFO    Loaded 179 commands from 10 categories
+23:56:00 INFO    Loading command modules...
+23:56:00 INFO    Cache system initialized successfully
+23:56:00 INFO    Initializing cache system...
+23:56:00 INFO    ✅ Session credentials processed (
