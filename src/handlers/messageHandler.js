@@ -339,6 +339,26 @@ class MessageHandler {
                 return;
             }
 
+            // Whitelist check - block non-whitelisted users when whitelist mode is active
+            try {
+                const { initWhitelist, isWhitelisted, isOwner } = await import('../commands/owner/whitelist.js');
+                const whitelistData = initWhitelist();
+                
+                if (whitelistData.enabled) {
+                    const userIsOwner = isOwner(sender, config);
+                    const userIsWhitelisted = isWhitelisted(sender, whitelistData);
+                    
+                    if (!userIsOwner && !userIsWhitelisted) {
+                        logger.debug(`Whitelist: Blocked message from non-whitelisted user ${sender.split('@')[0]}`);
+                        return;
+                    }
+                    
+                    logger.debug(`Whitelist: Allowed message from ${userIsOwner ? 'owner' : 'whitelisted user'} ${sender.split('@')[0]}`);
+                }
+            } catch (error) {
+                logger.error('Whitelist check error:', error);
+            }
+
             let user = await getUser(sender);
             if (!user) {
                 user = await createUser({

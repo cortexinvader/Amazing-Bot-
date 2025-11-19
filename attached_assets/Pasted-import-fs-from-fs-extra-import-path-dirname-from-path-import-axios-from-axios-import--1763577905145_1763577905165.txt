@@ -1,0 +1,275 @@
+import fs from "fs-extra";
+import path, { dirname } from "path";
+import axios from "axios";
+import { PasteClient } from "pastebin-api";
+import { fileURLToPath } from "url";
+
+const client = new PasteClient(
+    global.client.config.keys.pastebin || process.env.PASTEBIN_KEY
+);
+
+const cmdsPath = path.join(process.cwd(), "scripts", "cmds");
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+export default {
+    config: {
+        name: "cmd",
+        description: "Manages commands",
+        usage: "!cmd <install/delete/load/bin/file/unload> <commandname.js> [code]",
+        cooldown: 5,
+        role: 1,
+        category: "admin"
+    },
+    onRun: async function ({ event, sock, message, args, threadID, senderID }) {
+        try {
+            if (args.length < 2) {
+                return message.reply("Invalid usage!");
+            }
+            const action = args[0].toLowerCase();
+            const commandName = args[1];
+            const commandPath = path.join(cmdsPath, commandName);
+
+            if (action === "install" || action === "-i") {
+                let code = null;
+                if (!args[2]) {
+                    return message.reply("Please provide the command code!");
+                } else if (
+                    args[2].toLowerCase().startsWith("https") ||
+                    args[2].toLowerCase().startsWith("http")
+                ) {
+                    try {
+                        const response = await axios.get(args[2]);
+                        code = response.data;
+                    } catch (e) {
+                        return message.reply("An error occurred: " + e.message);
+                    }
+                } else {
+                    code = args.slice(2).join(" ");
+                }
+
+                if (fs.existsSync(commandPath)) {
+                    const confirmMsg = await sock.sendMessage(threadID, {
+                        text: `⚠️ Command file *${commandName}* already exists. React with 👍 to overwrite or 👎 to cancel.`
+                    });
+                    global.client.reactions.set(confirmMsg.key.id, {
+                        commandName: this.config.name,
+                        action: "overwrite",
+                        commandPath,
+                        newCode: code,
+                        senderID: senderID,
+                        threadID: threadID,
+                        id: confirmMsg.key.id
+                    });
+                    return;
+                }
+
+                await fs.writeFile(commandPath, code);
+                try {
+                    const commandModule = await import(commandPath + `?update=${Date.now()}`);
+                    if (fs.existsSync(commandPath)) {
+                        const command = commandModule.default;
+                        if (!command.config) {
+                            message.reply(`${commandName} does not export config`);
+                        } else if (!command.onRun) {
+                            message.reply(`${commandName} does not export the function onRun`);
+                        } else {
+                            global.client.commands.set(command.config.name, command);
+                            message.reply(`Command ${commandName} installed successfully!`);
+                        }
+                    }
+                } catch (e) {
+                    console.error("Error loading command:", e);
+                    return message.reply(`Error loading command: ${e.message}`);
+                }
+                return;
+            }
+
+            if (action === "delete" || action === "-d") {
+                const deleteCommandPath = path.join(cmdsPath, commandName);
+                if (fs.existsSync(deleteCommandPath)) {
+                    const confirmMsgDel = await sock.sendMessage(threadID, {
+                        text: `⚠️ Are you sure you want to delete the command *${commandName}*? React with 👍 to confirm or 👎 to cancel.`
+                    });
+                    global.client.reactions.set(confirmMsgDel.key.id, {
+                        commandName: this.config.name,
+                        action: "delete",
+                        commandPath: deleteCommandPath,
+                        commandNameStr: commandName,
+                        threadID: threadID,
+                        id: confirmMsgDel.key.id
+                    });
+                    return;
+                } else {
+                    message.reply(`Command ${commandName} not found!`);
+                    return;
+                }
+            }
+
+            switch (action) {
+                case "unload":
+                case "-ul":
+                case "-u":
+                    const unloadCommandPath = path.join(cmdsPath, args[1]);
+                    if (fs.existsSync(unloadCommandPath)) {
+                        try {
+                            const commandModule = await import(unloadCommandPath + `?update=${Date.now()}`);
+                            const command = commandModule.default;
+                            global.client.config.unloadedCmds.push(command.config.name);
+                            global.client.commands.delete(command.config.name);
+                            message.reply(`Command ${commandName} unloaded successfully!`);
+                            if (command.config.name.includes(global.client.config.unloadedCmds)) {
+                                fs.writeFileSync(
+                                    new URL("./../../config.json", import.meta.url),
+                                    JSON.stringify(global.client.config),
+                                    "utf8",
+                                    err => {
+                                        if (err) {
+                                            message.reply("failed to write data to config file");
+                                        } else {
+                                            message.reply("data has been written to config file successfully");
+                                        }
+                                    }
+                                );
+                            }
+                        } catch (e) {
+                            console.error("Error unloading command:", e);
+                            return message.reply(`Error unloading command: ${e.message}`);
+                        }
+                    } else {
+                        message.reply(`Command ${commandName} does not exist!`);
+                    }
+                    break;
+
+                case "load":
+                case "-l":
+                    const loadCommandPath = path.join(cmdsPath, args[1]);
+                    if (fs.existsSync(loadCommandPath)) {
+                        try {
+                            const commandModule = await import(loadCommandPath + `?update=${Date.now()}`);
+                            const command = commandModule.default;
+                            global.client.commands.set(command.config.name, command);
+                            message.reply(`Command ${commandName} loaded successfully!`);
+                            if (command.config.name.includes(global.client.config.unloadedCmds)) {
+                                global.client.config.unloadedCmds.pop(global.client.config.unloadedCmds.indexOf(command.config.name));
+                                fs.writeFileSync(
+                                    new URL("./../../config.json", import.meta.url),
+                                    JSON.stringify(global.client.config),
+                                    "utf8",
+                                    err => {
+                                        if (err) {
+                                            message.reply("failed to write data to config file");
+                                        } else {
+                                            message.reply("data has been written to config file successfully");
+                                        }
+                                    }
+                                );
+                            }
+                        } catch (e) {
+                            console.error("Error loading command:", e);
+                            return message.reply(`Error loading command: ${e.message}`);
+                        }
+                    } else {
+                        message.reply(`Command ${commandName} not found!`);
+                    }
+                    break;
+
+                case "bin":
+                case "-b":
+                    const binFileName = args[1];
+                    const binFilePath = path.join(cmdsPath, binFileName);
+                    if (!fs.existsSync(binFilePath)) {
+                        await message.reply(`❌ | The file ${binFileName} does not exist.`);
+                        return;
+                    }
+                    const binData = fs.readFileSync(binFilePath, "utf-8");
+                    try {
+                        const url = await client.createPaste({
+                            code: binData,
+                            expireDate: "N",
+                            format: "javascript",
+                            name: binFileName,
+                            publicity: 1
+                        });
+                        if (!url) {
+                            await message.reply(`❌ | Failed to upload the file to pastebin, please check if the API key is working.`);
+                            return;
+                        }
+                        const id = url.split("/")[3];
+                        const rawPaste = "https://pastebin.com/raw/" + id;
+                        await message.reply(`✅ | Successfully uploaded ${binFileName} to pastebin!\nUrl: ${rawPaste}`);
+                    } catch (e) {
+                        console.error("Pastebin error:", e);
+                        return message.reply(`❌ | Failed to upload to pastebin: ${e.message}`);
+                    }
+                    break;
+
+                case "file":
+                case "-f":
+                    const fileFileName = args[1];
+                    const fileFilePath = path.join(cmdsPath, fileFileName);
+                    if (!fs.existsSync(fileFilePath)) {
+                        return message.reply(`the file ${fileFileName} does not exist`);
+                    }
+                    const fileData = fs.readFileSync(fileFilePath, "utf-8");
+                    message.reply(fileData);
+                    break;
+
+                default:
+                    message.reply("unknown action specifield");
+            }
+        } catch (error) {
+            console.error("Error managing command:", error);
+            message.reply(`Failed to manage command! ${error.message}`);
+        }
+    },
+    onReaction: async function ({ sock, emoji, senderID, threadID, data, saveTable }) {
+        if (data.commandName !== this.config.name) return;
+
+        if (data.action === "overwrite") {
+            if (emoji === '👍') {
+                await fs.writeFile(data.commandPath, data.newCode);
+                try {
+                    const commandModule = await import(data.commandPath + `?update=${Date.now()}`);
+                    if (fs.existsSync(data.commandPath)) {
+                        const command = commandModule.default;
+                        if (!command.config) {
+                            await sock.sendMessage(threadID, { text: `${data.commandPath} does not export config` });
+                        } else if (!command.onRun) {
+                            await sock.sendMessage(threadID, { text: `${data.commandPath} does not export the function onRun` });
+                        } else {
+                            global.client.commands.set(command.config.name, command);
+                            await sock.sendMessage(threadID, { text: `✅ Command file overwritten and installed successfully.` });
+                        }
+                    }
+                } catch (e) {
+                    console.error("Error loading command after overwrite:", e);
+                    await sock.sendMessage(threadID, { text: `Error loading command after overwrite: ${e.message}` });
+                }
+            } else if (emoji === '👎') {
+                await sock.sendMessage(threadID, { text: `❌ Command overwrite cancelled.` });
+            } else {
+                await sock.sendMessage(threadID, { text: `❌ Invalid reaction. Overwrite cancelled.` });
+            }
+            global.client.reactions.delete(data.id);
+        }
+
+        if (data.action === "delete") {
+            if (emoji === '👍') {
+                try {
+                    await fs.unlink(data.commandPath);
+                    const cmdKey = data.commandNameStr.replace(".js", "");
+                    global.client.commands.delete(cmdKey);
+                    await sock.sendMessage(threadID, { text: `✅ Command ${data.commandNameStr} deleted successfully!` });
+                } catch (e) {
+                    await sock.sendMessage(threadID, { text: `❌ Error deleting command: ${e.message}` });
+                }
+            } else if (emoji === '👎') {
+                await sock.sendMessage(threadID, { text: `❌ Command delete cancelled.` });
+            } else {
+                await sock.sendMessage(threadID, { text: `❌ Invalid reaction. Delete cancelled.` });
+            }
+            global.client.reactions.delete(data.id);
+        }
+    }
+};
