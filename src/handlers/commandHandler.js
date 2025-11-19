@@ -225,20 +225,30 @@ class CommandHandler {
 
     async isBotAdmin(sock, groupId) {
         try {
-            if (!groupId || !sock || !sock.user) return false;
+            if (!groupId || !sock || !sock.user) {
+                logger.debug('Missing groupId or sock.user');
+                return false;
+            }
             
             const groupMetadata = await sock.groupMetadata(groupId);
-            if (!groupMetadata || !groupMetadata.participants) return false;
+            if (!groupMetadata || !groupMetadata.participants) {
+                logger.debug('Missing group metadata or participants');
+                return false;
+            }
             
             const botJid = sock.user.id;
             const botPhone = this.extractPhone(botJid);
             
+            logger.debug(`Checking bot admin status - Bot JID: ${botJid}, Bot Phone: ${botPhone}`);
+            
             const botParticipant = groupMetadata.participants.find(p => {
-                if (p.id === botJid) return true;
+                const pId = p.id;
+                const pLid = p.lid;
+                const pPhone = this.extractPhone(pId);
+                const pLidPhone = pLid ? this.extractPhone(pLid) : null;
                 
-                const pPhone = this.extractPhone(p.id);
-                const pLidPhone = p.lid ? this.extractPhone(p.lid) : null;
-                
+                if (pId === botJid) return true;
+                if (pLid === botJid) return true;
                 if (pPhone === botPhone) return true;
                 if (pLidPhone === botPhone) return true;
                 
@@ -246,12 +256,12 @@ class CommandHandler {
             });
             
             if (!botParticipant) {
-                logger.debug(`Bot not found in group participants`);
+                logger.debug(`Bot not found in group participants. Total participants: ${groupMetadata.participants.length}`);
                 return false;
             }
             
             const isAdmin = botParticipant.admin === 'admin' || botParticipant.admin === 'superadmin';
-            logger.debug(`Bot admin status in group: ${isAdmin} (role: ${botParticipant.admin || 'none'})`);
+            logger.debug(`Bot admin status: ${isAdmin} (role: ${botParticipant.admin || 'none'})`);
             
             return isAdmin;
         } catch (error) {
