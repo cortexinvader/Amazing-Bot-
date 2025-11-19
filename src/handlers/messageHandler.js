@@ -11,7 +11,6 @@ import path from 'path';
 import handleAutoReaction from '../events/autoReaction.js';
 import handleAntiLink from '../plugins/antiLink.js';
 import handleLevelUp from '../events/levelUp.js';
-import { trackMessage } from '../commands/utility/profile.js';
 
 class MessageHandler {
     constructor() {
@@ -164,10 +163,7 @@ class MessageHandler {
         const prefixUsed = this.detectPrefix(trimmedText);
         const shouldProcessNoPrefix = this.shouldProcessNoPrefix(trimmedText, isGroup, group, sender);
         
-        console.log(`🔍 PREFIX CHECK | Text: "${trimmedText.substring(0, 50)}" | Prefix: ${prefixUsed || 'none'} | NoPrefix: ${shouldProcessNoPrefix}`);
-        
         if (!prefixUsed && !shouldProcessNoPrefix) {
-            console.log(`❌ NOT A COMMAND - No prefix detected`);
             return false;
         }
 
@@ -176,7 +172,6 @@ class MessageHandler {
             : trimmedText.trim();
 
         if (!commandText || commandText.length === 0) {
-            console.log(`❌ NOT A COMMAND - Empty command text`);
             return false;
         }
 
@@ -184,14 +179,11 @@ class MessageHandler {
         const commandName = splitArgs.shift()?.toLowerCase();
 
         if (!commandName || commandName.length === 0) {
-            console.log(`❌ NOT A COMMAND - No command name`);
             return false;
         }
 
         const args = splitArgs;
         const command = commandHandler.getCommand(commandName);
-        
-        console.log(`🔎 COMMAND LOOKUP | Name: "${commandName}" | Found: ${command ? 'YES' : 'NO'}`);
         
         if (!command) {
             if (prefixUsed) {
@@ -200,7 +192,6 @@ class MessageHandler {
             return false;
         }
 
-        console.log(`⚡ EXECUTING COMMAND: ${commandName} | User: ${sender.split('@')[0]}`);
         logger.info(`Executing command: ${commandName} | User: ${sender.split('@')[0]} | Type: ${isGroup ? 'group' : 'private'}`);
         
         try {
@@ -335,13 +326,12 @@ class MessageHandler {
             const isGroup = from.endsWith('@g.us');
             
             const messageContent = this.extractMessageContent(message);
-            if (!messageContent || !messageContent.text) {
-                console.log(`⚠️  Message skipped - No text content`);
+            if (!messageContent) {
+                logger.debug(`Message skipped - No content extractable`);
                 return;
             }
 
-            console.log(`📨 NEW MESSAGE | From: ${sender.split('@')[0]} | Text: "${messageContent.text.substring(0, 100)}"`);
-            logger.debug(`Message received | From: ${sender.split('@')[0]} | Chat: ${isGroup ? 'group' : 'private'} | Text: ${messageContent.text.substring(0, 50)}`);
+            logger.info(`📨 Message from ${sender.split('@')[0]} in ${isGroup ? 'group' : 'private'}: "${messageContent.text.substring(0, 50)}${messageContent.text.length > 50 ? '...' : ''}"`);
 
             const spamCheck = await antiSpam.checkSpam(sender, message);
             if (spamCheck.isSpam && spamCheck.action === 'block') {
@@ -443,8 +433,7 @@ class MessageHandler {
             );
 
             if (isCommand) {
-                console.log(`✅ COMMAND EXECUTED`);
-                logger.debug(`Command processed successfully`);
+                logger.info(`✅ Command processed successfully`);
                 if (config.events.levelUp) {
                     try {
                         await handleLevelUp(sock, message, true);
@@ -462,14 +451,6 @@ class MessageHandler {
 
                 await this.updateMessageStats('command');
                 return;
-            }
-
-            if (isGroup) {
-                try {
-                    trackMessage(sender, from, false);
-                } catch (error) {
-                    logger.error('Track message error:', error);
-                }
             }
 
             if (config.events.levelUp) {
@@ -532,12 +513,6 @@ class MessageHandler {
                 const deletedBy = participant || remoteJid;
                 
                 if (isGroup) {
-                    try {
-                        trackMessage(deletedBy, remoteJid, true);
-                    } catch (error) {
-                        logger.error('Track delete error:', error);
-                    }
-
                     if (config.features.antiDelete) {
                         const group = await getGroup(remoteJid);
                         if (group?.settings?.antiDelete) {
@@ -560,16 +535,6 @@ class MessageHandler {
                 logger.error('Message deletion handling error:', error);
             }
         }
-    }
-
-    setAutoReplyStatus(enabled) {
-        this.autoReplyEnabled = enabled;
-        logger.info(`Auto-reply ${enabled ? 'enabled' : 'disabled'}`);
-    }
-
-    setChatBotStatus(enabled) {
-        this.chatBotEnabled = enabled;
-        logger.info(`ChatBot ${enabled ? 'enabled' : 'disabled'}`);
     }
 
     async getMessageStats() {
@@ -624,8 +589,6 @@ export default {
     handleIncomingMessage: (sock, message) => messageHandler.handleIncomingMessage(sock, message),
     handleMessageUpdate: (sock, updates) => messageHandler.handleMessageUpdate(sock, updates),
     handleMessageDelete: (sock, deletions) => messageHandler.handleMessageDelete(sock, deletions),
-    setAutoReplyStatus: (enabled) => messageHandler.setAutoReplyStatus(enabled),
-    setChatBotStatus: (enabled) => messageHandler.setChatBotStatus(enabled),
     getMessageStats: () => messageHandler.getMessageStats(),
     extractMessageContent: (message) => messageHandler.extractMessageContent(message),
     downloadMedia: (message, media) => messageHandler.downloadMedia(message, media)
