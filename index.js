@@ -432,16 +432,22 @@ async function setupEventHandlers(sock, saveCreds) {
         }
     });
 
+    logger.info('✅ Setting up group-participants.update event handler...');
     sock.ev.on('group-participants.update', async (groupUpdate) => {
         try {
+            logger.info(`🔔 GROUP PARTICIPANTS UPDATE EVENT | Group: ${groupUpdate.id} | Action: ${groupUpdate.action} | Participants: ${groupUpdate.participants?.length || 0}`);
+            
             await groupHandler.handleParticipantsUpdate(sock, groupUpdate);
         } catch (error) {
             logger.error('Group participants update error:', error);
         }
     });
 
+    logger.info('✅ Setting up groups.update event handler...');
     sock.ev.on('groups.update', async (groupsUpdate) => {
         try {
+            logger.info(`🔔 GROUPS UPDATE EVENT | Groups: ${groupsUpdate.length}`);
+            
             await groupHandler.handleGroupUpdate(sock, groupsUpdate);
         } catch (error) {
             logger.error('Groups update error:', error);
@@ -463,7 +469,13 @@ async function setupEventHandlers(sock, saveCreds) {
     });
     
     logger.info('✅ All event handlers registered successfully');
-}
+    logger.info(`📋 Event Status:`);
+    logger.info(`   - Group Join: ${config.events.groupJoin ? '✅ ENABLED' : '❌ DISABLED'}`);
+    logger.info(`   - Group Leave: ${config.events.groupLeave ? '✅ ENABLED' : '❌ DISABLED'}`);
+    logger.info(`   - Group Update: ${config.events.groupUpdate ? '✅ ENABLED' : '❌ DISABLED'}`);
+    logger.info(`   - Group Promote: ${config.events.groupPromote ? '✅ ENABLED' : '❌ DISABLED'}`);
+    logger.info(`   - Group Demote: ${config.events.groupDemote ? '✅ ENABLED' : '❌ DISABLED'}`);
+ }
 async function establishWhatsAppConnection() {
     return new Promise(async (resolve, reject) => {
         try {
