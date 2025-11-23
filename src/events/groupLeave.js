@@ -1,51 +1,136 @@
 import logger from '../utils/logger.js';
 import config from '../config.js';
 import { getGroup, updateGroup } from '../models/Group.js';
-import { createGoodbyeImage } from '../utils/canvasUtils.js';
+import axios from 'axios';
+
+async function getProfilePicture(sock, jid) {
+    try {
+        const url = await sock.profilePictureUrl(jid, 'image');
+        return url;
+    } catch (error) {
+        return 'https://i.ibb.co/2M7rtLk/ilom.jpg';
+    }
+}
+
+async function downloadProfilePic(url) {
+    try {
+        const response = await axios.get(url, { responseType: 'arraybuffer' });
+        return Buffer.from(response.data);
+    } catch (error) {
+        return null;
+    }
+}
 
 export default async function handleGroupLeave(sock, update) {
     try {
+        if (!config.events.groupLeave) {
+            logger.debug('Group leave event is disabled');
+            return;
+        }
+
         const { id: groupId, participants, action, author } = update;
         
-        if (action !== 'remove' && action !== 'leave') return;
+        if (action !== 'remove' && action !== 'leave') {
+            logger.debug(`Ignoring action: ${action} (not remove/leave)`);
+            return;
+        }
         
-        const group = await getGroup(groupId);
-        if (!group || !group.settings?.goodbye?.enabled) return;
-        
+        logger.info(`Processing group leave for ${participants.length} users in ${groupId}`);
+
+        let group = await getGroup(groupId);
         const groupMetadata = await sock.groupMetadata(groupId);
         const groupName = groupMetadata.subject || 'Group';
+        const memberCount = groupMetadata.participants.length;
         
         for (const participant of participants) {
             try {
                 const userName = participant.split('@')[0];
-                
-                const goodbyeImage = await createGoodbyeImage(userName, groupName);
-                
                 const isKicked = author && author !== participant;
                 
-                const goodbyeMessage = isKicked
-                    ? `╭──⦿【 👋 GOODBYE 】\n│\n│ 🚪 @${userName} was removed\n│ 👮 By: @${author.split('@')[0]}\n│ 📉 Group now has ${groupMetadata.participants.length} members\n│\n╰────────────⦿`
-                    : `╭──⦿【 👋 GOODBYE 】\n│\n│ 🚪 @${userName} has left\n│ 😢 We'll miss you!\n│ 📉 Group now has ${groupMetadata.participants.length} members\n│\n╰────────────⦿`;
+                logger.info(`Sending goodbye to ${userName} in ${groupName} (${isKicked ? 'kicked' : 'left'})`);
+
+                const profilePicUrl = await getProfilePicture(sock, participant);
+                const profilePicBuffer = await downloadProfilePic(profilePicUrl);
                 
-                const mentionsList = [participant];
-                if (author && isKicked) {
-                    mentionsList.push(author);
+                const goodbyeText = isKicked
+                    ? `╭━━━━━⦿「 👋 GOODBYE 」⦿━━━━━╮
+│
+│  🚪 @${userName} was removed
+│  👮 By: @${author.split('@')[0]}
+│  📉 Group now has ${memberCount} members
+│  💔 Goodbye!
+│
+╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯
+
+💫 ${config.botName} 🍀`
+                    : `╭━━━━━⦿「 👋 GOODBYE 」⦿━━━━━╮
+│
+│  🚪 @${userName} has left
+│  😢 We'll miss you!
+│  📉 Group now has ${memberCount} members
+│  👋 Take care!
+│
+╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯
+
+💫 ${config.botName} 🍀`;
+                
+                const mentionsList = isKicked ? [participant, author] : [participant];
+                
+                if (profilePicBuffer) {
+                    await sock.sendMessage(groupId, {
+                        image: profilePicBuffer,
+                        caption: goodbyeText,
+                        mentions: mentionsList
+                    });
+                } else {
+                    await sock.sendMessage(groupId, {
+                        text: goodbyeText,
+                        mentions: mentionsList
+                    });
                 }
                 
-                await sock.sendMessage(groupId, {
-                    image: goodbyeImage,
-                    caption: goodbyeMessage,
-                    mentions: mentionsList
-                });
+                logger.info(`✅ Goodbye sent for ${userName} in ${groupName}`);
                 
-                await updateGroup(groupId, {
-                    $inc: { 'stats.totalLeaves': 1 }
-                });
-                
-                logger.info(`Goodbye sent for ${userName} in ${groupName}`);
+                if (group) {
+                    try {
+                        await updateGroup(groupId, {
+                            $inc: { 'stats.totalLeaves': 1 }
+                        });
+                    } catch (dbError) {
+                        logger.debug(`Group stats update skipped: ${dbError.message}`);
+                    }
+                }
                 
             } catch (error) {
                 logger.error(`Error sending goodbye for ${participant}:`, error);
+                
+                try {
+                    const userName = participant.split('@')[0];
+                    const isKicked = author && author !== participant;
+                    
+                    const fallbackText = isKicked
+                        ? `╭━━━━━⦿「 👋 GOODBYE 」⦿━━━━━╮
+│
+│  🚪 @${userName} was removed
+│  👮 By: @${author.split('@')[0]}
+│
+╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯`
+                        : `╭━━━━━⦿「 👋 GOODBYE 」⦿━━━━━╮
+│
+│  🚪 @${userName} has left
+│  😢 We'll miss you!
+│
+╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯`;
+
+                    const mentionsList = isKicked ? [participant, author] : [participant];
+
+                    await sock.sendMessage(groupId, {
+                        text: fallbackText,
+                        mentions: mentionsList
+                    });
+                } catch (fallbackError) {
+                    logger.error(`Fallback goodbye failed:`, fallbackError);
+                }
             }
         }
         
