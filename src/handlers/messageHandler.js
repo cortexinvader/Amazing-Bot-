@@ -22,6 +22,9 @@ class MessageHandler {
         if (!this.commandHandler) {
             const commandHandlerModule = await import('./commandHandler.js');
             this.commandHandler = commandHandlerModule.commandHandler;
+            if (!this.commandHandler.isInitialized) {
+                await this.commandHandler.initialize();
+            }
         }
         return this.commandHandler;
     }
@@ -232,7 +235,7 @@ class MessageHandler {
             return false;
         }
 
-        logger.info(`Executing command: ${commandName} | User: ${sender.split('@')[0]} | Type: ${isGroup ? 'group' : 'private'}`);
+        logger.info(`📝 Command: ${commandName} | User: ${sender.split('@')[0]} | Location: ${isGroup ? 'group' : 'private'}`);
         
         try {
             await commandHandler.handleCommand(sock, message, commandName, args);
