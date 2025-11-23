@@ -155,6 +155,22 @@ class MessageHandler {
         return false;
     }
 
+    isSudo(sender) {
+        if (!sender) return false;
+        if (this.isOwner(sender)) return true;
+        
+        const senderNumber = sender.split('@')[0].replace(/:\d+$/, '');
+        
+        if (config.sudoers && Array.isArray(config.sudoers)) {
+            return config.sudoers.some(sudoJid => {
+                const sudoNumber = sudoJid.split('@')[0].replace(/:\d+$/, '');
+                return senderNumber === sudoNumber;
+            });
+        }
+        
+        return false;
+    }
+
     shouldProcessNoPrefix(text, isGroup, group, sender) {
         if (config.ownerNoPrefix && this.isOwner(sender)) {
             return true;
@@ -357,29 +373,30 @@ class MessageHandler {
 
             logger.info(`📨 Message from ${sender.split('@')[0]} in ${isGroup ? 'group' : 'private'}: "${messageContent.text.substring(0, 50)}${messageContent.text.length > 50 ? '...' : ''}"`);
 
-            const spamCheck = await antiSpam.checkSpam(sender, message);
-            if (spamCheck.isSpam && spamCheck.action === 'block') {
-                logger.debug(`Spam detected from ${sender.split('@')[0]}`);
-                return;
-            }
-
             try {
-                const { initWhitelist, isWhitelisted, isOwner } = await import('../commands/owner/whitelist.js');
+                const { initWhitelist, isWhitelisted, isOwner, isSudo } = await import('../commands/owner/whitelist.js');
                 const whitelistData = initWhitelist();
                 
                 if (whitelistData.enabled) {
                     const userIsOwner = isOwner(sender, config);
+                    const userIsSudo = isSudo(sender, config);
                     const userIsWhitelisted = isWhitelisted(sender, whitelistData);
                     
-                    if (!userIsOwner && !userIsWhitelisted) {
+                    if (!userIsOwner && !userIsSudo && !userIsWhitelisted) {
                         logger.debug(`Whitelist: Blocked message from non-whitelisted user ${sender.split('@')[0]}`);
                         return;
                     }
                     
-                    logger.debug(`Whitelist: Allowed message from ${userIsOwner ? 'owner' : 'whitelisted user'} ${sender.split('@')[0]}`);
+                    logger.debug(`Whitelist: Allowed message from ${userIsOwner ? 'owner' : userIsSudo ? 'sudo' : 'whitelisted user'} ${sender.split('@')[0]}`);
                 }
             } catch (error) {
                 logger.error('Whitelist check error:', error);
+            }
+
+            const spamCheck = await antiSpam.checkSpam(sender, message);
+            if (spamCheck.isSpam && spamCheck.action === 'block') {
+                logger.debug(`Spam detected from ${sender.split('@')[0]}`);
+                return;
             }
 
             let user = await getUser(sender);
