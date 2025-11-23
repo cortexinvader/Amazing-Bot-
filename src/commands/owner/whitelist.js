@@ -4,7 +4,6 @@ import logger from '../../utils/logger.js';
 
 const whitelistPath = path.join(process.cwd(), 'cache', 'whitelist.json');
 
-// Initialize whitelist storage
 const initWhitelist = () => {
     if (!fs.existsSync(whitelistPath)) {
         fs.ensureDirSync(path.dirname(whitelistPath));
@@ -17,27 +16,36 @@ const initWhitelist = () => {
     return fs.readJsonSync(whitelistPath);
 };
 
-// Save whitelist
 const saveWhitelist = (data) => {
     fs.writeJsonSync(whitelistPath, data, { spaces: 2 });
 };
 
-// Check if user is whitelisted
 const isWhitelisted = (jid, data) => {
     return data.users.includes(jid);
 };
 
-// Check if user is owner
 const isOwner = (jid, config) => {
-    const number = jid.split('@')[0];
-    return config.owner?.includes(number) || config.ownerNumbers?.includes(number);
+    const number = jid.split('@')[0].replace(/:\d+$/, '');
+    return config.ownerNumbers?.some(ownerJid => {
+        const ownerNumber = ownerJid.split('@')[0].replace(/:\d+$/, '');
+        return number === ownerNumber;
+    });
+};
+
+const isSudo = (jid, config) => {
+    if (isOwner(jid, config)) return true;
+    const number = jid.split('@')[0].replace(/:\d+$/, '');
+    return config.sudoers?.some(sudoJid => {
+        const sudoNumber = sudoJid.split('@')[0].replace(/:\d+$/, '');
+        return number === sudoNumber;
+    });
 };
 
 export default {
     name: 'whitelist',
     aliases: ['wl', 'whitelist-mode', 'exclusive'],
     category: 'owner',
-    description: '🔐 Advanced Whitelist System - Control who can use the bot. When enabled, only owner and whitelisted users can interact. Owner can whitelist users by replying to their messages.',
+    description: '🔐 Advanced Whitelist System - Control who can use the bot. When enabled, only owner, sudo, and whitelisted users can interact.',
     usage: 'whitelist <action> [user]',
     example: `whitelist enable
 whitelist disable
@@ -63,9 +71,6 @@ whitelist clear`,
 
         try {
             switch (action) {
-                // ═══════════════════════════════════════
-                // ENABLE WHITELIST MODE
-                // ═══════════════════════════════════════
                 case 'enable':
                 case 'on':
                 case 'activate': {
@@ -80,16 +85,13 @@ whitelist clear`,
                     saveWhitelist(whitelistData);
 
                     await sock.sendMessage(from, {
-                        text: `╭─────⦿ ✅ WHITELIST ENABLED ⦿─────\n│\n│ 🔐 *Whitelist mode activated!*\n│\n│ 📋 *How it works:*\n│ • Only owner can use bot\n│ • Reply to users to whitelist them\n│ • Whitelisted users get full access\n│\n│ 📝 *Commands:*\n│ ${prefix}whitelist add (reply to user)\n│ ${prefix}whitelist remove @user\n│ ${prefix}whitelist list\n│\n│ 👥 Currently whitelisted: ${whitelistData.users.length}\n│\n╰──────────────────────⦿\n\n💫 Ilom Bot 🍀`
+                        text: `╭─────⦿ ✅ WHITELIST ENABLED ⦿─────\n│\n│ 🔐 *Whitelist mode activated!*\n│\n│ 📋 *How it works:*\n│ • Owner and sudo can always use bot\n│ • Reply to users to whitelist them\n│ • Whitelisted users get full access\n│\n│ 📝 *Commands:*\n│ ${prefix}whitelist add (reply to user)\n│ ${prefix}whitelist remove @user\n│ ${prefix}whitelist list\n│\n│ 👥 Currently whitelisted: ${whitelistData.users.length}\n│\n╰──────────────────────⦿\n\n💫 Ilom Bot 🍀`
                     }, { quoted: message });
                     
                     logger.info(`Whitelist mode enabled by ${sender}`);
                     break;
                 }
 
-                // ═══════════════════════════════════════
-                // DISABLE WHITELIST MODE
-                // ═══════════════════════════════════════
                 case 'disable':
                 case 'off':
                 case 'deactivate': {
@@ -111,9 +113,6 @@ whitelist clear`,
                     break;
                 }
 
-                // ═══════════════════════════════════════
-                // ADD USER TO WHITELIST
-                // ═══════════════════════════════════════
                 case 'add':
                 case 'allow':
                 case 'permit':
@@ -121,16 +120,13 @@ whitelist clear`,
                     let targetJid = null;
                     let targetName = 'User';
 
-                    // Check if replying to a message
                     const quotedMsg = message.message?.extendedTextMessage?.contextInfo;
                     if (quotedMsg && quotedMsg.participant) {
                         targetJid = quotedMsg.participant;
                         targetName = quotedMsg.pushName || 'User';
                     } else if (message.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0]) {
-                        // Check if mentioning a user
                         targetJid = message.message.extendedTextMessage.contextInfo.mentionedJid[0];
                     } else if (args[1]) {
-                        // Try to parse from argument
                         const number = args[1].replace(/[^0-9]/g, '');
                         if (number) {
                             targetJid = number + '@s.whatsapp.net';
@@ -144,7 +140,6 @@ whitelist clear`,
                         return;
                     }
 
-                    // Check if already whitelisted
                     if (whitelistData.users.includes(targetJid)) {
                         await sock.sendMessage(from, {
                             text: `╭─────⦿ ℹ️ ALREADY WHITELISTED ⦿─────\n│\n│ 👤 *${targetName}*\n│ 📞 ${targetJid.split('@')[0]}\n│\n│ ✅ Already has whitelist access\n│\n╰──────────────────────⦿`
@@ -152,7 +147,6 @@ whitelist clear`,
                         return;
                     }
 
-                    // Add to whitelist
                     whitelistData.users.push(targetJid);
                     saveWhitelist(whitelistData);
 
@@ -162,7 +156,6 @@ whitelist clear`,
                     
                     logger.info(`User ${targetJid} whitelisted by ${sender}`);
 
-                    // Notify the user if in group
                     if (isGroup && targetJid !== sender) {
                         try {
                             await sock.sendMessage(from, {
@@ -176,9 +169,6 @@ whitelist clear`,
                     break;
                 }
 
-                // ═══════════════════════════════════════
-                // REMOVE USER FROM WHITELIST
-                // ═══════════════════════════════════════
                 case 'remove':
                 case 'delete':
                 case 'revoke':
@@ -186,7 +176,6 @@ whitelist clear`,
                     let targetJid = null;
                     let targetName = 'User';
 
-                    // Check if replying to a message
                     const quotedMsg = message.message?.extendedTextMessage?.contextInfo;
                     if (quotedMsg && quotedMsg.participant) {
                         targetJid = quotedMsg.participant;
@@ -207,7 +196,6 @@ whitelist clear`,
                         return;
                     }
 
-                    // Check if in whitelist
                     const index = whitelistData.users.indexOf(targetJid);
                     if (index === -1) {
                         await sock.sendMessage(from, {
@@ -216,7 +204,6 @@ whitelist clear`,
                         return;
                     }
 
-                    // Remove from whitelist
                     whitelistData.users.splice(index, 1);
                     saveWhitelist(whitelistData);
 
@@ -228,9 +215,6 @@ whitelist clear`,
                     break;
                 }
 
-                // ═══════════════════════════════════════
-                // LIST WHITELISTED USERS
-                // ═══════════════════════════════════════
                 case 'list':
                 case 'show':
                 case 'users':
@@ -258,9 +242,6 @@ whitelist clear`,
                     break;
                 }
 
-                // ═══════════════════════════════════════
-                // CLEAR ALL WHITELISTED USERS
-                // ═══════════════════════════════════════
                 case 'clear':
                 case 'reset':
                 case 'removeall': {
@@ -276,16 +257,13 @@ whitelist clear`,
                     saveWhitelist(whitelistData);
 
                     await sock.sendMessage(from, {
-                        text: `╭─────⦿ 🗑️ WHITELIST CLEARED ⦿─────\n│\n│ ✅ *Successfully cleared!*\n│\n│ 📊 Removed: ${count} users\n│ 👥 Current: 0 users\n│\n│ 🔐 Mode: ${whitelistData.enabled ? 'STILL ACTIVE' : 'INACTIVE'}\n│\n│ ${whitelistData.enabled ? '⚠️ Whitelist mode still active!\n│ Only owner can use bot now.\n│' : ''}\n╰──────────────────────⦿\n\n💫 Ilom Bot 🍀`
+                        text: `╭─────⦿ 🗑️ WHITELIST CLEARED ⦿─────\n│\n│ ✅ *Successfully cleared!*\n│\n│ 📊 Removed: ${count} users\n│ 👥 Current: 0 users\n│\n│ 🔐 Mode: ${whitelistData.enabled ? 'STILL ACTIVE' : 'INACTIVE'}\n│\n│ ${whitelistData.enabled ? '⚠️ Whitelist mode still active!\n│ Only owner/sudo can use bot now.\n│' : ''}\n╰──────────────────────⦿\n\n💫 Ilom Bot 🍀`
                     }, { quoted: message });
                     
                     logger.info(`Whitelist cleared by ${sender}, removed ${count} users`);
                     break;
                 }
 
-                // ═══════════════════════════════════════
-                // SHOW WHITELIST STATUS
-                // ═══════════════════════════════════════
                 case 'status':
                 case 'info':
                 case 'check': {
@@ -294,14 +272,11 @@ whitelist clear`,
                     const accessText = whitelistData.enabled ? 'RESTRICTED' : 'PUBLIC';
 
                     await sock.sendMessage(from, {
-                        text: `╭─────⦿ ${statusEmoji} WHITELIST STATUS ⦿─────\n│\n│ 🔐 *Mode:* ${statusText}\n│ 🌐 *Access:* ${accessText}\n│ 👥 *Whitelisted:* ${whitelistData.users.length} users\n│\n│ ${whitelistData.enabled ? '✅ Only owner and whitelisted users\n│    can use the bot' : '🌍 Everyone can use the bot'}\n│\n│ *COMMANDS:*\n│ ${prefix}whitelist ${whitelistData.enabled ? 'disable' : 'enable'}\n│ ${prefix}whitelist add (reply to user)\n│ ${prefix}whitelist list\n│ ${prefix}whitelist remove @user\n│ ${prefix}whitelist clear\n│\n╰──────────────────────⦿\n\n💫 Ilom Bot 🍀`
+                        text: `╭─────⦿ ${statusEmoji} WHITELIST STATUS ⦿─────\n│\n│ 🔐 *Mode:* ${statusText}\n│ 🌐 *Access:* ${accessText}\n│ 👥 *Whitelisted:* ${whitelistData.users.length} users\n│\n│ ${whitelistData.enabled ? '✅ Only owner, sudo, and whitelisted\n│    users can use the bot' : '🌍 Everyone can use the bot'}\n│\n│ *COMMANDS:*\n│ ${prefix}whitelist ${whitelistData.enabled ? 'disable' : 'enable'}\n│ ${prefix}whitelist add (reply to user)\n│ ${prefix}whitelist list\n│ ${prefix}whitelist remove @user\n│ ${prefix}whitelist clear\n│\n╰──────────────────────⦿\n\n💫 Ilom Bot 🍀`
                     }, { quoted: message });
                     break;
                 }
 
-                // ═══════════════════════════════════════
-                // DEFAULT - SHOW HELP
-                // ═══════════════════════════════════════
                 default: {
                     await sock.sendMessage(from, {
                         text: `╭─────⦿ 🔐 WHITELIST SYSTEM ⦿─────\n│\n│ *CONTROL COMMANDS:*\n│ ${prefix}whitelist enable\n│    🔒 Activate whitelist mode\n│\n│ ${prefix}whitelist disable\n│    🔓 Deactivate whitelist mode\n│\n│ *USER MANAGEMENT:*\n│ ${prefix}whitelist add (reply)\n│    ➕ Add user to whitelist\n│\n│ ${prefix}whitelist remove (reply)\n│    ➖ Remove user from whitelist\n│\n│ ${prefix}whitelist list\n│    📋 Show all whitelisted users\n│\n│ ${prefix}whitelist clear\n│    🗑️ Remove all users\n│\n│ *INFORMATION:*\n│ ${prefix}whitelist status\n│    ℹ️ Show current status\n│\n│ *CURRENT STATUS:*\n│ 🔐 Mode: ${whitelistData.enabled ? 'ACTIVE ✅' : 'INACTIVE ❌'}\n│ 👥 Users: ${whitelistData.users.length} whitelisted\n│\n╰──────────────────────⦿\n\n💫 Ilom Bot 🍀`
@@ -317,5 +292,4 @@ whitelist clear`,
     }
 };
 
-// Export utility functions for use in message handler
-export { initWhitelist, isWhitelisted, isOwner };
+export { initWhitelist, isWhitelisted, isOwner, isSudo };
