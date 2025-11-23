@@ -16,15 +16,21 @@ class CommandHandler {
         this.cooldowns = new Map();
         this.userCooldowns = new Map();
         this.commandExecutions = new Map();
+        this.isInitialized = false;
     }
 
     async initialize() {
+        if (this.isInitialized) {
+            return true;
+        }
+
         try {
             await commandManager.initializeCommands();
-            logger.info('Command handler initialized successfully');
+            this.isInitialized = true;
+            logger.info(`✅ Command handler initialized successfully with ${getAllCommands().length} commands`);
             return true;
         } catch (error) {
-            logger.error('Command handler initialization failed:', error);
+            logger.error('❌ Command handler initialization failed:', error);
             return false;
         }
     }
@@ -223,7 +229,7 @@ class CommandHandler {
                 return false;
             }
 
-            logger.info(`Executing command: ${commandName} for ${sender.split('@')[0]}`);
+            logger.info(`⚡ Executing command: ${commandName} for ${sender.split('@')[0]}`);
 
             await command.execute({
                 sock,
@@ -244,14 +250,14 @@ class CommandHandler {
             const executionTime = Date.now() - startTime;
             recordCommandUsage(commandName, executionTime, true);
             
-            logger.info(`Command ${commandName} executed successfully in ${executionTime}ms`);
+            logger.info(`✅ Command ${commandName} executed successfully in ${executionTime}ms`);
             return true;
 
         } catch (error) {
             const executionTime = Date.now() - startTime;
             recordCommandUsage(commandName, executionTime, false);
             
-            logger.error(`Command execution error [${commandName}]:`, error);
+            logger.error(`❌ Command execution error [${commandName}]:`, error);
 
             try {
                 await sock.sendMessage(from, {
