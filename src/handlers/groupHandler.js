@@ -1,6 +1,7 @@
 import logger from '../utils/logger.js';
 import config from '../config.js';
-import { handleGroupJoin, handleGroupLeave } from '../events/groupJoin.js';
+import handleGroupJoin from '../events/groupJoin.js';
+import handleGroupLeave from '../events/groupLeave.js';
 
 class GroupHandler {
     constructor() {
