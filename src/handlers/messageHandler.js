@@ -235,7 +235,7 @@ class MessageHandler {
             return false;
         }
 
-        logger.info(`📝 Command: ${commandName} | User: ${sender.split('@')[0]} | Location: ${isGroup ? 'group' : 'private'}`);
+        logger.info(`⚡ Command: ${commandName} | User: ${sender.split('@')[0]} | Location: ${isGroup ? 'group' : 'private'}`);
         
         try {
             await commandHandler.handleCommand(sock, message, commandName, args);
