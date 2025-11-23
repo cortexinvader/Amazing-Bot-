@@ -2,39 +2,59 @@ import logger from '../utils/logger.js';
 import config from '../config.js';
 import { getGroup, updateGroup } from '../models/Group.js';
 import { getUser, createUser } from '../models/User.js';
-import { createWelcomeImage } from '../utils/canvasUtils.js';
 import axios from 'axios';
+
+async function getProfilePicture(sock, jid) {
+    try {
+        const url = await sock.profilePictureUrl(jid, 'image');
+        return url;
+    } catch (error) {
+        return 'https://i.ibb.co/2M7rtLk/ilom.jpg';
+    }
+}
+
+async function downloadProfilePic(url) {
+    try {
+        const response = await axios.get(url, { responseType: 'arraybuffer' });
+        return Buffer.from(response.data);
+    } catch (error) {
+        return null;
+    }
+}
 
 export default async function handleGroupJoin(sock, update) {
     try {
+        if (!config.events.groupJoin) {
+            logger.debug('Group join event is disabled');
+            return;
+        }
+
         const { id: groupId, participants, action, author } = update;
         
-        if (action !== 'add') return;
+        if (action !== 'add') {
+            logger.debug(`Ignoring action: ${action} (not add)`);
+            return;
+        }
         
-        const group = await getGroup(groupId);
-        if (!group || !group.settings?.welcome?.enabled) return;
-        
+        logger.info(`Processing group join for ${participants.length} users in ${groupId}`);
+
+        let group = await getGroup(groupId);
         const groupMetadata = await sock.groupMetadata(groupId);
         const groupName = groupMetadata.subject || 'Group';
         const memberCount = groupMetadata.participants.length;
         
         for (const participant of participants) {
             try {
-                let profilePicUrl = 'https://i.ibb.co/2M7rtLk/ilom.jpg';
-                try {
-                    profilePicUrl = await sock.profilePictureUrl(participant, 'image');
-                } catch (error) {
-                    logger.debug(`No profile picture for ${participant}`);
-                }
-                
                 const phoneNumber = participant.split('@')[0].replace(/:\d+/, '');
                 const userContact = groupMetadata.participants.find(p => p.id === participant);
                 const displayName = userContact?.notify || phoneNumber;
                 
-                const welcomeImage = await createWelcomeImage(displayName, groupName, memberCount, profilePicUrl);
+                logger.info(`Sending welcome to ${displayName} in ${groupName}`);
+
+                const profilePicUrl = await getProfilePicture(sock, participant);
+                const profilePicBuffer = await downloadProfilePic(profilePicUrl);
                 
-                const welcomeMessage = group.settings?.welcome?.message || 
-                    `╭━━━━━⦿「 🎉 WELCOME 」⦿━━━━━╮
+                const welcomeText = `╭━━━━━⦿「 🎉 WELCOME 」⦿━━━━━╮
 │
 │  👋 𝗪𝗲𝗹𝗰𝗼𝗺𝗲 @${phoneNumber}!
 │
@@ -45,29 +65,67 @@ export default async function handleGroupJoin(sock, update) {
 │
 ╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯
 
-⚡ Type ${config.prefix || '.'}menu to see bot commands`;
+⚡ Type ${config.prefix || '.'}menu to see bot commands
+
+💫 ${config.botName} 🍀`;
+
+                if (profilePicBuffer) {
+                    await sock.sendMessage(groupId, {
+                        image: profilePicBuffer,
+                        caption: welcomeText,
+                        mentions: [participant]
+                    });
+                } else {
+                    await sock.sendMessage(groupId, {
+                        text: welcomeText,
+                        mentions: [participant]
+                    });
+                }
                 
-                await sock.sendMessage(groupId, {
-                    image: welcomeImage,
-                    caption: welcomeMessage,
-                    mentions: [participant]
-                });
+                logger.info(`✅ Welcome sent to ${displayName} in ${groupName}`);
                 
-                await createUser({
-                    jid: participant,
-                    phone: phoneNumber,
-                    name: displayName,
-                    firstSeen: new Date()
-                });
+                try {
+                    await createUser({
+                        jid: participant,
+                        phone: phoneNumber,
+                        name: displayName,
+                        firstSeen: new Date()
+                    });
+                } catch (dbError) {
+                    logger.debug(`User creation skipped: ${dbError.message}`);
+                }
                 
-                await updateGroup(groupId, {
-                    $inc: { 'stats.totalJoins': 1 }
-                });
-                
-                logger.info(`Welcome sent to ${displayName} in ${groupName}`);
+                if (group) {
+                    try {
+                        await updateGroup(groupId, {
+                            $inc: { 'stats.totalJoins': 1 }
+                        });
+                    } catch (dbError) {
+                        logger.debug(`Group stats update skipped: ${dbError.message}`);
+                    }
+                }
                 
             } catch (error) {
                 logger.error(`Error welcoming ${participant}:`, error);
+                
+                try {
+                    const phoneNumber = participant.split('@')[0].replace(/:\d+/, '');
+                    const fallbackText = `╭━━━━━⦿「 🎉 WELCOME 」⦿━━━━━╮
+│
+│  👋 𝗪𝗲𝗹𝗰𝗼𝗺𝗲 @${phoneNumber}!
+│
+│  🎊 You are member #${memberCount}
+│  🌟 Group: ${groupName}
+│
+╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯`;
+
+                    await sock.sendMessage(groupId, {
+                        text: fallbackText,
+                        mentions: [participant]
+                    });
+                } catch (fallbackError) {
+                    logger.error(`Fallback welcome failed:`, fallbackError);
+                }
             }
         }
         
