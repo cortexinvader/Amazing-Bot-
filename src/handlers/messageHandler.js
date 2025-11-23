@@ -339,7 +339,6 @@ class MessageHandler {
                 return;
             }
 
-            // Whitelist check - block non-whitelisted users when whitelist mode is active
             try {
                 const { initWhitelist, isWhitelisted, isOwner } = await import('../commands/owner/whitelist.js');
                 const whitelistData = initWhitelist();
