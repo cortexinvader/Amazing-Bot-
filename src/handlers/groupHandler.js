@@ -2,6 +2,26 @@ import logger from '../utils/logger.js';
 import config from '../config.js';
 import handleGroupJoin from '../events/groupJoin.js';
 import handleGroupLeave from '../events/groupLeave.js';
+import axios from 'axios';
+import { createPromoteImage, createDemoteImage } from '../utils/canvasUtils.js';
+
+async function getProfilePicture(sock, jid) {
+    try {
+        const url = await sock.profilePictureUrl(jid, 'image');
+        return url;
+    } catch (error) {
+        return 'https://i.ibb.co/2M7rtLk/ilom.jpg';
+    }
+}
+
+async function downloadProfilePic(url) {
+    try {
+        const response = await axios.get(url, { responseType: 'arraybuffer' });
+        return Buffer.from(response.data);
+    } catch (error) {
+        return null;
+    }
+}
 
 class GroupHandler {
     constructor() {
@@ -52,7 +72,15 @@ class GroupHandler {
                 const userName = participant.split('@')[0];
                 const authorName = author ? author.split('@')[0] : 'Admin';
                 
-                const promoteMessage = `╭──⦿【 👑 PROMOTION 】
+                logger.info(`Processing promote for ${userName} in ${groupName}`);
+
+                try {
+                    const profilePicUrl = await getProfilePicture(sock, participant);
+                    const profilePicBuffer = await downloadProfilePic(profilePicUrl);
+                    
+                    const promoteImage = await createPromoteImage(userName, groupName, authorName);
+                    
+                    const promoteMessage = `╭──⦿【 👑 PROMOTION 】
 │
 │ 🎉 Congratulations @${userName}!
 │ ⬆️ You are now a Group Admin
@@ -60,13 +88,43 @@ class GroupHandler {
 │ 💼 Use your power wisely!
 │
 ╰────────────⦿`;
-                
-                await sock.sendMessage(groupId, {
-                    text: promoteMessage,
-                    mentions: [participant, author].filter(Boolean)
-                });
-                
-                logger.info(`Promote notification sent for ${userName} in ${groupName}`);
+                    
+                    if (profilePicBuffer) {
+                        await sock.sendMessage(groupId, {
+                            image: profilePicBuffer,
+                            caption: promoteMessage,
+                            mentions: [participant, author].filter(Boolean)
+                        });
+                    } else if (promoteImage) {
+                        await sock.sendMessage(groupId, {
+                            image: promoteImage,
+                            caption: promoteMessage,
+                            mentions: [participant, author].filter(Boolean)
+                        });
+                    } else {
+                        await sock.sendMessage(groupId, {
+                            text: promoteMessage,
+                            mentions: [participant, author].filter(Boolean)
+                        });
+                    }
+                    
+                    logger.info(`✅ Promote notification sent for ${userName} in ${groupName}`);
+                } catch (error) {
+                    logger.error(`Error sending promote notification for ${participant}:`, error);
+                    
+                    const fallbackMessage = `╭──⦿【 👑 PROMOTION 】
+│
+│ 🎉 Congratulations @${userName}!
+│ ⬆️ You are now a Group Admin
+│ 👨‍💼 Promoted by: @${authorName}
+│
+╰────────────⦿`;
+
+                    await sock.sendMessage(groupId, {
+                        text: fallbackMessage,
+                        mentions: [participant, author].filter(Boolean)
+                    });
+                }
             }
         } catch (error) {
             logger.error('Error handling group promote:', error);
@@ -84,20 +142,57 @@ class GroupHandler {
                 const userName = participant.split('@')[0];
                 const authorName = author ? author.split('@')[0] : 'Admin';
                 
-                const demoteMessage = `╭──⦿【 ⬇️ DEMOTION 】
+                logger.info(`Processing demote for ${userName} in ${groupName}`);
+
+                try {
+                    const profilePicUrl = await getProfilePicture(sock, participant);
+                    const profilePicBuffer = await downloadProfilePic(profilePicUrl);
+                    
+                    const demoteImage = await createDemoteImage(userName, groupName, authorName);
+                    
+                    const demoteMessage = `╭──⦿【 ⬇️ DEMOTION 】
 │
 │ 📉 @${userName} is no longer an admin
 │ 👮 Demoted by: @${authorName}
 │ 👤 Now a regular member
 │
 ╰────────────⦿`;
-                
-                await sock.sendMessage(groupId, {
-                    text: demoteMessage,
-                    mentions: [participant, author].filter(Boolean)
-                });
-                
-                logger.info(`Demote notification sent for ${userName} in ${groupName}`);
+                    
+                    if (profilePicBuffer) {
+                        await sock.sendMessage(groupId, {
+                            image: profilePicBuffer,
+                            caption: demoteMessage,
+                            mentions: [participant, author].filter(Boolean)
+                        });
+                    } else if (demoteImage) {
+                        await sock.sendMessage(groupId, {
+                            image: demoteImage,
+                            caption: demoteMessage,
+                            mentions: [participant, author].filter(Boolean)
+                        });
+                    } else {
+                        await sock.sendMessage(groupId, {
+                            text: demoteMessage,
+                            mentions: [participant, author].filter(Boolean)
+                        });
+                    }
+                    
+                    logger.info(`✅ Demote notification sent for ${userName} in ${groupName}`);
+                } catch (error) {
+                    logger.error(`Error sending demote notification for ${participant}:`, error);
+                    
+                    const fallbackMessage = `╭──⦿【 ⬇️ DEMOTION 】
+│
+│ 📉 @${userName} is no longer an admin
+│ 👮 Demoted by: @${authorName}
+│
+╰────────────⦿`;
+
+                    await sock.sendMessage(groupId, {
+                        text: fallbackMessage,
+                        mentions: [participant, author].filter(Boolean)
+                    });
+                }
             }
         } catch (error) {
             logger.error('Error handling group demote:', error);
