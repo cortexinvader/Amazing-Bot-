@@ -7,7 +7,8 @@ import {
     getCommandsByCategory,
     searchCommands as searchCommandsUtil,
     getSystemStats,
-    recordCommandUsage
+    recordCommandUsage,
+    getAllCategories
 } from '../utils/commandManager.js';
 
 class CommandHandler {
@@ -44,6 +45,10 @@ class CommandHandler {
         return getCommandsByCategory(category);
     }
 
+    getAllCategories() {
+        return getAllCategories();
+    }
+
     searchCommands(query) {
         return searchCommandsUtil(query);
     }
@@ -58,16 +63,32 @@ class CommandHandler {
 
     isOwner(sender) {
         if (!sender) return false;
-        const ownerNumber = sender.split('@')[0];
-        return config.owner?.includes(ownerNumber) || config.ownerNumbers?.includes(ownerNumber);
+        const senderNumber = sender.split('@')[0].replace(/:\d+$/, '');
+        
+        if (config.ownerNumbers && Array.isArray(config.ownerNumbers)) {
+            return config.ownerNumbers.some(ownerJid => {
+                const ownerNumber = ownerJid.split('@')[0].replace(/:\d+$/, '');
+                return senderNumber === ownerNumber;
+            });
+        }
+        
+        return false;
     }
 
     isSudo(sender) {
         if (!sender) return false;
         if (this.isOwner(sender)) return true;
         
-        const sudoNumber = sender.split('@')[0];
-        return config.sudo?.includes(sudoNumber) || config.sudoNumbers?.includes(sudoNumber);
+        const sudoNumber = sender.split('@')[0].replace(/:\d+$/, '');
+        
+        if (config.sudoers && Array.isArray(config.sudoers)) {
+            return config.sudoers.some(sudoJid => {
+                const sudoNum = sudoJid.split('@')[0].replace(/:\d+$/, '');
+                return sudoNumber === sudoNum;
+            });
+        }
+        
+        return false;
     }
 
     async checkCooldown(commandName, sender) {
@@ -216,7 +237,8 @@ class CommandHandler {
                 isBotAdmin,
                 prefix: config.prefix,
                 pushName: message.pushName,
-                quoted: message.message?.extendedTextMessage?.contextInfo?.quotedMessage
+                quoted: message.message?.extendedTextMessage?.contextInfo?.quotedMessage,
+                isOwner: this.isOwner(sender)
             });
 
             const executionTime = Date.now() - startTime;
@@ -240,6 +262,15 @@ class CommandHandler {
             }
 
             return false;
+        }
+    }
+
+    getTopCommands(limit = 5) {
+        try {
+            const stats = getSystemStats();
+            return [];
+        } catch (error) {
+            return [];
         }
     }
 }
