@@ -1,4 +1,3 @@
-import { commandHandler } from './commandHandler.js';
 import config from '../config.js';
 import logger from '../utils/logger.js';
 import { getUser, createUser, updateUser } from '../models/User.js';
@@ -16,6 +15,15 @@ class MessageHandler {
     constructor() {
         this.messageQueue = [];
         this.processing = false;
+        this.commandHandler = null;
+    }
+
+    async initializeCommandHandler() {
+        if (!this.commandHandler) {
+            const commandHandlerModule = await import('./commandHandler.js');
+            this.commandHandler = commandHandlerModule.commandHandler;
+        }
+        return this.commandHandler;
     }
 
     extractMessageContent(message) {
@@ -133,8 +141,22 @@ class MessageHandler {
         return null;
     }
 
+    isOwner(sender) {
+        if (!sender) return false;
+        const senderNumber = sender.split('@')[0].replace(/:\d+$/, '');
+        
+        if (config.ownerNumbers && Array.isArray(config.ownerNumbers)) {
+            return config.ownerNumbers.some(ownerJid => {
+                const ownerNumber = ownerJid.split('@')[0].replace(/:\d+$/, '');
+                return senderNumber === ownerNumber;
+            });
+        }
+        
+        return false;
+    }
+
     shouldProcessNoPrefix(text, isGroup, group, sender) {
-        if (config.ownerNoPrefix && commandHandler.isOwner(sender)) {
+        if (config.ownerNoPrefix && this.isOwner(sender)) {
             return true;
         }
         
@@ -159,6 +181,8 @@ class MessageHandler {
 
         const from = message.key.remoteJid;
         const sender = message.key.participant || from;
+        
+        const commandHandler = await this.initializeCommandHandler();
         
         const prefixUsed = this.detectPrefix(trimmedText);
         const shouldProcessNoPrefix = this.shouldProcessNoPrefix(trimmedText, isGroup, group, sender);
@@ -187,7 +211,7 @@ class MessageHandler {
         
         if (!command) {
             if (prefixUsed) {
-                await this.handleUnknownCommand(sock, message, commandName);
+                await this.handleUnknownCommand(sock, message, commandName, commandHandler);
             }
             return false;
         }
@@ -210,7 +234,7 @@ class MessageHandler {
         }
     }
 
-    async handleUnknownCommand(sock, message, commandName) {
+    async handleUnknownCommand(sock, message, commandName, commandHandler) {
         const from = message.key.remoteJid;
         const suggestions = await commandHandler.searchCommands(commandName);
         
@@ -504,7 +528,7 @@ class MessageHandler {
             try {
                 const { key, update: messageUpdate } = update;
                 
-                if (messageUpdate.message) {
+                if (messageUpdate && messageUpdate.message && key && key.id) {
                     logger.info(`Message updated: ${key.id}`);
                     
                     const updatedContent = this.extractMessageContent(messageUpdate);
@@ -557,25 +581,46 @@ class MessageHandler {
     }
 
     async getMessageStats() {
-        let stats = cache.get('messageStats');
-        
-        if (!stats || typeof stats !== 'object') {
-            stats = {
+        try {
+            let stats = await cache.get('messageStats');
+            
+            if (!stats || typeof stats !== 'object') {
+                stats = {
+                    totalMessages: 0,
+                    commandsExecuted: 0,
+                    mediaProcessed: 0,
+                    groupMessages: 0,
+                    privateMessages: 0
+                };
+                await cache.set('messageStats', stats, 3600);
+            }
+            
+            return stats;
+        } catch (error) {
+            logger.error('Error getting message stats:', error);
+            return {
                 totalMessages: 0,
                 commandsExecuted: 0,
                 mediaProcessed: 0,
                 groupMessages: 0,
                 privateMessages: 0
             };
-            cache.set('messageStats', stats, 3600);
         }
-        
-        return stats;
     }
 
     async updateMessageStats(type) {
         try {
             let stats = await this.getMessageStats();
+            
+            if (!stats) {
+                stats = {
+                    totalMessages: 0,
+                    commandsExecuted: 0,
+                    mediaProcessed: 0,
+                    groupMessages: 0,
+                    privateMessages: 0
+                };
+            }
             
             stats.totalMessages = (stats.totalMessages || 0) + 1;
             
@@ -594,7 +639,7 @@ class MessageHandler {
                     break;
             }
             
-            cache.set('messageStats', stats, 3600);
+            await cache.set('messageStats', stats, 3600);
         } catch (error) {
             logger.error('Failed to update message stats:', error);
         }
