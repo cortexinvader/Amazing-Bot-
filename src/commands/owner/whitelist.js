@@ -5,40 +5,164 @@ import logger from '../../utils/logger.js';
 const whitelistPath = path.join(process.cwd(), 'cache', 'whitelist.json');
 
 const initWhitelist = () => {
-    if (!fs.existsSync(whitelistPath)) {
+    try {
+        // Ensure cache directory exists
         fs.ensureDirSync(path.dirname(whitelistPath));
-        fs.writeJsonSync(whitelistPath, {
-            enabled: false,
-            users: [],
-            groups: []
-        });
+        
+        // If file doesn't exist, create it with disabled state
+        if (!fs.existsSync(whitelistPath)) {
+            const defaultData = {
+                enabled: false, // Default to DISABLED for safety
+                users: [],
+                groups: []
+            };
+            fs.writeJsonSync(whitelistPath, defaultData, { spaces: 2 });
+            logger.info('Created new whitelist file (disabled by default)');
+            return defaultData;
+        }
+        
+        // Read existing file
+        const data = fs.readJsonSync(whitelistPath);
+        
+        // Validate structure
+        if (typeof data !== 'object' || data === null) {
+            logger.warn('Invalid whitelist data, resetting to default');
+            const defaultData = { enabled: false, users: [], groups: [] };
+            fs.writeJsonSync(whitelistPath, defaultData, { spaces: 2 });
+            return defaultData;
+        }
+        
+        // Ensure required fields exist
+        if (typeof data.enabled !== 'boolean') {
+            data.enabled = false;
+        }
+        if (!Array.isArray(data.users)) {
+            data.users = [];
+        }
+        if (!Array.isArray(data.groups)) {
+            data.groups = [];
+        }
+        
+        logger.debug(`Whitelist loaded: enabled=${data.enabled}, users=${data.users.length}, groups=${data.groups.length}`);
+        return data;
+    } catch (error) {
+        logger.error('Error initializing whitelist:', error);
+        // Return safe default on error
+        return { enabled: false, users: [], groups: [] };
     }
-    return fs.readJsonSync(whitelistPath);
 };
 
 const saveWhitelist = (data) => {
-    fs.writeJsonSync(whitelistPath, data, { spaces: 2 });
+    try {
+        // Validate data before saving
+        if (!data || typeof data !== 'object') {
+            logger.error('Invalid whitelist data to save');
+            return false;
+        }
+        
+        // Ensure required fields
+        if (typeof data.enabled !== 'boolean') {
+            data.enabled = false;
+        }
+        if (!Array.isArray(data.users)) {
+            data.users = [];
+        }
+        if (!Array.isArray(data.groups)) {
+            data.groups = [];
+        }
+        
+        fs.ensureDirSync(path.dirname(whitelistPath));
+        fs.writeJsonSync(whitelistPath, data, { spaces: 2 });
+        logger.debug(`Whitelist saved: enabled=${data.enabled}, users=${data.users.length}`);
+        return true;
+    } catch (error) {
+        logger.error('Error saving whitelist:', error);
+        return false;
+    }
 };
 
 const isWhitelisted = (jid, data) => {
-    return data.users.includes(jid);
+    try {
+        if (!jid || !data || !Array.isArray(data.users)) {
+            return false;
+        }
+        
+        // Normalize JID for comparison
+        const normalizedJid = jid.split('@')[0].replace(/:\d+$/, '') + '@s.whatsapp.net';
+        
+        // Check if user is in whitelist
+        const result = data.users.some(whitelistedJid => {
+            const normalizedWhitelisted = whitelistedJid.split('@')[0].replace(/:\d+$/, '') + '@s.whatsapp.net';
+            return normalizedJid === normalizedWhitelisted;
+        });
+        
+        logger.debug(`Whitelist check for ${jid.split('@')[0]}: ${result}`);
+        return result;
+    } catch (error) {
+        logger.error('Error checking whitelist:', error);
+        return false;
+    }
 };
 
 const isOwner = (jid, config) => {
-    const number = jid.split('@')[0].replace(/:\d+$/, '');
-    return config.ownerNumbers?.some(ownerJid => {
-        const ownerNumber = ownerJid.split('@')[0].replace(/:\d+$/, '');
-        return number === ownerNumber;
-    });
+    try {
+        if (!jid || !config || !config.ownerNumbers) {
+            logger.debug('Invalid parameters for owner check');
+            return false;
+        }
+        
+        // Extract phone number from JID
+        const number = jid.split('@')[0].replace(/:\d+$/, '');
+        
+        // Check against all owner numbers
+        const result = config.ownerNumbers.some(ownerJid => {
+            const ownerNumber = ownerJid.split('@')[0].replace(/:\d+$/, '');
+            const match = number === ownerNumber;
+            if (match) {
+                logger.debug(`Owner match: ${number} === ${ownerNumber}`);
+            }
+            return match;
+        });
+        
+        logger.debug(`Owner check for ${number}: ${result}`);
+        return result;
+    } catch (error) {
+        logger.error('Error checking owner status:', error);
+        return false;
+    }
 };
 
 const isSudo = (jid, config) => {
-    if (isOwner(jid, config)) return true;
-    const number = jid.split('@')[0].replace(/:\d+$/, '');
-    return config.sudoers?.some(sudoJid => {
-        const sudoNumber = sudoJid.split('@')[0].replace(/:\d+$/, '');
-        return number === sudoNumber;
-    });
+    try {
+        // Owners are automatically sudo
+        if (isOwner(jid, config)) {
+            logger.debug(`User ${jid.split('@')[0]} is owner, therefore sudo`);
+            return true;
+        }
+        
+        if (!jid || !config || !config.sudoers) {
+            return false;
+        }
+        
+        // Extract phone number from JID
+        const number = jid.split('@')[0].replace(/:\d+$/, '');
+        
+        // Check against sudo list
+        const result = config.sudoers.some(sudoJid => {
+            const sudoNumber = sudoJid.split('@')[0].replace(/:\d+$/, '');
+            const match = number === sudoNumber;
+            if (match) {
+                logger.debug(`Sudo match: ${number} === ${sudoNumber}`);
+            }
+            return match;
+        });
+        
+        logger.debug(`Sudo check for ${number}: ${result}`);
+        return result;
+    } catch (error) {
+        logger.error('Error checking sudo status:', error);
+        return false;
+    }
 };
 
 export default {
@@ -83,12 +207,13 @@ whitelist clear`,
 
                     whitelistData.enabled = true;
                     saveWhitelist(whitelistData);
+                    
+                    logger.info(`Whitelist mode ENABLED by ${sender.split('@')[0]}`);
 
                     await sock.sendMessage(from, {
                         text: `╭─────⦿ ✅ WHITELIST ENABLED ⦿─────\n│\n│ 🔐 *Whitelist mode activated!*\n│\n│ 📋 *How it works:*\n│ • Owner and sudo can always use bot\n│ • Reply to users to whitelist them\n│ • Whitelisted users get full access\n│\n│ 📝 *Commands:*\n│ ${prefix}whitelist add (reply to user)\n│ ${prefix}whitelist remove @user\n│ ${prefix}whitelist list\n│\n│ 👥 Currently whitelisted: ${whitelistData.users.length}\n│\n╰──────────────────────⦿\n\n💫 Ilom Bot 🍀`
                     }, { quoted: message });
                     
-                    logger.info(`Whitelist mode enabled by ${sender}`);
                     break;
                 }
 
@@ -104,12 +229,13 @@ whitelist clear`,
 
                     whitelistData.enabled = false;
                     saveWhitelist(whitelistData);
+                    
+                    logger.info(`Whitelist mode DISABLED by ${sender.split('@')[0]}`);
 
                     await sock.sendMessage(from, {
                         text: `╭─────⦿ 🔓 WHITELIST DISABLED ⦿─────\n│\n│ ✅ *Whitelist mode deactivated!*\n│\n│ 🌐 Bot is now public\n│ 👥 Everyone can use commands\n│\n│ 📝 Whitelist data preserved:\n│ ${whitelistData.users.length} users still saved\n│\n│ 💡 Enable anytime with:\n│ ${prefix}whitelist enable\n│\n╰──────────────────────⦿\n\n💫 Ilom Bot 🍀`
                     }, { quoted: message });
                     
-                    logger.info(`Whitelist mode disabled by ${sender}`);
                     break;
                 }
 
@@ -140,21 +266,27 @@ whitelist clear`,
                         return;
                     }
 
-                    if (whitelistData.users.includes(targetJid)) {
+                    // Normalize the JID before checking
+                    const normalizedJid = targetJid.split('@')[0].replace(/:\d+$/, '') + '@s.whatsapp.net';
+
+                    if (whitelistData.users.some(jid => {
+                        const normalized = jid.split('@')[0].replace(/:\d+$/, '') + '@s.whatsapp.net';
+                        return normalized === normalizedJid;
+                    })) {
                         await sock.sendMessage(from, {
                             text: `╭─────⦿ ℹ️ ALREADY WHITELISTED ⦿─────\n│\n│ 👤 *${targetName}*\n│ 📞 ${targetJid.split('@')[0]}\n│\n│ ✅ Already has whitelist access\n│\n╰──────────────────────⦿`
                         }, { quoted: message });
                         return;
                     }
 
-                    whitelistData.users.push(targetJid);
+                    whitelistData.users.push(normalizedJid);
                     saveWhitelist(whitelistData);
+                    
+                    logger.info(`User ${targetJid.split('@')[0]} whitelisted by ${sender.split('@')[0]}`);
 
                     await sock.sendMessage(from, {
                         text: `╭─────⦿ ✅ USER WHITELISTED ⦿─────\n│\n│ 👤 *Name:* ${targetName}\n│ 📞 *Number:* ${targetJid.split('@')[0]}\n│\n│ ✨ User can now use the bot\n│ 👥 Total whitelisted: ${whitelistData.users.length}\n│\n│ 🔐 Whitelist: ${whitelistData.enabled ? 'ACTIVE' : 'INACTIVE'}\n│\n╰──────────────────────⦿\n\n💫 Ilom Bot 🍀`
                     }, { quoted: message });
-                    
-                    logger.info(`User ${targetJid} whitelisted by ${sender}`);
 
                     if (isGroup && targetJid !== sender) {
                         try {
@@ -196,7 +328,13 @@ whitelist clear`,
                         return;
                     }
 
-                    const index = whitelistData.users.indexOf(targetJid);
+                    // Normalize the JID for comparison
+                    const normalizedTarget = targetJid.split('@')[0].replace(/:\d+$/, '') + '@s.whatsapp.net';
+                    const index = whitelistData.users.findIndex(jid => {
+                        const normalized = jid.split('@')[0].replace(/:\d+$/, '') + '@s.whatsapp.net';
+                        return normalized === normalizedTarget;
+                    });
+
                     if (index === -1) {
                         await sock.sendMessage(from, {
                             text: `╭─────⦿ ℹ️ NOT WHITELISTED ⦿─────\n│\n│ 👤 *${targetName}*\n│ 📞 ${targetJid.split('@')[0]}\n│\n│ ❌ User is not in whitelist\n│\n╰──────────────────────⦿`
@@ -206,12 +344,13 @@ whitelist clear`,
 
                     whitelistData.users.splice(index, 1);
                     saveWhitelist(whitelistData);
+                    
+                    logger.info(`User ${targetJid.split('@')[0]} removed from whitelist by ${sender.split('@')[0]}`);
 
                     await sock.sendMessage(from, {
                         text: `╭─────⦿ 🗑️ USER REMOVED ⦿─────\n│\n│ 👤 *Name:* ${targetName}\n│ 📞 *Number:* ${targetJid.split('@')[0]}\n│\n│ ❌ Removed from whitelist\n│ 👥 Total whitelisted: ${whitelistData.users.length}\n│\n│ 🔐 Whitelist: ${whitelistData.enabled ? 'ACTIVE' : 'INACTIVE'}\n│\n╰──────────────────────⦿\n\n💫 Ilom Bot 🍀`
                     }, { quoted: message });
                     
-                    logger.info(`User ${targetJid} removed from whitelist by ${sender}`);
                     break;
                 }
 
@@ -255,12 +394,13 @@ whitelist clear`,
                     const count = whitelistData.users.length;
                     whitelistData.users = [];
                     saveWhitelist(whitelistData);
+                    
+                    logger.info(`Whitelist cleared by ${sender.split('@')[0]}, removed ${count} users`);
 
                     await sock.sendMessage(from, {
                         text: `╭─────⦿ 🗑️ WHITELIST CLEARED ⦿─────\n│\n│ ✅ *Successfully cleared!*\n│\n│ 📊 Removed: ${count} users\n│ 👥 Current: 0 users\n│\n│ 🔐 Mode: ${whitelistData.enabled ? 'STILL ACTIVE' : 'INACTIVE'}\n│\n│ ${whitelistData.enabled ? '⚠️ Whitelist mode still active!\n│ Only owner/sudo can use bot now.\n│' : ''}\n╰──────────────────────⦿\n\n💫 Ilom Bot 🍀`
                     }, { quoted: message });
                     
-                    logger.info(`Whitelist cleared by ${sender}, removed ${count} users`);
                     break;
                 }
 
