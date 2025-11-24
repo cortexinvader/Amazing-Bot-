@@ -350,6 +350,53 @@ class MessageHandler {
         }
     }
 
+    // IMPROVED WHITELIST CHECK - More robust and with better logging
+    async checkWhitelist(sender, from) {
+        try {
+            const { initWhitelist, isWhitelisted, isOwner, isSudo } = await import('../commands/owner/whitelist.js');
+            const whitelistData = initWhitelist();
+            
+            // Log whitelist status
+            logger.debug(`Whitelist enabled: ${whitelistData.enabled}`);
+            
+            // If whitelist is disabled, allow everyone
+            if (!whitelistData.enabled) {
+                logger.debug('Whitelist is disabled - allowing message');
+                return { allowed: true, reason: 'whitelist_disabled' };
+            }
+            
+            // Check if user is owner
+            const userIsOwner = isOwner(sender, config);
+            if (userIsOwner) {
+                logger.debug(`User ${sender.split('@')[0]} is OWNER - allowing`);
+                return { allowed: true, reason: 'owner' };
+            }
+            
+            // Check if user is sudo
+            const userIsSudo = isSudo(sender, config);
+            if (userIsSudo) {
+                logger.debug(`User ${sender.split('@')[0]} is SUDO - allowing`);
+                return { allowed: true, reason: 'sudo' };
+            }
+            
+            // Check if user is whitelisted
+            const userIsWhitelisted = isWhitelisted(sender, whitelistData);
+            if (userIsWhitelisted) {
+                logger.debug(`User ${sender.split('@')[0]} is WHITELISTED - allowing`);
+                return { allowed: true, reason: 'whitelisted' };
+            }
+            
+            // User is not authorized
+            logger.debug(`User ${sender.split('@')[0]} is NOT authorized - blocking`);
+            return { allowed: false, reason: 'not_whitelisted' };
+            
+        } catch (error) {
+            logger.error('Whitelist check error:', error);
+            // On error, allow the message to prevent blocking due to errors
+            return { allowed: true, reason: 'error_fallback' };
+        }
+    }
+
     async handleIncomingMessage(sock, message) {
         try {
             if (!message || !message.key) {
@@ -376,25 +423,24 @@ class MessageHandler {
 
             logger.info(`📨 Message from ${sender.split('@')[0]} in ${isGroup ? 'group' : 'private'}: "${messageContent.text.substring(0, 50)}${messageContent.text.length > 50 ? '...' : ''}"`);
 
-            try {
-                const { initWhitelist, isWhitelisted, isOwner, isSudo } = await import('../commands/owner/whitelist.js');
-                const whitelistData = initWhitelist();
-                
-                if (whitelistData.enabled) {
-                    const userIsOwner = isOwner(sender, config);
-                    const userIsSudo = isSudo(sender, config);
-                    const userIsWhitelisted = isWhitelisted(sender, whitelistData);
-                    
-                    if (!userIsOwner && !userIsSudo && !userIsWhitelisted) {
-                        logger.debug(`Whitelist: Blocked message from non-whitelisted user ${sender.split('@')[0]}`);
-                        return;
+            // IMPROVED WHITELIST CHECK - Check before spam check
+            const whitelistResult = await this.checkWhitelist(sender, from);
+            if (!whitelistResult.allowed) {
+                logger.info(`🚫 Message blocked by whitelist from ${sender.split('@')[0]} - Reason: ${whitelistResult.reason}`);
+                // Optionally send a notification to the user
+                if (!isGroup) {
+                    try {
+                        await sock.sendMessage(from, {
+                            text: `⚠️ *Access Restricted*\n\nThis bot is currently in whitelist mode. Only authorized users can interact with it.\n\nContact the bot owner for access.`
+                        }, { quoted: message });
+                    } catch (error) {
+                        logger.debug('Failed to send whitelist notification:', error);
                     }
-                    
-                    logger.debug(`Whitelist: Allowed message from ${userIsOwner ? 'owner' : userIsSudo ? 'sudo' : 'whitelisted user'} ${sender.split('@')[0]}`);
                 }
-            } catch (error) {
-                logger.error('Whitelist check error:', error);
+                return;
             }
+
+            logger.debug(`✅ Whitelist check passed - Reason: ${whitelistResult.reason}`);
 
             const spamCheck = await antiSpam.checkSpam(sender, message);
             if (spamCheck.isSpam && spamCheck.action === 'block') {
