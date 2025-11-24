@@ -87,43 +87,37 @@ async function processSessionCredentials() {
 
             logger.info('🔐 Processing session credentials from environment...');
 
-            if (sessionId.startsWith('sypher™--')) {
+            if (sessionId.startsWith('sypher™--') || sessionId.startsWith('sypher sypher™--')) {
                 try {
-                    logger.info('📥 Detected sypher™ session format, downloading from Mega.nz...');
-                    const sessdata = sessionId.replace("sypher™--", "").trim();
+                    logger.info('📥 Detected sypher™ session format, downloading from server...');
+                    const sessdata = sessionId.replace("sypher sypher™--", "").replace("sypher™--", "").trim();
                     
                     if (!sessdata || sessdata.length < 10) {
                         throw new Error('Invalid sypher session ID format');
                     }
                     
-                    const filer = File.fromURL(`https://mega.nz/file/${sessdata}`);
+                    const axios = (await import('axios')).default;
+                    const response = await axios.get(`https://existing-madelle-lance-ui-efecfdce.koyeb.app/download/${sessdata}`, { 
+                        responseType: 'stream',
+                        timeout: 15000
+                    });
                     
+                    if (response.status === 404) {
+                        throw new Error(`File with identifier ${sessdata} not found.`);
+                    }
+                    
+                    await fs.ensureDir(SESSION_PATH);
+                    const writer = fs.createWriteStream(path.join(SESSION_PATH, 'creds.json'));
+                    response.data.pipe(writer);
+
                     await new Promise((resolve, reject) => {
-                        const timeout = setTimeout(() => {
-                            reject(new Error('Mega.nz download timeout after 30 seconds'));
-                        }, 30000);
-                        
-                        filer.download((err, data) => {
-                            clearTimeout(timeout);
-                            
-                            if (err) {
-                                logger.error('❌ Failed to download from Mega.nz:', err.message);
-                                reject(err);
-                            } else if (!data || data.length === 0) {
-                                logger.error('❌ Downloaded data is empty');
-                                reject(new Error('Empty session data'));
-                            } else {
-                                fs.writeFile(path.join(SESSION_PATH, 'creds.json'), data, writeErr => {
-                                    if (writeErr) {
-                                        logger.error('❌ Failed to write creds.json:', writeErr.message);
-                                        reject(writeErr);
-                                    } else {
-                                        logger.info('✅ Session successfully downloaded from Mega.nz');
-                                        logger.info(`📦 Session data size: ${data.length} bytes`);
-                                        resolve();
-                                    }
-                                });
-                            }
+                        writer.on('finish', () => {
+                            logger.info('✅ Session credentials downloaded successfully!');
+                            resolve();
+                        });
+                        writer.on('error', (err) => {
+                            logger.error('❌ Failed to download session file:', err);
+                            reject(err);
                         });
                     });
                     
