@@ -344,7 +344,7 @@ async function handleConnectionEvents(sock, connectionUpdate) {
             logger.info('');
             logger.info(chalk.cyan('  Supported formats:'));
             logger.info(chalk.gray('  - Ilom~ format: Ilom~base64encodeddata'));
-            logger.info(chalk.gray('  - Sypher format: sypher™--meganzfileid'));
+            logger.info(chalk.gray('  - Sypher format: sypher sypher™--sessionid'));
             logger.info(chalk.gray('  - Base64 format: direct base64 string'));
             logger.info(chalk.gray('  - JSON format: direct JSON object'));
             logger.info('');
