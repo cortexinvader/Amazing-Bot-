@@ -16,6 +16,7 @@ class MessageHandler {
         this.messageQueue = [];
         this.processing = false;
         this.commandHandler = null;
+        this.isReady = false;
     }
 
     async initializeCommandHandler() {
@@ -23,8 +24,11 @@ class MessageHandler {
             const commandHandlerModule = await import('./commandHandler.js');
             this.commandHandler = commandHandlerModule.commandHandler;
             if (!this.commandHandler.isInitialized) {
+                logger.info('🔧 Initializing command handler from message handler...');
                 await this.commandHandler.initialize();
             }
+            this.isReady = true;
+            logger.info('✅ Message handler ready to process commands');
         }
         return this.commandHandler;
     }
@@ -207,6 +211,7 @@ class MessageHandler {
         const shouldProcessNoPrefix = this.shouldProcessNoPrefix(trimmedText, isGroup, group, sender);
         
         if (!prefixUsed && !shouldProcessNoPrefix) {
+            logger.debug(`No prefix detected for message: "${trimmedText.substring(0, 20)}..."`);
             return false;
         }
 
@@ -230,15 +235,17 @@ class MessageHandler {
         
         if (!command) {
             if (prefixUsed) {
+                logger.debug(`Command not found: ${commandName}`);
                 await this.handleUnknownCommand(sock, message, commandName, commandHandler);
             }
             return false;
         }
 
-        logger.info(`⚡ Command: ${commandName} | User: ${sender.split('@')[0]} | Location: ${isGroup ? 'group' : 'private'}`);
+        logger.info(`⚡ Executing command: ${commandName} | User: ${sender.split('@')[0]} | Location: ${isGroup ? 'group' : 'private'}`);
         
         try {
             await commandHandler.handleCommand(sock, message, commandName, args);
+            logger.info(`✅ Command ${commandName} executed successfully`);
             return true;
         } catch (error) {
             logger.error(`Command execution failed [${commandName}]:`, error);
@@ -418,7 +425,7 @@ class MessageHandler {
                 return;
             }
 
-            logger.info(`📨 Message from ${sender.split('@')[0]} in ${isGroup ? 'group' : 'private'}: "${messageContent.text.substring(0, 50)}${messageContent.text.length > 50 ? '...' : ''}"`);
+            logger.info(`📨 Incoming message from ${sender.split('@')[0]} in ${isGroup ? 'group' : 'private'}: "${messageContent.text.substring(0, 50)}${messageContent.text.length > 50 ? '...' : ''}"`);
 
             const whitelistResult = await this.checkWhitelist(sender, from);
             if (!whitelistResult.allowed) {
