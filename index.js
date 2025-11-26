@@ -389,12 +389,13 @@ async function setupEventHandlers(sock, saveCreds) {
 
     logger.info('✅ Setting up messages.upsert event handler...');
     sock.ev.on('messages.upsert', async (upsert) => {
-        logger.debug(`🔔 messages.upsert EVENT | Type: ${upsert.type} | Messages: ${upsert.messages?.length || 0}`);
+        logger.info(`🔔 messages.upsert EVENT | Type: ${upsert.type} | Messages: ${upsert.messages?.length || 0}`);
         const { messages, type } = upsert;
         if (type === 'notify') {
-            logger.debug(`📬 Processing ${messages.length} notify message(s)...`);
+            logger.info(`📬 Processing ${messages.length} notify message(s)...`);
             for (const message of messages) {
                 try {
+                    logger.info(`📨 Processing message from ${message.key.remoteJid}`);
                     await messageHandler.handleIncomingMessage(sock, message);
                 } catch (error) {
                     logger.error('Error processing message:', error);
@@ -511,6 +512,9 @@ async function establishWhatsAppConnection() {
                 maxRetries: 5,
                 logger: P({ level: "silent" }),
                 version,
+                getMessage: async (key) => {
+                    return { conversation: '' };
+                }
             });
 
             logger.info('📢 Setting up connection event handlers...');
@@ -570,6 +574,13 @@ async function establishWhatsAppConnection() {
                         await qrService.clearQR();
                     }
                     
+                    await setupEventHandlers(sock, saveCreds);
+                    
+                    global.sock = sock;
+                    
+                    logger.info('🎯 Bot is now listening for messages...');
+                    console.log(chalk.yellow('📨 Waiting for messages...'));
+                    
                     await sendBotStatusUpdate(sock);
                     
                     resolve();
@@ -605,10 +616,6 @@ async function establishWhatsAppConnection() {
                     logger.info('📬 Received pending notifications');
                 }
             });
-
-            await setupEventHandlers(sock, saveCreds);
-
-            global.sock = sock;
 
         } catch (error) {
             logger.error('Failed to establish WhatsApp connection:', error);
@@ -822,6 +829,10 @@ async function initializeBot() {
         logger.info('Initializing cache system...');
         await initializeCache();
 
+        logger.info('Initializing command handler...');
+        await commandHandler.initialize();
+        logger.info(`✅ Command handler ready with ${commandHandler.getCommandCount()} commands`);
+
         logger.info('Loading command modules...');
         await commandHandler.loadCommands();
 
@@ -834,12 +845,15 @@ async function initializeBot() {
         logger.info('Starting web server...');
         await startWebServer(app);
 
+        logger.info('Establishing WhatsApp connection...');
         await establishWhatsAppConnection();
 
         setupProcessHandlers();
 
         logger.info('Bot initialization completed successfully');
         console.log(chalk.magenta.bold('🎉 Ilom Bot is fully operational and ready to serve!'));
+        console.log(chalk.yellow.bold('\n📨 Bot is now listening for incoming messages...'));
+        console.log(chalk.cyan(`💬 Send a message with prefix "${config.prefix}" to test (e.g., ${config.prefix}ping)\n`));
 
     } catch (error) {
         logger.error('Bot initialization failed:', error);
