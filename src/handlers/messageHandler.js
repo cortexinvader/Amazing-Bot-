@@ -17,20 +17,29 @@ class MessageHandler {
         this.processing = false;
         this.commandHandler = null;
         this.isReady = false;
+        this.initializationPromise = null;
     }
 
     async initializeCommandHandler() {
-        if (!this.commandHandler) {
-            const commandHandlerModule = await import('./commandHandler.js');
-            this.commandHandler = commandHandlerModule.commandHandler;
-            if (!this.commandHandler.isInitialized) {
-                logger.info('🔧 Initializing command handler from message handler...');
-                await this.commandHandler.initialize();
-            }
-            this.isReady = true;
-            logger.info('✅ Message handler ready to process commands');
+        if (this.initializationPromise) {
+            return this.initializationPromise;
         }
-        return this.commandHandler;
+
+        this.initializationPromise = (async () => {
+            if (!this.commandHandler) {
+                const commandHandlerModule = await import('./commandHandler.js');
+                this.commandHandler = commandHandlerModule.commandHandler;
+                if (!this.commandHandler.isInitialized) {
+                    logger.info('🔧 Initializing command handler from message handler...');
+                    await this.commandHandler.initialize();
+                }
+                this.isReady = true;
+                logger.info('✅ Message handler ready to process commands');
+            }
+            return this.commandHandler;
+        })();
+
+        return this.initializationPromise;
     }
 
     extractMessageContent(message) {
@@ -141,16 +150,12 @@ class MessageHandler {
 
     detectPrefix(text) {
         if (!text || typeof text !== 'string') {
-            logger.debug(`detectPrefix: invalid text`);
             return null;
         }
         const trimmedText = text.trim();
-        logger.debug(`detectPrefix: checking "${trimmedText}" against prefix "${config.prefix}"`);
         if (trimmedText.startsWith(config.prefix)) {
-            logger.debug(`detectPrefix: MATCH found`);
             return config.prefix;
         }
-        logger.debug(`detectPrefix: no match`);
         return null;
     }
 
@@ -200,17 +205,13 @@ class MessageHandler {
 
     async processCommand(sock, message, text, user, group, isGroup) {
         if (!text || typeof text !== 'string') {
-            logger.info(`processCommand: invalid text type`);
             return false;
         }
 
         const trimmedText = text.trim();
         if (trimmedText.length === 0) {
-            logger.info(`processCommand: empty text`);
             return false;
         }
-
-        logger.info(`processCommand: analyzing text "${trimmedText.substring(0, 30)}..."`);
 
         const from = message.key.remoteJid;
         const sender = message.key.participant || from;
@@ -218,13 +219,9 @@ class MessageHandler {
         const commandHandler = await this.initializeCommandHandler();
         
         const prefixUsed = this.detectPrefix(trimmedText);
-        logger.info(`processCommand: prefixUsed = ${prefixUsed}, prefix expected = "${config.prefix}"`);
-        
         const shouldProcessNoPrefix = this.shouldProcessNoPrefix(trimmedText, isGroup, group, sender);
-        logger.info(`processCommand: shouldProcessNoPrefix = ${shouldProcessNoPrefix}`);
         
         if (!prefixUsed && !shouldProcessNoPrefix) {
-            logger.info(`processCommand: No prefix and no noPrefix - returning false`);
             return false;
         }
 
@@ -232,20 +229,14 @@ class MessageHandler {
             ? trimmedText.slice(prefixUsed.length).trim() 
             : trimmedText.trim();
 
-        logger.info(`processCommand: extracted command text = "${commandText}"`);
-
         if (!commandText || commandText.length === 0) {
-            logger.info(`processCommand: empty command text after extraction`);
             return false;
         }
 
         const splitArgs = commandText.split(/\s+/);
         const commandName = splitArgs.shift()?.toLowerCase();
 
-        logger.info(`processCommand: commandName = "${commandName}"`);
-
         if (!commandName || commandName.length === 0) {
-            logger.info(`processCommand: empty command name`);
             return false;
         }
 
@@ -253,9 +244,7 @@ class MessageHandler {
         const command = commandHandler.getCommand(commandName);
         
         if (!command) {
-            logger.info(`processCommand: command "${commandName}" not found in handler`);
             if (prefixUsed) {
-                logger.info(`processCommand: sending unknown command response`);
                 await this.handleUnknownCommand(sock, message, commandName, commandHandler);
             }
             return false;
@@ -380,23 +369,19 @@ class MessageHandler {
     async checkWhitelist(sender, from) {
         try {
             if (!config.whitelist.enabled) {
-                logger.debug('Whitelist disabled - allowing all messages');
                 return { allowed: true, reason: 'whitelist_disabled_in_config' };
             }
 
             if (config.whitelist.bypassOwners && this.isOwner(sender)) {
-                logger.debug(`Owner bypasses whitelist`);
                 return { allowed: true, reason: 'owner_bypass' };
             }
 
             if (config.whitelist.bypassSudos && this.isSudo(sender)) {
-                logger.debug(`Sudo bypasses whitelist`);
                 return { allowed: true, reason: 'sudo_bypass' };
             }
 
             const whitelistModule = await import('../commands/owner/whitelist.js').catch(() => null);
             if (!whitelistModule) {
-                logger.debug('Whitelist module not found - allowing');
                 return { allowed: true, reason: 'whitelist_module_not_found' };
             }
 
@@ -405,11 +390,9 @@ class MessageHandler {
             
             const userIsWhitelisted = isWhitelisted ? isWhitelisted(sender, whitelistData) : false;
             if (userIsWhitelisted) {
-                logger.debug(`User ${sender.split('@')[0]} is whitelisted`);
                 return { allowed: true, reason: 'whitelisted' };
             }
             
-            logger.debug(`User ${sender.split('@')[0]} not authorized`);
             return { allowed: false, reason: 'not_whitelisted' };
             
         } catch (error) {
@@ -421,37 +404,30 @@ class MessageHandler {
     async handleIncomingMessage(sock, message) {
         try {
             if (!message || !message.key) {
-                logger.debug('No message or key');
                 return;
             }
             
             const from = message.key.remoteJid;
             const fromMe = message.key.fromMe;
             
-            logger.debug(`📩 Processing message | From: ${from} | FromMe: ${fromMe} | SelfMode: ${config.selfMode}`);
-            
             if (fromMe && !config.selfMode) {
-                logger.debug(`Own message ignored (selfMode: ${config.selfMode})`);
                 return;
             }
             
             if (!from || from === 'status@broadcast') {
-                logger.debug(`Invalid sender: ${from}`);
                 return;
             }
 
             const sender = message.key.participant || from;
             const isGroup = from.endsWith('@g.us');
             
-            logger.debug(`📄 Extracting message content...`);
             const messageContent = this.extractMessageContent(message);
             if (!messageContent) {
-                logger.debug(`No extractable content`);
                 return;
             }
 
             const textPreview = messageContent.text.substring(0, 50) + (messageContent.text.length > 50 ? '...' : '');
-            logger.info(`📨 Message received from ${sender.split('@')[0]} in ${isGroup ? 'group' : 'private'} | Text: "${textPreview}"`);
+            logger.info(`📨 Message from ${sender.split('@')[0]} in ${isGroup ? 'group' : 'private'} | Text: "${textPreview}"`);
 
             const whitelistResult = await this.checkWhitelist(sender, from);
             if (!whitelistResult.allowed) {
@@ -468,18 +444,38 @@ class MessageHandler {
                 return;
             }
 
-            logger.debug(`✅ Whitelist OK - checking spam...`);
-
             const spamCheck = await antiSpam.checkSpam(sender, message);
             if (spamCheck.isSpam && spamCheck.action === 'block') {
                 logger.info(`🔴 Spam blocked from ${sender.split('@')[0]}`);
                 return;
             }
 
-            let user = null;
+            let user = await getUser(sender);
             let group = null;
 
-            logger.info(`🔧 Checking if command: "${messageContent.text}"`);
+            if (isGroup) {
+                group = await getGroup(from);
+                if (!group) {
+                    try {
+                        const metadata = await sock.groupMetadata(from);
+                        group = await createGroup({
+                            jid: from,
+                            name: metadata.subject,
+                            participants: metadata.participants.length,
+                            createdBy: metadata.owner,
+                            createdAt: new Date(metadata.creation * 1000)
+                        });
+                    } catch (error) {
+                        logger.error('Failed to create group:', error);
+                    }
+                } else {
+                    await updateGroup(from, {
+                        $inc: { messageCount: 1 },
+                        lastActivity: new Date()
+                    }).catch(err => logger.debug('Update group error:', err));
+                }
+            }
+
             const isCommand = await this.processCommand(
                 sock, message, messageContent.text, user, group, isGroup
             );
@@ -505,7 +501,6 @@ class MessageHandler {
                 return;
             }
 
-            user = await getUser(sender);
             if (!user) {
                 user = await createUser({
                     jid: sender,
@@ -513,37 +508,12 @@ class MessageHandler {
                     name: message.pushName || 'Unknown',
                     isGroup: false
                 });
-                logger.debug(`New user created: ${sender.split('@')[0]}`);
             } else {
                 await updateUser(sender, {
                     name: message.pushName || user.name,
                     lastSeen: new Date(),
                     $inc: { messageCount: 1 }
                 }).catch(err => logger.debug('Update user error:', err));
-            }
-
-            if (isGroup) {
-                group = await getGroup(from);
-                if (!group) {
-                    try {
-                        const metadata = await sock.groupMetadata(from);
-                        group = await createGroup({
-                            jid: from,
-                            name: metadata.subject,
-                            participants: metadata.participants.length,
-                            createdBy: metadata.owner,
-                            createdAt: new Date(metadata.creation * 1000)
-                        });
-                        logger.debug(`New group created: ${metadata.subject}`);
-                    } catch (error) {
-                        logger.error('Failed to create group:', error);
-                    }
-                } else {
-                    await updateGroup(from, {
-                        $inc: { messageCount: 1 },
-                        lastActivity: new Date()
-                    }).catch(err => logger.debug('Update group error:', err));
-                }
             }
 
             await this.saveMessage(message, user, group, messageContent).catch(err => logger.debug('Save message error:', err));
@@ -557,7 +527,6 @@ class MessageHandler {
                 const replyHandler = global.replyHandlers[quotedMessageId];
                 try {
                     await replyHandler.handler(messageContent.text, message);
-                    logger.debug('Reply handler executed');
                 } catch (error) {
                     logger.error('Reply handler error:', error);
                 }
@@ -568,7 +537,6 @@ class MessageHandler {
                 const chatHandler = global.chatHandlers[sender];
                 try {
                     await chatHandler.handler(messageContent.text, message);
-                    logger.debug('Chat handler executed');
                 } catch (error) {
                     logger.error('Chat handler error:', error);
                 }
