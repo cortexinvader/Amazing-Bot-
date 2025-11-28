@@ -379,40 +379,37 @@ class MessageHandler {
 
     async checkWhitelist(sender, from) {
         try {
+            if (!config.whitelist.enabled) {
+                logger.debug('Whitelist disabled - allowing all messages');
+                return { allowed: true, reason: 'whitelist_disabled_in_config' };
+            }
+
+            if (config.whitelist.bypassOwners && this.isOwner(sender)) {
+                logger.debug(`Owner bypasses whitelist`);
+                return { allowed: true, reason: 'owner_bypass' };
+            }
+
+            if (config.whitelist.bypassSudos && this.isSudo(sender)) {
+                logger.debug(`Sudo bypasses whitelist`);
+                return { allowed: true, reason: 'sudo_bypass' };
+            }
+
             const whitelistModule = await import('../commands/owner/whitelist.js').catch(() => null);
-            
             if (!whitelistModule) {
-                logger.debug('Whitelist module not found - allowing all messages');
+                logger.debug('Whitelist module not found - allowing');
                 return { allowed: true, reason: 'whitelist_module_not_found' };
             }
 
-            const { initWhitelist, isWhitelisted, isOwner: whitelistIsOwner, isSudo: whitelistIsSudo } = whitelistModule;
+            const { initWhitelist, isWhitelisted } = whitelistModule;
             const whitelistData = initWhitelist();
-            
-            if (!whitelistData.enabled) {
-                logger.debug('Whitelist is disabled - allowing message');
-                return { allowed: true, reason: 'whitelist_disabled' };
-            }
-            
-            const userIsOwner = whitelistIsOwner ? whitelistIsOwner(sender, config) : this.isOwner(sender);
-            if (userIsOwner) {
-                logger.debug(`User ${sender.split('@')[0]} is OWNER - allowing`);
-                return { allowed: true, reason: 'owner' };
-            }
-            
-            const userIsSudo = whitelistIsSudo ? whitelistIsSudo(sender, config) : this.isSudo(sender);
-            if (userIsSudo) {
-                logger.debug(`User ${sender.split('@')[0]} is SUDO - allowing`);
-                return { allowed: true, reason: 'sudo' };
-            }
             
             const userIsWhitelisted = isWhitelisted ? isWhitelisted(sender, whitelistData) : false;
             if (userIsWhitelisted) {
-                logger.debug(`User ${sender.split('@')[0]} is WHITELISTED - allowing`);
+                logger.debug(`User ${sender.split('@')[0]} is whitelisted`);
                 return { allowed: true, reason: 'whitelisted' };
             }
             
-            logger.debug(`User ${sender.split('@')[0]} is NOT authorized - blocking`);
+            logger.debug(`User ${sender.split('@')[0]} not authorized`);
             return { allowed: false, reason: 'not_whitelisted' };
             
         } catch (error) {

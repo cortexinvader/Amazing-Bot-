@@ -28,6 +28,13 @@ const config = {
     autoRead: process.env.AUTO_READ === 'true',
     autoTyping: process.env.AUTO_TYPING === 'true',
     autoRecording: process.env.AUTO_RECORDING === 'true',
+    
+    whitelist: {
+        enabled: process.env.WHITELIST_ENABLED === 'true',
+        bypassOwners: true,
+        bypassSudos: true,
+        bypassBotOwner: true
+    },
 
     database: {
         url: process.env.MONGODB_URL || process.env.DATABASE_URL || 'mongodb://localhost:27017/ilombot',
