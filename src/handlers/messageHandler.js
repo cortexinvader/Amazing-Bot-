@@ -253,7 +253,7 @@ class MessageHandler {
         logger.info(`⚡ Executing command: ${commandName} | User: ${sender.split('@')[0]} | Location: ${isGroup ? 'group' : 'private'}`);
         
         try {
-            await commandHandler.handleCommand(sock, message, commandName, args);
+            const result = await commandHandler.handleCommand(sock, message, commandName, args);
             logger.info(`✅ Command ${commandName} executed successfully`);
             return true;
         } catch (error) {

@@ -231,6 +231,14 @@ class CommandHandler {
 
             logger.info(`⚡ Executing command: ${commandName} for ${sender.split('@')[0]}`);
 
+            if (!command.execute || typeof command.execute !== 'function') {
+                logger.error(`Command ${commandName} has no execute function`);
+                await sock.sendMessage(from, {
+                    text: `❌ *Error*\n\nCommand ${commandName} is not properly configured.`
+                }, { quoted: message });
+                return false;
+            }
+
             await command.execute({
                 sock,
                 message,
@@ -246,7 +254,7 @@ class CommandHandler {
                 quoted: message.message?.extendedTextMessage?.contextInfo?.quotedMessage,
                 isOwner: this.isOwner(sender)
             });
-
+            
             const executionTime = Date.now() - startTime;
             recordCommandUsage(commandName, executionTime, true);
             
