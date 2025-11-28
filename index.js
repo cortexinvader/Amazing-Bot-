@@ -391,18 +391,23 @@ async function setupEventHandlers(sock, saveCreds) {
     sock.ev.on('messages.upsert', async (upsert) => {
         logger.info(`🔔 messages.upsert EVENT | Type: ${upsert.type} | Messages: ${upsert.messages?.length || 0}`);
         const { messages, type } = upsert;
-        if (type === 'notify') {
-            logger.info(`📬 Processing ${messages.length} notify message(s)...`);
-            for (const message of messages) {
-                try {
-                    logger.info(`📨 Processing message from ${message.key.remoteJid}`);
-                    await messageHandler.handleIncomingMessage(sock, message);
-                } catch (error) {
-                    logger.error('Error processing message:', error);
-                }
+        logger.info(`📥 Message event received - Type: ${type}, Count: ${messages?.length || 0}`);
+        
+        if (!messages || messages.length === 0) {
+            logger.debug('No messages in upsert event');
+            return;
+        }
+
+        for (const message of messages) {
+            try {
+                const from = message.key?.remoteJid || 'unknown';
+                const fromMe = message.key?.fromMe || false;
+                logger.info(`📨 [${type}] Message from ${from} | FromMe: ${fromMe} | has content: ${!!message.message}`);
+                
+                await messageHandler.handleIncomingMessage(sock, message);
+            } catch (error) {
+                logger.error('Error processing message:', error);
             }
-        } else {
-            logger.debug(`⏭️  Skipping message type: ${type}`);
         }
     });
 

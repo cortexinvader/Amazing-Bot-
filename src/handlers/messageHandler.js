@@ -140,11 +140,17 @@ class MessageHandler {
     }
 
     detectPrefix(text) {
-        if (!text || typeof text !== 'string') return null;
+        if (!text || typeof text !== 'string') {
+            logger.debug(`detectPrefix: invalid text`);
+            return null;
+        }
         const trimmedText = text.trim();
+        logger.debug(`detectPrefix: checking "${trimmedText}" against prefix "${config.prefix}"`);
         if (trimmedText.startsWith(config.prefix)) {
+            logger.debug(`detectPrefix: MATCH found`);
             return config.prefix;
         }
+        logger.debug(`detectPrefix: no match`);
         return null;
     }
 
@@ -194,13 +200,17 @@ class MessageHandler {
 
     async processCommand(sock, message, text, user, group, isGroup) {
         if (!text || typeof text !== 'string') {
+            logger.info(`processCommand: invalid text type`);
             return false;
         }
 
         const trimmedText = text.trim();
         if (trimmedText.length === 0) {
+            logger.info(`processCommand: empty text`);
             return false;
         }
+
+        logger.info(`processCommand: analyzing text "${trimmedText.substring(0, 30)}..."`);
 
         const from = message.key.remoteJid;
         const sender = message.key.participant || from;
@@ -208,10 +218,13 @@ class MessageHandler {
         const commandHandler = await this.initializeCommandHandler();
         
         const prefixUsed = this.detectPrefix(trimmedText);
+        logger.info(`processCommand: prefixUsed = ${prefixUsed}, prefix expected = "${config.prefix}"`);
+        
         const shouldProcessNoPrefix = this.shouldProcessNoPrefix(trimmedText, isGroup, group, sender);
+        logger.info(`processCommand: shouldProcessNoPrefix = ${shouldProcessNoPrefix}`);
         
         if (!prefixUsed && !shouldProcessNoPrefix) {
-            logger.debug(`No prefix detected for message: "${trimmedText.substring(0, 20)}..."`);
+            logger.info(`processCommand: No prefix and no noPrefix - returning false`);
             return false;
         }
 
@@ -219,14 +232,20 @@ class MessageHandler {
             ? trimmedText.slice(prefixUsed.length).trim() 
             : trimmedText.trim();
 
+        logger.info(`processCommand: extracted command text = "${commandText}"`);
+
         if (!commandText || commandText.length === 0) {
+            logger.info(`processCommand: empty command text after extraction`);
             return false;
         }
 
         const splitArgs = commandText.split(/\s+/);
         const commandName = splitArgs.shift()?.toLowerCase();
 
+        logger.info(`processCommand: commandName = "${commandName}"`);
+
         if (!commandName || commandName.length === 0) {
+            logger.info(`processCommand: empty command name`);
             return false;
         }
 
@@ -234,8 +253,9 @@ class MessageHandler {
         const command = commandHandler.getCommand(commandName);
         
         if (!command) {
+            logger.info(`processCommand: command "${commandName}" not found in handler`);
             if (prefixUsed) {
-                logger.debug(`Command not found: ${commandName}`);
+                logger.info(`processCommand: sending unknown command response`);
                 await this.handleUnknownCommand(sock, message, commandName, commandHandler);
             }
             return false;
@@ -404,32 +424,41 @@ class MessageHandler {
     async handleIncomingMessage(sock, message) {
         try {
             if (!message || !message.key) {
-                return;
-            }
-            
-            if (message.key.fromMe && !config.selfMode) {
+                logger.debug('No message or key');
                 return;
             }
             
             const from = message.key.remoteJid;
+            const fromMe = message.key.fromMe;
+            
+            logger.debug(`📩 Processing message | From: ${from} | FromMe: ${fromMe} | SelfMode: ${config.selfMode}`);
+            
+            if (fromMe && !config.selfMode) {
+                logger.debug(`Own message ignored (selfMode: ${config.selfMode})`);
+                return;
+            }
+            
             if (!from || from === 'status@broadcast') {
+                logger.debug(`Invalid sender: ${from}`);
                 return;
             }
 
             const sender = message.key.participant || from;
             const isGroup = from.endsWith('@g.us');
             
+            logger.debug(`📄 Extracting message content...`);
             const messageContent = this.extractMessageContent(message);
             if (!messageContent) {
-                logger.debug(`Message skipped - No content extractable`);
+                logger.debug(`No extractable content`);
                 return;
             }
 
-            logger.info(`📨 Incoming message from ${sender.split('@')[0]} in ${isGroup ? 'group' : 'private'}: "${messageContent.text.substring(0, 50)}${messageContent.text.length > 50 ? '...' : ''}"`);
+            const textPreview = messageContent.text.substring(0, 50) + (messageContent.text.length > 50 ? '...' : '');
+            logger.info(`📨 Message received from ${sender.split('@')[0]} in ${isGroup ? 'group' : 'private'} | Text: "${textPreview}"`);
 
             const whitelistResult = await this.checkWhitelist(sender, from);
             if (!whitelistResult.allowed) {
-                logger.info(`🚫 Message blocked by whitelist from ${sender.split('@')[0]} - Reason: ${whitelistResult.reason}`);
+                logger.info(`🚫 Blocked by whitelist: ${whitelistResult.reason}`);
                 if (!isGroup) {
                     try {
                         await sock.sendMessage(from, {
@@ -442,17 +471,18 @@ class MessageHandler {
                 return;
             }
 
-            logger.debug(`✅ Whitelist check passed - Reason: ${whitelistResult.reason}`);
+            logger.debug(`✅ Whitelist OK - checking spam...`);
 
             const spamCheck = await antiSpam.checkSpam(sender, message);
             if (spamCheck.isSpam && spamCheck.action === 'block') {
-                logger.debug(`Spam detected from ${sender.split('@')[0]}`);
+                logger.info(`🔴 Spam blocked from ${sender.split('@')[0]}`);
                 return;
             }
 
             let user = null;
             let group = null;
 
+            logger.info(`🔧 Checking if command: "${messageContent.text}"`);
             const isCommand = await this.processCommand(
                 sock, message, messageContent.text, user, group, isGroup
             );
