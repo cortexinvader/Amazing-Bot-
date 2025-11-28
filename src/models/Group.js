@@ -140,7 +140,7 @@ GroupSchema.methods.unban = function() {
 const Group = mongoose.model('Group', GroupSchema);
 
 const isDatabaseConnected = () => {
-    return mongoose.connection.readyState === 1;
+    return mongoose.connection.readyState === 1 && mongoose.connection.simulated !== true;
 };
 
 const mockGroup = (jid, groupData = {}) => ({

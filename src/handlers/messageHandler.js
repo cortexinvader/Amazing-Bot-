@@ -450,7 +450,35 @@ class MessageHandler {
                 return;
             }
 
-            let user = await getUser(sender);
+            let user = null;
+            let group = null;
+
+            const isCommand = await this.processCommand(
+                sock, message, messageContent.text, user, group, isGroup
+            );
+
+            if (isCommand) {
+                logger.info(`✅ Command processed successfully`);
+                if (config.events.levelUp) {
+                    try {
+                        await handleLevelUp(sock, message, true);
+                    } catch (error) {
+                        logger.error('Level up error:', error);
+                    }
+                }
+                
+                cache.set(`lastMessage_${sender}`, {
+                    content: messageContent.text,
+                    timestamp: Date.now(),
+                    messageType: messageContent.messageType,
+                    isGroup
+                }, 300);
+
+                await this.updateMessageStats('command');
+                return;
+            }
+
+            user = await getUser(sender);
             if (!user) {
                 user = await createUser({
                     jid: sender,
@@ -464,10 +492,9 @@ class MessageHandler {
                     name: message.pushName || user.name,
                     lastSeen: new Date(),
                     $inc: { messageCount: 1 }
-                });
+                }).catch(err => logger.debug('Update user error:', err));
             }
 
-            let group = null;
             if (isGroup) {
                 group = await getGroup(from);
                 if (!group) {
@@ -488,11 +515,11 @@ class MessageHandler {
                     await updateGroup(from, {
                         $inc: { messageCount: 1 },
                         lastActivity: new Date()
-                    });
+                    }).catch(err => logger.debug('Update group error:', err));
                 }
             }
 
-            await this.saveMessage(message, user, group, messageContent);
+            await this.saveMessage(message, user, group, messageContent).catch(err => logger.debug('Save message error:', err));
 
             if (messageContent.quoted) {
                 await this.handleQuotedMessage(sock, message, messageContent.quoted, user);
@@ -537,31 +564,6 @@ class MessageHandler {
                 } catch (error) {
                     logger.error('Auto-reaction error:', error);
                 }
-            }
-
-            const isCommand = await this.processCommand(
-                sock, message, messageContent.text, user, group, isGroup
-            );
-
-            if (isCommand) {
-                logger.info(`✅ Command processed successfully`);
-                if (config.events.levelUp) {
-                    try {
-                        await handleLevelUp(sock, message, true);
-                    } catch (error) {
-                        logger.error('Level up error:', error);
-                    }
-                }
-                
-                cache.set(`lastMessage_${sender}`, {
-                    content: messageContent.text,
-                    timestamp: Date.now(),
-                    messageType: messageContent.messageType,
-                    isGroup
-                }, 300);
-
-                await this.updateMessageStats('command');
-                return;
             }
 
             if (config.events.levelUp) {

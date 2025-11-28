@@ -411,7 +411,7 @@ UserSchema.pre('save', function(next) {
 const User = mongoose.model('User', UserSchema);
 
 const isDatabaseConnected = () => {
-    return mongoose.connection.readyState === 1;
+    return mongoose.connection.readyState === 1 && mongoose.connection.simulated !== true;
 };
 
 const mockUser = (jid, userData = {}) => ({
