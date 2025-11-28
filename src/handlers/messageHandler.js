@@ -382,6 +382,7 @@ class MessageHandler {
 
             const whitelistModule = await import('../commands/owner/whitelist.js').catch(() => null);
             if (!whitelistModule) {
+                logger.debug('Whitelist module not found, allowing by default');
                 return { allowed: true, reason: 'whitelist_module_not_found' };
             }
 
