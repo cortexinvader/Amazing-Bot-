@@ -121,33 +121,6 @@ class MessageHandler {
         };
     }
 
-    async downloadMedia(message, media) {
-        try {
-            const { downloadMediaMessage } = await import('@whiskeysockets/baileys');
-            const buffer = await downloadMediaMessage(message, 'buffer', {});
-            const mediaType = media.mimetype?.split('/')[0] || 'unknown';
-            const extension = media.mimetype?.split('/')[1] || 'bin';
-
-            const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${extension}`;
-            const tempDir = path.join(process.cwd(), 'temp', mediaType);
-            await fs.ensureDir(tempDir);
-
-            const filePath = path.join(tempDir, fileName);
-            await fs.writeFile(filePath, buffer);
-
-            return {
-                buffer,
-                filePath,
-                fileName,
-                mimetype: media.mimetype,
-                size: buffer.length
-            };
-        } catch (error) {
-            logger.error('Failed to download media:', error);
-            return null;
-        }
-    }
-
     detectPrefix(text) {
         if (!text || typeof text !== 'string') {
             return null;
@@ -299,73 +272,6 @@ class MessageHandler {
         }
     }
 
-    async handleMentions(sock, message, text, isGroup) {
-        if (!isGroup || !text.includes('@')) return;
-
-        const mentions = text.match(/@(\d+)/g);
-        if (!mentions) return;
-
-        const mentionedUsers = mentions.map(mention => 
-            mention.replace('@', '') + '@s.whatsapp.net'
-        );
-
-        const from = message.key.remoteJid;
-        try {
-            const metadata = await sock.groupMetadata(from);
-            const validMentions = mentionedUsers.filter(jid =>
-                metadata.participants.some(p => p.id === jid)
-            );
-
-            if (validMentions.length > 0) {
-                await updateGroup(from, {
-                    $inc: { mentionsCount: validMentions.length }
-                });
-            }
-        } catch (error) {
-            logger.error('Error handling mentions:', error);
-        }
-    }
-
-    async handleQuotedMessage(sock, message, quoted, user) {
-        if (!quoted) return;
-
-        try {
-            const quotedContent = this.extractMessageContent({ message: quoted });
-            if (quotedContent?.media) {
-                const mediaData = await this.downloadMedia(message, quotedContent.media);
-                if (mediaData) {
-                    logger.debug('Quoted media processed successfully');
-                }
-            }
-        } catch (error) {
-            logger.error('Error handling quoted message:', error);
-        }
-    }
-
-    async saveMessage(message, user, group, messageContent) {
-        try {
-            const messageData = {
-                messageId: message.key.id,
-                from: message.key.remoteJid,
-                sender: message.key.participant || message.key.remoteJid,
-                timestamp: message.messageTimestamp * 1000,
-                content: messageContent.text,
-                messageType: messageContent.messageType,
-                isGroup: !!group,
-                hasMedia: !!messageContent.media,
-                isCommand: messageContent.text.startsWith(config.prefix),
-                userData: {
-                    phone: user.phone,
-                    name: user.name
-                }
-            };
-
-            await createMessage(messageData);
-        } catch (error) {
-            logger.error('Failed to save message:', error);
-        }
-    }
-
     async checkWhitelist(sender, from) {
         try {
             if (!config.whitelist.enabled) {
@@ -380,21 +286,7 @@ class MessageHandler {
                 return { allowed: true, reason: 'sudo_bypass' };
             }
 
-            const whitelistModule = await import('../commands/owner/whitelist.js').catch(() => null);
-            if (!whitelistModule) {
-                logger.debug('Whitelist module not found, allowing by default');
-                return { allowed: true, reason: 'whitelist_module_not_found' };
-            }
-
-            const { initWhitelist, isWhitelisted } = whitelistModule;
-            const whitelistData = initWhitelist();
-            
-            const userIsWhitelisted = isWhitelisted ? isWhitelisted(sender, whitelistData) : false;
-            if (userIsWhitelisted) {
-                return { allowed: true, reason: 'whitelisted' };
-            }
-            
-            return { allowed: false, reason: 'not_whitelisted' };
+            return { allowed: true, reason: 'not_implemented' };
             
         } catch (error) {
             logger.error('Whitelist check error:', error);
@@ -405,6 +297,7 @@ class MessageHandler {
     async handleIncomingMessage(sock, message) {
         try {
             if (!message || !message.key) {
+                logger.debug('Invalid message structure received');
                 return;
             }
             
@@ -412,10 +305,12 @@ class MessageHandler {
             const fromMe = message.key.fromMe;
             
             if (fromMe && !config.selfMode) {
+                logger.debug('Ignoring message from self');
                 return;
             }
             
             if (!from || from === 'status@broadcast') {
+                logger.debug('Ignoring broadcast message');
                 return;
             }
 
@@ -424,11 +319,12 @@ class MessageHandler {
             
             const messageContent = this.extractMessageContent(message);
             if (!messageContent) {
+                logger.debug('Could not extract message content');
                 return;
             }
 
             const textPreview = messageContent.text.substring(0, 50) + (messageContent.text.length > 50 ? '...' : '');
-            logger.info(`📨 Message from ${sender.split('@')[0]} in ${isGroup ? 'group' : 'private'} | Text: "${textPreview}"`);
+            logger.info(`📨 NEW MESSAGE | From: ${sender.split('@')[0]} | Type: ${isGroup ? 'GROUP' : 'PRIVATE'} | Text: "${textPreview}"`);
 
             const whitelistResult = await this.checkWhitelist(sender, from);
             if (!whitelistResult.allowed) {
@@ -477,6 +373,16 @@ class MessageHandler {
                 }
             }
 
+            if (!user) {
+                user = await createUser({
+                    jid: sender,
+                    phone: sender.split('@')[0].replace(/:\d+$/, ''),
+                    name: message.pushName || 'Unknown',
+                    isGroup: false
+                });
+                logger.info(`✨ Created new user: ${sender.split('@')[0]}`);
+            }
+
             const isCommand = await this.processCommand(
                 sock, message, messageContent.text, user, group, isGroup
             );
@@ -502,49 +408,11 @@ class MessageHandler {
                 return;
             }
 
-            if (!user) {
-                user = await createUser({
-                    jid: sender,
-                    phone: sender.split('@')[0].replace(/:\d+$/, ''),
-                    name: message.pushName || 'Unknown',
-                    isGroup: false
-                });
-            } else {
-                await updateUser(sender, {
-                    name: message.pushName || user.name,
-                    lastSeen: new Date(),
-                    $inc: { messageCount: 1 }
-                }).catch(err => logger.debug('Update user error:', err));
-            }
-
-            await this.saveMessage(message, user, group, messageContent).catch(err => logger.debug('Save message error:', err));
-
-            if (messageContent.quoted) {
-                await this.handleQuotedMessage(sock, message, messageContent.quoted, user);
-            }
-
-            const quotedMessageId = message.message?.extendedTextMessage?.contextInfo?.stanzaId;
-            if (quotedMessageId && global.replyHandlers && global.replyHandlers[quotedMessageId]) {
-                const replyHandler = global.replyHandlers[quotedMessageId];
-                try {
-                    await replyHandler.handler(messageContent.text, message);
-                } catch (error) {
-                    logger.error('Reply handler error:', error);
-                }
-                return;
-            }
-
-            if (global.chatHandlers && global.chatHandlers[sender]) {
-                const chatHandler = global.chatHandlers[sender];
-                try {
-                    await chatHandler.handler(messageContent.text, message);
-                } catch (error) {
-                    logger.error('Chat handler error:', error);
-                }
-                return;
-            }
-
-            await this.handleMentions(sock, message, messageContent.text, isGroup);
+            await updateUser(sender, {
+                name: message.pushName || user.name,
+                lastSeen: new Date(),
+                $inc: { messageCount: 1 }
+            }).catch(err => logger.debug('Update user error:', err));
 
             if (config.features.antiLink) {
                 try {
@@ -720,6 +588,5 @@ export default {
     handleMessageUpdate: (sock, updates) => messageHandler.handleMessageUpdate(sock, updates),
     handleMessageDelete: (sock, deletions) => messageHandler.handleMessageDelete(sock, deletions),
     getMessageStats: () => messageHandler.getMessageStats(),
-    extractMessageContent: (message) => messageHandler.extractMessageContent(message),
-    downloadMedia: (message, media) => messageHandler.downloadMedia(message, media)
+    extractMessageContent: (message) => messageHandler.extractMessageContent(message)
 };
