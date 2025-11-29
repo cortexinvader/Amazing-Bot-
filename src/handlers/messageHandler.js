@@ -43,7 +43,10 @@ class MessageHandler {
     }
 
     extractMessageContent(message) {
-        if (!message || !message.message) return null;
+        if (!message || !message.message) {
+            logger.debug('No message or message.message found');
+            return null;
+        }
 
         const msg = message.message;
         let text = '';
@@ -51,74 +54,92 @@ class MessageHandler {
         let media = null;
         let quoted = null;
 
-        if (msg.ephemeralMessage?.message) {
-            return this.extractMessageContent({ message: msg.ephemeralMessage.message });
-        }
+        try {
+            if (msg.ephemeralMessage?.message) {
+                return this.extractMessageContent({ message: msg.ephemeralMessage.message });
+            }
 
-        if (msg.viewOnceMessage?.message) {
-            return this.extractMessageContent({ message: msg.viewOnceMessage.message });
-        }
+            if (msg.viewOnceMessage?.message) {
+                return this.extractMessageContent({ message: msg.viewOnceMessage.message });
+            }
 
-        if (msg.viewOnceMessageV2?.message) {
-            return this.extractMessageContent({ message: msg.viewOnceMessageV2.message });
-        }
+            if (msg.viewOnceMessageV2?.message) {
+                return this.extractMessageContent({ message: msg.viewOnceMessageV2.message });
+            }
 
-        if (msg.documentWithCaptionMessage?.message) {
-            return this.extractMessageContent({ message: msg.documentWithCaptionMessage.message });
-        }
+            if (msg.documentWithCaptionMessage?.message) {
+                return this.extractMessageContent({ message: msg.documentWithCaptionMessage.message });
+            }
 
-        if (msg.conversation) {
-            text = msg.conversation;
-        } else if (msg.extendedTextMessage) {
-            text = msg.extendedTextMessage.text || '';
-            quoted = msg.extendedTextMessage.contextInfo?.quotedMessage;
-        } else if (msg.imageMessage) {
-            text = msg.imageMessage.caption || '';
-            messageType = 'image';
-            media = msg.imageMessage;
-        } else if (msg.videoMessage) {
-            text = msg.videoMessage.caption || '';
-            messageType = 'video';
-            media = msg.videoMessage;
-        } else if (msg.audioMessage) {
-            messageType = 'audio';
-            media = msg.audioMessage;
-        } else if (msg.documentMessage) {
-            text = msg.documentMessage.caption || '';
-            messageType = 'document';
-            media = msg.documentMessage;
-        } else if (msg.stickerMessage) {
-            messageType = 'sticker';
-            media = msg.stickerMessage;
-        } else if (msg.contactMessage) {
-            messageType = 'contact';
-            text = msg.contactMessage.displayName || '';
-        } else if (msg.locationMessage) {
-            messageType = 'location';
-            text = msg.locationMessage.name || 'Location';
-        } else if (msg.liveLocationMessage) {
-            messageType = 'liveLocation';
-            text = msg.liveLocationMessage.caption || 'Live Location';
-        } else if (msg.pollCreationMessage) {
-            messageType = 'poll';
-            text = msg.pollCreationMessage.name || '';
-        } else if (msg.buttonsResponseMessage) {
-            text = msg.buttonsResponseMessage.selectedButtonId || '';
-            messageType = 'buttonResponse';
-        } else if (msg.listResponseMessage) {
-            text = msg.listResponseMessage.singleSelectReply?.selectedRowId || '';
-            messageType = 'listResponse';
-        } else if (msg.templateButtonReplyMessage) {
-            text = msg.templateButtonReplyMessage.selectedId || '';
-            messageType = 'templateButtonReply';
-        }
+            if (msg.conversation) {
+                text = msg.conversation;
+                logger.debug(`Extracted conversation text: ${text}`);
+            } else if (msg.extendedTextMessage) {
+                text = msg.extendedTextMessage.text || '';
+                quoted = msg.extendedTextMessage.contextInfo?.quotedMessage;
+                logger.debug(`Extracted extended text: ${text}`);
+            } else if (msg.imageMessage) {
+                text = msg.imageMessage.caption || '';
+                messageType = 'image';
+                media = msg.imageMessage;
+                logger.debug(`Extracted image caption: ${text}`);
+            } else if (msg.videoMessage) {
+                text = msg.videoMessage.caption || '';
+                messageType = 'video';
+                media = msg.videoMessage;
+                logger.debug(`Extracted video caption: ${text}`);
+            } else if (msg.audioMessage) {
+                messageType = 'audio';
+                media = msg.audioMessage;
+            } else if (msg.documentMessage) {
+                text = msg.documentMessage.caption || '';
+                messageType = 'document';
+                media = msg.documentMessage;
+            } else if (msg.stickerMessage) {
+                messageType = 'sticker';
+                media = msg.stickerMessage;
+            } else if (msg.contactMessage) {
+                messageType = 'contact';
+                text = msg.contactMessage.displayName || '';
+            } else if (msg.locationMessage) {
+                messageType = 'location';
+                text = msg.locationMessage.name || 'Location';
+            } else if (msg.liveLocationMessage) {
+                messageType = 'liveLocation';
+                text = msg.liveLocationMessage.caption || 'Live Location';
+            } else if (msg.pollCreationMessage) {
+                messageType = 'poll';
+                text = msg.pollCreationMessage.name || '';
+            } else if (msg.buttonsResponseMessage) {
+                text = msg.buttonsResponseMessage.selectedButtonId || '';
+                messageType = 'buttonResponse';
+            } else if (msg.listResponseMessage) {
+                text = msg.listResponseMessage.singleSelectReply?.selectedRowId || '';
+                messageType = 'listResponse';
+            } else if (msg.templateButtonReplyMessage) {
+                text = msg.templateButtonReplyMessage.selectedId || '';
+                messageType = 'templateButtonReply';
+            } else if (msg.protocolMessage) {
+                logger.debug('Protocol message detected (likely delete/revoke), skipping');
+                return null;
+            } else if (msg.reactionMessage) {
+                logger.debug('Reaction message detected, skipping');
+                return null;
+            } else {
+                logger.debug(`Unknown message type, keys: ${Object.keys(msg).join(', ')}`);
+                return null;
+            }
 
-        return { 
-            text: text.trim(), 
-            messageType, 
-            media, 
-            quoted 
-        };
+            return { 
+                text: text.trim(), 
+                messageType, 
+                media, 
+                quoted 
+            };
+        } catch (error) {
+            logger.error('Error extracting message content:', error);
+            return null;
+        }
     }
 
     detectPrefix(text) {
@@ -195,6 +216,7 @@ class MessageHandler {
         const shouldProcessNoPrefix = this.shouldProcessNoPrefix(trimmedText, isGroup, group, sender);
         
         if (!prefixUsed && !shouldProcessNoPrefix) {
+            logger.debug(`No prefix detected and no-prefix not enabled for ${sender}`);
             return false;
         }
 
@@ -203,6 +225,7 @@ class MessageHandler {
             : trimmedText.trim();
 
         if (!commandText || commandText.length === 0) {
+            logger.debug('Command text is empty after prefix removal');
             return false;
         }
 
@@ -210,6 +233,7 @@ class MessageHandler {
         const commandName = splitArgs.shift()?.toLowerCase();
 
         if (!commandName || commandName.length === 0) {
+            logger.debug('Command name is empty');
             return false;
         }
 
@@ -217,20 +241,21 @@ class MessageHandler {
         const command = commandHandler.getCommand(commandName);
         
         if (!command) {
+            logger.debug(`Command not found: ${commandName}`);
             if (prefixUsed) {
                 await this.handleUnknownCommand(sock, message, commandName, commandHandler);
             }
             return false;
         }
 
-        logger.info(`⚡ Executing command: ${commandName} | User: ${sender.split('@')[0]} | Location: ${isGroup ? 'group' : 'private'}`);
+        logger.info(`⚡ EXECUTING COMMAND: ${commandName} | User: ${sender.split('@')[0]} | Args: [${args.join(', ')}]`);
         
         try {
             const result = await commandHandler.handleCommand(sock, message, commandName, args);
             logger.info(`✅ Command ${commandName} executed successfully`);
             return true;
         } catch (error) {
-            logger.error(`Command execution failed [${commandName}]:`, error);
+            logger.error(`❌ Command execution failed [${commandName}]:`, error);
             try {
                 await sock.sendMessage(from, {
                     text: `❌ *Error*\n\nFailed to execute command: ${commandName}\n\nError: ${error.message}`
@@ -305,26 +330,31 @@ class MessageHandler {
             const fromMe = message.key.fromMe;
             
             if (fromMe && !config.selfMode) {
-                logger.debug('Ignoring message from self');
                 return;
             }
             
             if (!from || from === 'status@broadcast') {
-                logger.debug('Ignoring broadcast message');
                 return;
             }
 
             const sender = message.key.participant || from;
             const isGroup = from.endsWith('@g.us');
+
+            logger.debug(`Raw message keys: ${Object.keys(message.message || {}).join(', ')}`);
             
             const messageContent = this.extractMessageContent(message);
             if (!messageContent) {
-                logger.debug('Could not extract message content');
+                logger.debug('Could not extract message content - likely system/notification message');
+                return;
+            }
+
+            if (!messageContent.text && messageContent.messageType === 'text') {
+                logger.debug('Text message type but no text content - skipping');
                 return;
             }
 
             const textPreview = messageContent.text.substring(0, 50) + (messageContent.text.length > 50 ? '...' : '');
-            logger.info(`📨 NEW MESSAGE | From: ${sender.split('@')[0]} | Type: ${isGroup ? 'GROUP' : 'PRIVATE'} | Text: "${textPreview}"`);
+            logger.info(`📨 NEW MESSAGE | From: ${sender.split('@')[0]} | Type: ${messageContent.messageType} | ${isGroup ? 'GROUP' : 'PRIVATE'} | Text: "${textPreview}"`);
 
             const whitelistResult = await this.checkWhitelist(sender, from);
             if (!whitelistResult.allowed) {
