@@ -383,35 +383,56 @@ async function handleConnectionEvents(sock, connectionUpdate) {
 
 async function setupEventHandlers(sock, saveCreds) {
     sock.ev.on('creds.update', () => {
-        logger.debug('Credentials updated, saving...');
         saveCreds();
     });
 
     logger.info('✅ Setting up messages.upsert event handler...');
     sock.ev.on('messages.upsert', async (upsert) => {
         const { messages, type } = upsert;
-        logger.info(`🔔 MESSAGE EVENT | Type: ${type} | Count: ${messages?.length || 0}`);
         
         if (!messages || messages.length === 0) {
-            logger.debug('No messages in upsert event');
             return;
         }
 
         for (const message of messages) {
             try {
-                const from = message.key?.remoteJid || 'unknown';
-                const fromMe = message.key?.fromMe || false;
-                const hasContent = !!message.message;
+                if (!message || !message.key) {
+                    continue;
+                }
+
+                const from = message.key.remoteJid;
+                const fromMe = message.key.fromMe;
                 
-                logger.info(`📬 PROCESSING | From: ${from} | FromMe: ${fromMe} | HasContent: ${hasContent}`);
+                if (!from || from === 'status@broadcast') {
+                    continue;
+                }
+
+                if (fromMe && !config.selfMode) {
+                    continue;
+                }
+
+                const hasMessage = message.message && Object.keys(message.message).length > 0;
                 
-                if (!hasContent) {
-                    logger.debug('Message has no content, skipping');
+                if (!hasMessage) {
+                    logger.debug(`Skipping empty message from ${from}`);
+                    continue;
+                }
+
+                const messageKeys = Object.keys(message.message);
+                const isSystemMessage = messageKeys.includes('protocolMessage') || 
+                                       messageKeys.includes('reactionMessage') ||
+                                       messageKeys.includes('senderKeyDistributionMessage') ||
+                                       messageKeys.includes('messageContextInfo');
+
+                if (isSystemMessage && messageKeys.length === 1) {
+                    logger.debug(`Skipping system message from ${from}, keys: ${messageKeys.join(', ')}`);
                     continue;
                 }
                 
+                logger.info(`📬 PROCESSING MESSAGE | From: ${from} | FromMe: ${fromMe} | Keys: ${messageKeys.join(', ')}`);
+                
                 await messageHandler.handleIncomingMessage(sock, message);
-                logger.info(`✅ MESSAGE PROCESSED SUCCESSFULLY`);
+                
             } catch (error) {
                 logger.error('Error processing individual message:', error);
             }
@@ -477,9 +498,6 @@ async function setupEventHandlers(sock, saveCreds) {
     
     logger.info('✅ All event handlers registered successfully');
     logger.info(`📋 Message Handler Status: ${messageHandler.isReady ? 'READY' : 'NOT READY'}`);
-    logger.info(`📋 Event Status:`);
-    logger.info(`   - Group Join: ${config.events.groupJoin ? '✅ ENABLED' : '❌ DISABLED'}`);
-    logger.info(`   - Group Leave: ${config.events.groupLeave ? '✅ ENABLED' : '❌ DISABLED'}`);
 }
 async function establishWhatsAppConnection() {
     return new Promise(async (resolve, reject) => {
