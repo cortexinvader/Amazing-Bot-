@@ -389,9 +389,8 @@ async function setupEventHandlers(sock, saveCreds) {
 
     logger.info('✅ Setting up messages.upsert event handler...');
     sock.ev.on('messages.upsert', async (upsert) => {
-        logger.info(`🔔 messages.upsert EVENT | Type: ${upsert.type} | Messages: ${upsert.messages?.length || 0}`);
         const { messages, type } = upsert;
-        logger.info(`📥 Message event received - Type: ${type}, Count: ${messages?.length || 0}`);
+        logger.info(`🔔 MESSAGE EVENT | Type: ${type} | Count: ${messages?.length || 0}`);
         
         if (!messages || messages.length === 0) {
             logger.debug('No messages in upsert event');
@@ -402,11 +401,19 @@ async function setupEventHandlers(sock, saveCreds) {
             try {
                 const from = message.key?.remoteJid || 'unknown';
                 const fromMe = message.key?.fromMe || false;
-                logger.info(`📨 [${type}] Message from ${from} | FromMe: ${fromMe} | has content: ${!!message.message}`);
+                const hasContent = !!message.message;
+                
+                logger.info(`📬 PROCESSING | From: ${from} | FromMe: ${fromMe} | HasContent: ${hasContent}`);
+                
+                if (!hasContent) {
+                    logger.debug('Message has no content, skipping');
+                    continue;
+                }
                 
                 await messageHandler.handleIncomingMessage(sock, message);
+                logger.info(`✅ MESSAGE PROCESSED SUCCESSFULLY`);
             } catch (error) {
-                logger.error('Error processing message:', error);
+                logger.error('Error processing individual message:', error);
             }
         }
     });
@@ -435,7 +442,7 @@ async function setupEventHandlers(sock, saveCreds) {
     logger.info('✅ Setting up group-participants.update event handler...');
     sock.ev.on('group-participants.update', async (groupUpdate) => {
         try {
-            logger.info(`🔔 GROUP PARTICIPANTS UPDATE EVENT | Group: ${groupUpdate.id} | Action: ${groupUpdate.action} | Participants: ${groupUpdate.participants?.length || 0}`);
+            logger.info(`🔔 GROUP EVENT | Group: ${groupUpdate.id} | Action: ${groupUpdate.action} | Participants: ${groupUpdate.participants?.length || 0}`);
             
             await groupHandler.handleParticipantsUpdate(sock, groupUpdate);
         } catch (error) {
@@ -446,7 +453,7 @@ async function setupEventHandlers(sock, saveCreds) {
     logger.info('✅ Setting up groups.update event handler...');
     sock.ev.on('groups.update', async (groupsUpdate) => {
         try {
-            logger.info(`🔔 GROUPS UPDATE EVENT | Groups: ${groupsUpdate.length}`);
+            logger.info(`🔔 GROUPS UPDATE | Count: ${groupsUpdate.length}`);
             
             await groupHandler.handleGroupUpdate(sock, groupsUpdate);
         } catch (error) {
@@ -469,13 +476,11 @@ async function setupEventHandlers(sock, saveCreds) {
     });
     
     logger.info('✅ All event handlers registered successfully');
+    logger.info(`📋 Message Handler Status: ${messageHandler.isReady ? 'READY' : 'NOT READY'}`);
     logger.info(`📋 Event Status:`);
     logger.info(`   - Group Join: ${config.events.groupJoin ? '✅ ENABLED' : '❌ DISABLED'}`);
     logger.info(`   - Group Leave: ${config.events.groupLeave ? '✅ ENABLED' : '❌ DISABLED'}`);
-    logger.info(`   - Group Update: ${config.events.groupUpdate ? '✅ ENABLED' : '❌ DISABLED'}`);
-    logger.info(`   - Group Promote: ${config.events.groupPromote ? '✅ ENABLED' : '❌ DISABLED'}`);
-    logger.info(`   - Group Demote: ${config.events.groupDemote ? '✅ ENABLED' : '❌ DISABLED'}`);
- }
+}
 async function establishWhatsAppConnection() {
     return new Promise(async (resolve, reject) => {
         try {
