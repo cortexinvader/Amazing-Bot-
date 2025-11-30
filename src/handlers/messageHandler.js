@@ -2,11 +2,8 @@ import config from '../config.js';
 import logger from '../utils/logger.js';
 import { getUser, createUser, updateUser } from '../models/User.js';
 import { getGroup, createGroup, updateGroup } from '../models/Group.js';
-import { createMessage } from '../models/Message.js';
 import antiSpam from '../utils/antiSpam.js';
 import { cache } from '../utils/cache.js';
-import fs from 'fs-extra';
-import path from 'path';
 import handleAutoReaction from '../events/autoReaction.js';
 import handleAntiLink from '../plugins/antiLink.js';
 import handleLevelUp from '../events/levelUp.js';
@@ -63,22 +60,6 @@ class MessageHandler {
         let quoted = null;
 
         try {
-            if (msg.ephemeralMessage?.message) {
-                return this.extractMessageContent({ message: msg.ephemeralMessage.message });
-            }
-
-            if (msg.viewOnceMessage?.message) {
-                return this.extractMessageContent({ message: msg.viewOnceMessage.message });
-            }
-
-            if (msg.viewOnceMessageV2?.message) {
-                return this.extractMessageContent({ message: msg.viewOnceMessageV2.message });
-            }
-
-            if (msg.documentWithCaptionMessage?.message) {
-                return this.extractMessageContent({ message: msg.documentWithCaptionMessage.message });
-            }
-
             if (msg.conversation) {
                 text = msg.conversation;
             } else if (msg.extendedTextMessage) {
@@ -102,30 +83,7 @@ class MessageHandler {
             } else if (msg.stickerMessage) {
                 messageType = 'sticker';
                 media = msg.stickerMessage;
-            } else if (msg.contactMessage) {
-                messageType = 'contact';
-                text = msg.contactMessage.displayName || '';
-            } else if (msg.locationMessage) {
-                messageType = 'location';
-                text = msg.locationMessage.name || 'Location';
-            } else if (msg.liveLocationMessage) {
-                messageType = 'liveLocation';
-                text = msg.liveLocationMessage.caption || 'Live Location';
-            } else if (msg.pollCreationMessage) {
-                messageType = 'poll';
-                text = msg.pollCreationMessage.name || '';
-            } else if (msg.buttonsResponseMessage) {
-                text = msg.buttonsResponseMessage.selectedButtonId || '';
-                messageType = 'buttonResponse';
-            } else if (msg.listResponseMessage) {
-                text = msg.listResponseMessage.singleSelectReply?.selectedRowId || '';
-                messageType = 'listResponse';
-            } else if (msg.templateButtonReplyMessage) {
-                text = msg.templateButtonReplyMessage.selectedId || '';
-                messageType = 'templateButtonReply';
-            } else if (msg.protocolMessage) {
-                return null;
-            } else if (msg.reactionMessage) {
+            } else if (msg.protocolMessage || msg.reactionMessage) {
                 return null;
             } else {
                 return null;
@@ -276,16 +234,12 @@ class MessageHandler {
             response += `│ 💡 𝗗𝗶𝗱 𝘆𝗼𝘂 𝗺𝗲𝗮𝗻:\n`;
             suggestions.slice(0, 3).forEach(cmd => {
                 response += `│    • ${config.prefix}${cmd.name}\n`;
-                response += `│      ${cmd.description}\n`;
             });
             response += `│\n`;
         }
         
         response += `│ 📚 𝗧𝗶𝗽: Type ${config.prefix}help for all commands\n`;
-        response += `╰────────⦿\n\n`;
-        response += `╭─────────────⦿\n`;
-        response += `│💫 | [ ${config.botName} 🍀 ]\n`;
-        response += `╰────────────⦿`;
+        response += `╰────────⦿`;
         
         try {
             await sock.sendMessage(from, { text: response }, { quoted: message });
@@ -351,15 +305,6 @@ class MessageHandler {
             const whitelistResult = await this.checkWhitelist(sender, from);
             if (!whitelistResult.allowed) {
                 logger.info(`🚫 Blocked by whitelist: ${whitelistResult.reason}`);
-                if (!isGroup) {
-                    try {
-                        await sock.sendMessage(from, {
-                            text: `⚠️ *Access Restricted*\n\nThis bot is currently in whitelist mode. Only authorized users can interact with it.\n\nContact the bot owner for access.`
-                        }, { quoted: message });
-                    } catch (error) {
-                        logger.debug('Failed to send whitelist notification:', error);
-                    }
-                }
                 return;
             }
 
@@ -387,11 +332,6 @@ class MessageHandler {
                     } catch (error) {
                         logger.error('Failed to create group:', error);
                     }
-                } else {
-                    await updateGroup(from, {
-                        $inc: { messageCount: 1 },
-                        lastActivity: new Date()
-                    }).catch(err => logger.debug('Update group error:', err));
                 }
             }
 
@@ -419,14 +359,6 @@ class MessageHandler {
                     }
                 }
                 
-                cache.set(`lastMessage_${sender}`, {
-                    content: messageContent.text,
-                    timestamp: Date.now(),
-                    messageType: messageContent.messageType,
-                    isGroup
-                }, 300);
-
-                await this.updateMessageStats('command');
                 return;
             }
 
@@ -460,15 +392,6 @@ class MessageHandler {
                 }
             }
 
-            cache.set(`lastMessage_${sender}`, {
-                content: messageContent.text,
-                timestamp: Date.now(),
-                messageType: messageContent.messageType,
-                isGroup
-            }, 300);
-
-            await this.updateMessageStats(isGroup ? 'group' : 'private');
-
         } catch (error) {
             logger.error('Critical message handling error:', {
                 error: error.message,
@@ -486,14 +409,6 @@ class MessageHandler {
                 
                 if (messageUpdate && messageUpdate.message && key && key.id) {
                     logger.info(`Message updated: ${key.id}`);
-                    
-                    const updatedContent = this.extractMessageContent(messageUpdate);
-                    if (updatedContent) {
-                        cache.set(`updatedMessage_${key.id}`, {
-                            content: updatedContent.text,
-                            timestamp: Date.now()
-                        }, 300);
-                    }
                 }
             } catch (error) {
                 logger.error('Message update handling error:', error);
@@ -507,28 +422,6 @@ class MessageHandler {
                 const { fromMe, id, participant, remoteJid } = deletion;
                 
                 logger.info(`Message deleted: ${id} from ${remoteJid}`);
-                
-                const isGroup = remoteJid.endsWith('@g.us');
-                const deletedBy = participant || remoteJid;
-                
-                if (isGroup) {
-                    if (config.features.antiDelete) {
-                        const group = await getGroup(remoteJid);
-                        if (group?.settings?.antiDelete) {
-                            const cachedMessage = cache.get(`message_${id}`);
-                            if (cachedMessage) {
-                                await sock.sendMessage(remoteJid, {
-                                    text: `🗑️ *Anti-Delete*\n\n*Deleted by:* @${deletedBy.split('@')[0]}\n*Content:* ${cachedMessage.content}\n*Time:* ${new Date(cachedMessage.timestamp).toLocaleString()}`,
-                                    contextInfo: {
-                                        mentionedJid: [deletedBy]
-                                    }
-                                });
-                            }
-                        }
-                    }
-                }
-                
-                cache.del(`message_${id}`);
                 
             } catch (error) {
                 logger.error('Message deletion handling error:', error);
@@ -561,43 +454,6 @@ class MessageHandler {
                 groupMessages: 0,
                 privateMessages: 0
             };
-        }
-    }
-
-    async updateMessageStats(type) {
-        try {
-            let stats = await this.getMessageStats();
-            
-            if (!stats) {
-                stats = {
-                    totalMessages: 0,
-                    commandsExecuted: 0,
-                    mediaProcessed: 0,
-                    groupMessages: 0,
-                    privateMessages: 0
-                };
-            }
-            
-            stats.totalMessages = (stats.totalMessages || 0) + 1;
-            
-            switch (type) {
-                case 'command':
-                    stats.commandsExecuted = (stats.commandsExecuted || 0) + 1;
-                    break;
-                case 'media':
-                    stats.mediaProcessed = (stats.mediaProcessed || 0) + 1;
-                    break;
-                case 'group':
-                    stats.groupMessages = (stats.groupMessages || 0) + 1;
-                    break;
-                case 'private':
-                    stats.privateMessages = (stats.privateMessages || 0) + 1;
-                    break;
-            }
-            
-            await cache.set('messageStats', stats, 3600);
-        } catch (error) {
-            logger.error('Failed to update message stats:', error);
         }
     }
 }
