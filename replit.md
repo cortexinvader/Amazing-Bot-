@@ -130,14 +130,14 @@ npm run dev
 
 ## Recent Changes
 
-- **2025-11-28 (Final):** Fixed whitelist blocking and perfected command listening
-  - ✅ **WHITELIST NOW DISABLED BY DEFAULT** - Set WHITELIST_ENABLED=false in config
-  - ✅ Whitelist can be enabled by owners via: `WHITELIST_ENABLED=true` in env
-  - ✅ Owners and Sudos ALWAYS bypass whitelist (even when enabled)
-  - ✅ Bot now listens to ALL commands with prefix "." immediately
-  - ✅ No more blocked messages - fast command execution
-  - ✅ All 173 commands ready to execute
-  - ✅ To enable whitelist: Set WHITELIST_ENABLED=true in environment
+- **2025-11-30:** Rewrote message handler for reliable command execution
+  - ✅ Simplified message handler following reference implementation pattern
+  - ✅ Direct command flow: message → prefix check → command lookup → execute
+  - ✅ Whitelist disabled by default (WHITELIST_ENABLED=false)
+  - ✅ Owners/Sudos bypass whitelist when enabled
+  - ✅ Clean error messages for unknown commands
+  - ✅ 173 commands loaded and ready
+  - ✅ All events properly registered (messages, groups, calls)
 
 - **2025-11-28:** Fixed command processing flow and database operations
   - ✅ Reordered message handler to process commands FIRST before database operations
