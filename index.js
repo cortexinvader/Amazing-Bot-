@@ -387,6 +387,9 @@ async function setupEventHandlers(sock, saveCreds) {
     });
 
     logger.info('✅ Setting up messages.upsert event handler...');
+    
+    await messageHandler.initializeCommandHandler();
+    
     sock.ev.on('messages.upsert', async (upsert) => {
         const { messages, type } = upsert;
         
@@ -497,7 +500,7 @@ async function setupEventHandlers(sock, saveCreds) {
     });
     
     logger.info('✅ All event handlers registered successfully');
-    logger.info(`📋 Message Handler Status: ${messageHandler.isReady ? 'READY' : 'NOT READY'}`);
+    logger.info(`📋 Message Handler Status: ${messageHandler.isReady ? 'READY ✅' : 'NOT READY ❌'}`);
 }
 async function establishWhatsAppConnection() {
     return new Promise(async (resolve, reject) => {
