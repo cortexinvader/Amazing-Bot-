@@ -18,6 +18,7 @@ class MessageHandler {
         this.commandHandler = null;
         this.isReady = false;
         this.initializationPromise = null;
+        this.initialized = false;
     }
 
     async initializeCommandHandler() {
@@ -26,17 +27,25 @@ class MessageHandler {
         }
 
         this.initializationPromise = (async () => {
-            if (!this.commandHandler) {
-                const commandHandlerModule = await import('./commandHandler.js');
-                this.commandHandler = commandHandlerModule.commandHandler;
-                if (!this.commandHandler.isInitialized) {
-                    logger.info('🔧 Initializing command handler from message handler...');
-                    await this.commandHandler.initialize();
+            try {
+                if (!this.commandHandler) {
+                    const commandHandlerModule = await import('./commandHandler.js');
+                    this.commandHandler = commandHandlerModule.commandHandler;
+                    
+                    if (!this.commandHandler.isInitialized) {
+                        logger.info('🔧 Initializing command handler from message handler...');
+                        await this.commandHandler.initialize();
+                    }
+                    
+                    this.isReady = true;
+                    this.initialized = true;
+                    logger.info('✅ Message handler ready to process commands');
                 }
-                this.isReady = true;
-                logger.info('✅ Message handler ready to process commands');
+                return this.commandHandler;
+            } catch (error) {
+                logger.error('Failed to initialize command handler:', error);
+                throw error;
             }
-            return this.commandHandler;
         })();
 
         return this.initializationPromise;
@@ -44,7 +53,6 @@ class MessageHandler {
 
     extractMessageContent(message) {
         if (!message || !message.message) {
-            logger.debug('No message or message.message found');
             return null;
         }
 
@@ -73,21 +81,17 @@ class MessageHandler {
 
             if (msg.conversation) {
                 text = msg.conversation;
-                logger.debug(`Extracted conversation text: ${text}`);
             } else if (msg.extendedTextMessage) {
                 text = msg.extendedTextMessage.text || '';
                 quoted = msg.extendedTextMessage.contextInfo?.quotedMessage;
-                logger.debug(`Extracted extended text: ${text}`);
             } else if (msg.imageMessage) {
                 text = msg.imageMessage.caption || '';
                 messageType = 'image';
                 media = msg.imageMessage;
-                logger.debug(`Extracted image caption: ${text}`);
             } else if (msg.videoMessage) {
                 text = msg.videoMessage.caption || '';
                 messageType = 'video';
                 media = msg.videoMessage;
-                logger.debug(`Extracted video caption: ${text}`);
             } else if (msg.audioMessage) {
                 messageType = 'audio';
                 media = msg.audioMessage;
@@ -120,13 +124,10 @@ class MessageHandler {
                 text = msg.templateButtonReplyMessage.selectedId || '';
                 messageType = 'templateButtonReply';
             } else if (msg.protocolMessage) {
-                logger.debug('Protocol message detected (likely delete/revoke), skipping');
                 return null;
             } else if (msg.reactionMessage) {
-                logger.debug('Reaction message detected, skipping');
                 return null;
             } else {
-                logger.debug(`Unknown message type, keys: ${Object.keys(msg).join(', ')}`);
                 return null;
             }
 
@@ -210,13 +211,12 @@ class MessageHandler {
         const from = message.key.remoteJid;
         const sender = message.key.participant || from;
         
-        const commandHandler = await this.initializeCommandHandler();
+        await this.initializeCommandHandler();
         
         const prefixUsed = this.detectPrefix(trimmedText);
         const shouldProcessNoPrefix = this.shouldProcessNoPrefix(trimmedText, isGroup, group, sender);
         
         if (!prefixUsed && !shouldProcessNoPrefix) {
-            logger.debug(`No prefix detected and no-prefix not enabled for ${sender}`);
             return false;
         }
 
@@ -225,7 +225,6 @@ class MessageHandler {
             : trimmedText.trim();
 
         if (!commandText || commandText.length === 0) {
-            logger.debug('Command text is empty after prefix removal');
             return false;
         }
 
@@ -233,17 +232,15 @@ class MessageHandler {
         const commandName = splitArgs.shift()?.toLowerCase();
 
         if (!commandName || commandName.length === 0) {
-            logger.debug('Command name is empty');
             return false;
         }
 
         const args = splitArgs;
-        const command = commandHandler.getCommand(commandName);
+        const command = this.commandHandler.getCommand(commandName);
         
         if (!command) {
-            logger.debug(`Command not found: ${commandName}`);
             if (prefixUsed) {
-                await this.handleUnknownCommand(sock, message, commandName, commandHandler);
+                await this.handleUnknownCommand(sock, message, commandName, this.commandHandler);
             }
             return false;
         }
@@ -251,7 +248,7 @@ class MessageHandler {
         logger.info(`⚡ EXECUTING COMMAND: ${commandName} | User: ${sender.split('@')[0]} | Args: [${args.join(', ')}]`);
         
         try {
-            const result = await commandHandler.handleCommand(sock, message, commandName, args);
+            const result = await this.commandHandler.handleCommand(sock, message, commandName, args);
             logger.info(`✅ Command ${commandName} executed successfully`);
             return true;
         } catch (error) {
@@ -322,7 +319,6 @@ class MessageHandler {
     async handleIncomingMessage(sock, message) {
         try {
             if (!message || !message.key) {
-                logger.debug('Invalid message structure received');
                 return;
             }
             
@@ -340,16 +336,12 @@ class MessageHandler {
             const sender = message.key.participant || from;
             const isGroup = from.endsWith('@g.us');
 
-            logger.debug(`Raw message keys: ${Object.keys(message.message || {}).join(', ')}`);
-            
             const messageContent = this.extractMessageContent(message);
             if (!messageContent) {
-                logger.debug('Could not extract message content - likely system/notification message');
                 return;
             }
 
             if (!messageContent.text && messageContent.messageType === 'text') {
-                logger.debug('Text message type but no text content - skipping');
                 return;
             }
 
