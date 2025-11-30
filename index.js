@@ -8,7 +8,6 @@ import { dirname } from 'path';
 import NodeCache from 'node-cache';
 import figlet from 'figlet';
 import chalk from 'chalk';
-import { File } from 'megajs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -20,7 +19,6 @@ import { commandHandler } from './src/handlers/commandHandler.js';
 import eventHandler from './src/handlers/eventHandler.js';
 import callHandler from './src/handlers/callHandler.js';
 import groupHandler from './src/handlers/groupHandler.js';
-import mediaHandler from './src/handlers/mediaHandler.js';
 import errorHandler from './src/handlers/errorHandler.js';
 import config from './src/config.js';
 import constants from './src/constants.js';
@@ -170,12 +168,10 @@ async function processSessionCredentials() {
             }
         } catch (error) {
             logger.warn('⚠️ Invalid SESSION_ID format:', error.message);
-            logger.debug('SESSION_ID content preview:', process.env.SESSION_ID?.substring(0, 100) + '...');
         }
     }
 
     const credsPath = path.join(SESSION_PATH, 'creds.json');
-    const keysPath = path.join(SESSION_PATH, 'keys');
 
     if (await fs.pathExists(credsPath)) {
         try {
@@ -245,142 +241,6 @@ async function sendBotStatusUpdate(sock) {
     }
 }
 
-async function handleConnectionEvents(sock, connectionUpdate) {
-    const originalLog = console.log;
-    const originalClear = console.clear;
-    const originalWrite = process.stdout.write;
-    
-    console.log = () => {};
-    console.clear = () => {};
-    process.stdout.write = () => {};
-    
-    const baileys = await import('@whiskeysockets/baileys');
-    const { DisconnectReason } = baileys;
-    
-    console.log = originalLog;
-    console.clear = originalClear;
-    process.stdout.write = originalWrite;
-    const { connection, lastDisconnect, qr, receivedPendingNotifications } = connectionUpdate;
-
-    if (qr) {
-        console.log(chalk.cyan('\n📱 QR Code received - scan with WhatsApp to connect'));
-        if (!process.env.SESSION_ID) {
-            console.log(chalk.yellow('💡 Tip: Set SESSION_ID environment variable to avoid QR scanning in future'));
-        } else {
-            console.log(chalk.yellow('⚠️  Your existing SESSION_ID may be invalid or expired'));
-            console.log(chalk.yellow('📝 Scan the QR code to generate a new session'));
-        }
-
-        if (qrService.isQREnabled()) {
-            try {
-                const qrGenerated = await qrService.generateQR(qr);
-                if (qrGenerated) {
-                    console.log(chalk.green('✅ QR code generated and saved'));
-                    const domain = process.env.REPLIT_DOMAINS || process.env.REPL_SLUG;
-                    if (domain) {
-                        console.log(chalk.blue(`🌐 Access QR code at: https://${domain}/qr`));
-                    } else {
-                        console.log(chalk.blue(`🌐 Access QR code at: http://localhost:${config.server.port}/qr`));
-                    }
-                } else {
-                    console.log(chalk.red('❌ Failed to generate QR code'));
-                }
-            } catch (error) {
-                logger.error('Error generating QR code:', error);
-            }
-        } else {
-            console.log(chalk.yellow('\n📱 Please scan QR code in terminal above'));
-        }
-    }
-
-    if (connection === 'close') {
-        const statusCode = lastDisconnect?.error?.output?.statusCode;
-        const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
-
-        logger.warn(`⚠️  Connection closed. Status code: ${statusCode}`);
-        logger.warn(`Disconnect reason: ${lastDisconnect?.error?.message || 'Unknown'}`);
-
-        if (statusCode === DisconnectReason.badSession) {
-            logger.error('❌ Bad Session File, please delete session and scan again');
-            logger.info('🗑️  Deleting existing session...');
-            await fs.remove(SESSION_PATH).catch(() => {});
-            await fs.ensureDir(SESSION_PATH);
-            await fs.ensureDir(path.join(SESSION_PATH, 'keys'));
-            logger.info('🔄 Please restart the bot to scan QR code');
-            process.exit(0);
-        } else if (statusCode === DisconnectReason.connectionClosed) {
-            logger.warn('⚠️  Connection closed, reconnecting....');
-            setTimeout(establishWhatsAppConnection, 5000);
-        } else if (statusCode === DisconnectReason.connectionLost) {
-            logger.warn('⚠️  Connection lost from server, reconnecting....');
-            setTimeout(establishWhatsAppConnection, 5000);
-        } else if (statusCode === DisconnectReason.connectionReplaced) {
-            logger.error('❌ Connection replaced, another new session opened, please close current session first');
-            process.exit(0);
-        } else if (statusCode === DisconnectReason.loggedOut) {
-            logger.error('❌ WhatsApp session expired or invalid');
-            logger.info('🗑️  Clearing old session data...');
-            await fs.remove(SESSION_PATH).catch(() => {});
-            await fs.ensureDir(SESSION_PATH);
-            await fs.ensureDir(path.join(SESSION_PATH, 'keys'));
-            logger.info('✅ Session cleared successfully');
-            logger.info('');
-            logger.info(chalk.cyan.bold('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'));
-            logger.info(chalk.yellow.bold('  📱 WHATSAPP PAIRING REQUIRED'));
-            logger.info(chalk.cyan.bold('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'));
-            logger.info('');
-            logger.info(chalk.white('  To connect your WhatsApp bot, you have 2 options:'));
-            logger.info('');
-            logger.info(chalk.green('  Option 1: Scan QR Code'));
-            logger.info(chalk.gray('  1. Restart the bot (it will exit now)'));
-            logger.info(chalk.gray('  2. A QR code will appear in the terminal'));
-            logger.info(chalk.gray('  3. Open WhatsApp > Linked Devices > Link a Device'));
-            logger.info(chalk.gray('  4. Scan the QR code'));
-            logger.info('');
-            logger.info(chalk.green('  Option 2: Use Session ID'));
-            logger.info(chalk.gray('  1. Get a valid SESSION_ID from your WhatsApp pairing'));
-            logger.info(chalk.gray('  2. Update the SESSION_ID in your .env file'));
-            logger.info(chalk.gray('  3. Restart the bot'));
-            logger.info('');
-            logger.info(chalk.cyan('  Supported formats:'));
-            logger.info(chalk.gray('  - Ilom~ format: Ilom~base64encodeddata'));
-            logger.info(chalk.gray('  - Sypher format: sypher sypher™--sessionid'));
-            logger.info(chalk.gray('  - Base64 format: direct base64 string'));
-            logger.info(chalk.gray('  - JSON format: direct JSON object'));
-            logger.info('');
-            logger.info(chalk.cyan.bold('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'));
-            logger.info('');
-            setTimeout(() => process.exit(0), 2000);
-        } else if (statusCode === DisconnectReason.restartRequired) {
-            logger.info('⚠️  Restart required, restarting....');
-            setTimeout(establishWhatsAppConnection, 5000);
-        } else if (statusCode === DisconnectReason.timedOut) {
-            logger.warn('⚠️  Connection timed out, reconnecting....');
-            setTimeout(establishWhatsAppConnection, 5000);
-        } else if (shouldReconnect) {
-            logger.warn(`⚠️  Reconnecting... (${statusCode})`);
-            setTimeout(establishWhatsAppConnection, 5000);
-        }
-    } else if (connection === 'open') {
-        reconnectAttempts = 0;
-        logger.info('✅ WhatsApp connection established');
-        console.log(chalk.green.bold('🚀 Bot is online and ready!'));
-
-        if (qrService.isQREnabled()) {
-            await qrService.clearQR();
-        }
-
-        if (!isInitialized) {
-            isInitialized = true;
-            if (config.ownerNumbers && config.ownerNumbers.length > 0) {
-                await sendBotStatusUpdate(sock);
-            }
-        }
-    } else if (connection === 'connecting') {
-        logger.info('🔗 Connecting to WhatsApp...');
-    }
-}
-
 async function setupEventHandlers(sock, saveCreds) {
     sock.ev.on('creds.update', () => {
         saveCreds();
@@ -417,7 +277,6 @@ async function setupEventHandlers(sock, saveCreds) {
                 const hasMessage = message.message && Object.keys(message.message).length > 0;
                 
                 if (!hasMessage) {
-                    logger.debug(`Skipping empty message from ${from}`);
                     continue;
                 }
 
@@ -428,7 +287,6 @@ async function setupEventHandlers(sock, saveCreds) {
                                        messageKeys.includes('messageContextInfo');
 
                 if (isSystemMessage && messageKeys.length === 1) {
-                    logger.debug(`Skipping system message from ${from}, keys: ${messageKeys.join(', ')}`);
                     continue;
                 }
                 
@@ -502,6 +360,7 @@ async function setupEventHandlers(sock, saveCreds) {
     logger.info('✅ All event handlers registered successfully');
     logger.info(`📋 Message Handler Status: ${messageHandler.isReady ? 'READY ✅' : 'NOT READY ❌'}`);
 }
+
 async function establishWhatsAppConnection() {
     return new Promise(async (resolve, reject) => {
         try {
@@ -549,16 +408,9 @@ async function establishWhatsAppConnection() {
             });
 
             logger.info('📢 Setting up connection event handlers...');
-            logger.info('🔗 Connecting to WhatsApp...');
 
             const connectionTimeout = setTimeout(async () => {
                 logger.warn('⚠️  Connection timeout - WhatsApp connection took too long');
-                logger.info('💡 This might be due to:');
-                logger.info('   - Invalid or expired SESSION_ID');
-                logger.info('   - Network connectivity issues');
-                logger.info('   - WhatsApp server problems');
-                logger.info('🔄 Attempting to reconnect...');
-
                 if (sock && sock.end) {
                     await sock.end();
                 }
@@ -685,120 +537,6 @@ function setupProcessHandlers() {
     });
 }
 
-async function loadLocalizationFiles() {
-    const localeDir = path.join(__dirname, 'src', 'locales');
-    const locales = ['en', 'es', 'fr', 'de', 'pt', 'ar', 'hi', 'zh', 'ja', 'ko'];
-
-    for (const locale of locales) {
-        const filePath = path.join(localeDir, `${locale}.json`);
-        if (!await fs.pathExists(filePath)) {
-            await fs.writeJSON(filePath, {
-                welcome: `Welcome to ${config.botName}!`,
-                help: 'Available commands',
-                error: 'An error occurred'
-            });
-        }
-    }
-}
-
-async function createDefaultAssets() {
-    const assetsDir = path.join(__dirname, 'src', 'assets');
-
-    const defaultFiles = {
-        'images/logo.png': 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
-        'templates/welcome.html': '<!DOCTYPE html><html><body><h1>Welcome!</h1></body></html>',
-        'templates/stats.html': '<!DOCTYPE html><html><body><h1>Bot Stats</h1></body></html>'
-    };
-
-    for (const [file, content] of Object.entries(defaultFiles)) {
-        const filePath = path.join(assetsDir, file);
-        if (!await fs.pathExists(filePath)) {
-            await fs.ensureDir(path.dirname(filePath));
-            if (file.endsWith('.png')) {
-                await fs.writeFile(filePath, Buffer.from(content, 'base64'));
-            } else {
-                await fs.writeFile(filePath, content);
-            }
-        }
-    }
-}
-
-async function initializeDatabaseModels() {
-    const modelsDir = path.join(__dirname, 'src', 'models');
-    const models = [
-        'User.js', 'Group.js', 'Message.js', 'Command.js', 'Economy.js',
-        'Game.js', 'Warning.js', 'Ban.js', 'Premium.js', 'Settings.js',
-        'Log.js', 'Session.js'
-    ];
-
-    for (const model of models) {
-        const modelPath = path.join(modelsDir, model);
-        if (!await fs.pathExists(modelPath)) {
-            await fs.writeFile(modelPath, `const mongoose = require('mongoose');\n\nmodule.exports = mongoose.model('${model.replace('.js', '')}', new mongoose.Schema({}));`);
-        }
-    }
-}
-
-async function setupAPIRoutes() {
-    const routesDir = path.join(__dirname, 'src', 'api', 'routes');
-    const routes = [
-        'auth.js', 'users.js', 'groups.js', 'messages.js', 
-        'commands.js', 'stats.js', 'settings.js', 'webhooks.js', 'health.js'
-    ];
-
-    for (const route of routes) {
-        const routePath = path.join(routesDir, route);
-        if (!await fs.pathExists(routePath)) {
-            const routeName = route.replace('.js', '');
-            await fs.writeFile(routePath, `const express = require('express');\nconst router = express.Router();\n\nrouter.get('/', (req, res) => {\n    res.json({ route: '${routeName}', status: 'active' });\n});\n\nmodule.exports = router;`);
-        }
-    }
-}
-
-async function createConfigurationFiles() {
-    const configFiles = {
-        '.env.example': `SESSION_ID=\nOWNER_NUMBERS=254700143167\nPREFIX=.\nPUBLIC_MODE=false\nDATABASE_URL=mongodb://localhost:27017/ilombot\nPORT=3000\nTIMEZONE=UTC\nBOT_NAME=Ilom Bot\nBOT_VERSION=1.0.0`,
-        '.gitignore': `node_modules/\n.env\nsession/\nlogs/\ntemp/\nbackups/\nmedia/cache/\n*.log\n.DS_Store`,
-        '.dockerignore': `node_modules/\n.env\nsession/\nlogs/\ntemp/\nbackups/\n*.log\nDockerfile\n.dockerignore\n.git/`,
-        'package.json': JSON.stringify({
-            name: 'ilom-whatsapp-bot',
-            version: '1.0.0',
-            description: 'Advanced WhatsApp Bot by Ilom',
-            main: 'index.js',
-            scripts: {
-                start: 'node index.js',
-                dev: 'nodemon index.js',
-                test: 'jest'
-            },
-            dependencies: {
-                '@whiskeysockets/baileys': '^6.6.0',
-                'express': '^4.18.2',
-                'fs-extra': '^11.1.1',
-                'pino': '^8.15.0',
-                'node-cache': '^5.1.2',
-                'gradient-string': '^2.0.2',
-                'figlet': '^1.6.0',
-                'chalk': '^4.1.2',
-                'dotenv': '^16.3.1',
-                'mongoose': '^7.5.0',
-                'axios': '^1.5.0',
-                'moment': '^2.29.4'
-            },
-            devDependencies: {
-                'nodemon': '^3.0.1',
-                'jest': '^29.6.2'
-            }
-        }, null, 2)
-    };
-
-    for (const [file, content] of Object.entries(configFiles)) {
-        const filePath = path.join(process.cwd(), file);
-        if (!await fs.pathExists(filePath)) {
-            await fs.writeFile(filePath, content);
-        }
-    }
-}
-
 async function loadSavedSettings() {
     try {
         const mongoose = await import('mongoose');
@@ -832,21 +570,6 @@ async function initializeBot() {
 
         logger.info('Creating project directory structure...');
         await createDirectoryStructure();
-
-        logger.info('Setting up configuration files...');
-        await createConfigurationFiles();
-
-        logger.info('Loading localization files...');
-        await loadLocalizationFiles();
-
-        logger.info('Creating default assets...');
-        await createDefaultAssets();
-
-        logger.info('Initializing database models...');
-        await initializeDatabaseModels();
-
-        logger.info('Setting up API routes...');
-        await setupAPIRoutes();
 
         logger.info('Connecting to database...');
         await connectToDatabase();
