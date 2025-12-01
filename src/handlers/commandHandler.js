@@ -157,7 +157,7 @@ class CommandHandler {
             return false;
         }
 
-        if (isGroup && command.adminOnly && !isGroupAdmin) {
+        if (isGroup && command.adminOnly && !isGroupAdmin && !this.isOwner(sender)) {
             await sock.sendMessage(from, {
                 text: '❌ *Admin Only*\n\nThis command requires group admin privileges.'
             }, { quoted: message });
