@@ -1,12 +1,6 @@
 import config from '../config.js';
 import logger from '../utils/logger.js';
-import { getUser, createUser, updateUser } from '../models/User.js';
-import { getGroup, createGroup, updateGroup } from '../models/Group.js';
-import antiSpam from '../utils/antiSpam.js';
 import { cache } from '../utils/cache.js';
-import handleAutoReaction from '../events/autoReaction.js';
-import handleAntiLink from '../plugins/antiLink.js';
-import handleLevelUp from '../events/levelUp.js';
 
 class MessageHandler {
     constructor() {
@@ -71,8 +65,6 @@ class MessageHandler {
             } else if (msg.stickerMessage) {
                 messageType = 'sticker';
                 media = msg.stickerMessage;
-            } else if (msg.protocolMessage || msg.reactionMessage) {
-                return null;
             } else {
                 return null;
             }
@@ -150,7 +142,7 @@ class MessageHandler {
                 return;
             }
 
-            logger.info(`📨 MESSAGE | From: ${sender.split('@')[0]} | ${isGroup ? 'GROUP' : 'PRIVATE'} | Text: "${text.substring(0, 50)}"`);
+            logger.info(`📨 MESSAGE | From: ${sender.split('@')[0]} | ${isGroup ? 'GROUP' : 'PRIVATE'} | Text: "${text.substring(0, 50)}${text.length > 50 ? '...' : ''}"`);
 
             if (config.whitelist && config.whitelist.enabled) {
                 if (!this.isOwner(sender) && !this.isSudo(sender)) {
@@ -159,14 +151,9 @@ class MessageHandler {
                 }
             }
 
-            const spamCheck = await antiSpam.checkSpam(sender, message);
-            if (spamCheck.isSpam && spamCheck.action === 'block') {
-                logger.info(`🔴 Spam blocked from ${sender.split('@')[0]}`);
-                return;
-            }
-
+            const isOwnerUser = this.isOwner(sender);
+            const ownerNoPrefix = config.ownerNoPrefix && isOwnerUser;
             const isPrefixed = text.startsWith(config.prefix);
-            const ownerNoPrefix = config.ownerNoPrefix && this.isOwner(sender);
             
             if (!isPrefixed && !ownerNoPrefix) {
                 return;
@@ -178,7 +165,12 @@ class MessageHandler {
                 return;
             }
 
-            const commandText = isPrefixed ? text.slice(config.prefix.length).trim() : text.trim();
+            let commandText;
+            if (ownerNoPrefix && !isPrefixed) {
+                commandText = text.trim();
+            } else {
+                commandText = text.slice(config.prefix.length).trim();
+            }
             
             if (!commandText || commandText.length === 0) {
                 return;
@@ -216,7 +208,7 @@ class MessageHandler {
             
             try {
                 await commandHandler.handleCommand(sock, message, commandName, args);
-                logger.info(`✅ Command ${commandName} executed`);
+                logger.info(`✅ Command ${commandName} executed successfully`);
             } catch (error) {
                 logger.error(`❌ Command ${commandName} failed:`, error);
                 await sock.sendMessage(from, {
