@@ -251,7 +251,7 @@ async function setupEventHandlers(sock, saveCreds) {
     await messageHandler.initializeCommandHandler();
     
     sock.ev.on('messages.upsert', async (upsert) => {
-        const { messages, type } = upsert;
+        const { messages } = upsert;
         
         if (!messages || messages.length === 0) {
             return;
@@ -281,16 +281,16 @@ async function setupEventHandlers(sock, saveCreds) {
                 }
 
                 const messageKeys = Object.keys(message.message);
-                const isSystemMessage = messageKeys.includes('protocolMessage') || 
-                                       messageKeys.includes('reactionMessage') ||
-                                       messageKeys.includes('senderKeyDistributionMessage') ||
-                                       messageKeys.includes('messageContextInfo');
+                const isProtocolOnly = messageKeys.length === 1 && (
+                    messageKeys.includes('protocolMessage') || 
+                    messageKeys.includes('senderKeyDistributionMessage')
+                );
 
-                if (isSystemMessage && messageKeys.length === 1) {
+                if (isProtocolOnly) {
                     continue;
                 }
                 
-                logger.info(`📬 PROCESSING MESSAGE | From: ${from} | FromMe: ${fromMe} | Keys: ${messageKeys.join(', ')}`);
+                logger.debug(`📬 MESSAGE RECEIVED | From: ${from.split('@')[0]} | FromMe: ${fromMe}`);
                 
                 await messageHandler.handleIncomingMessage(sock, message);
                 
@@ -360,7 +360,6 @@ async function setupEventHandlers(sock, saveCreds) {
     logger.info('✅ All event handlers registered successfully');
     logger.info(`📋 Message Handler Status: ${messageHandler.isReady ? 'READY ✅' : 'NOT READY ❌'}`);
 }
-
 async function establishWhatsAppConnection() {
     return new Promise(async (resolve, reject) => {
         try {
