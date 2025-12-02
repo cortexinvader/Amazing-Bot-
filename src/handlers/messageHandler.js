@@ -22,7 +22,7 @@ class MessageHandler {
             }
             
             this.isReady = true;
-            logger.info('✅ Message handler ready to process commands');
+            logger.info('Message handler ready to process commands');
             return this.commandHandler;
         } catch (error) {
             logger.error('Failed to initialize command handler:', error);
@@ -81,13 +81,19 @@ class MessageHandler {
         }
     }
 
+    normalizePhoneNumber(jid) {
+        if (!jid) return '';
+        return jid.split('@')[0].replace(/:\d+$/, '').replace(/[^0-9]/g, '');
+    }
+
     isOwner(sender) {
         if (!sender) return false;
-        const senderNumber = sender.split('@')[0].replace(/:\d+$/, '');
+        
+        const senderNumber = this.normalizePhoneNumber(sender);
         
         if (config.ownerNumbers && Array.isArray(config.ownerNumbers)) {
             return config.ownerNumbers.some(ownerJid => {
-                const ownerNumber = ownerJid.split('@')[0].replace(/:\d+$/, '');
+                const ownerNumber = this.normalizePhoneNumber(ownerJid);
                 return senderNumber === ownerNumber;
             });
         }
@@ -99,11 +105,11 @@ class MessageHandler {
         if (!sender) return false;
         if (this.isOwner(sender)) return true;
         
-        const senderNumber = sender.split('@')[0].replace(/:\d+$/, '');
+        const senderNumber = this.normalizePhoneNumber(sender);
         
         if (config.sudoers && Array.isArray(config.sudoers)) {
             return config.sudoers.some(sudoJid => {
-                const sudoNumber = sudoJid.split('@')[0].replace(/:\d+$/, '');
+                const sudoNumber = this.normalizePhoneNumber(sudoJid);
                 return senderNumber === sudoNumber;
             });
         }
@@ -142,11 +148,11 @@ class MessageHandler {
                 return;
             }
 
-            logger.info(`📨 MESSAGE | From: ${sender.split('@')[0]} | ${isGroup ? 'GROUP' : 'PRIVATE'} | Text: "${text.substring(0, 50)}${text.length > 50 ? '...' : ''}"`);
+            logger.info(`MESSAGE | From: ${sender.split('@')[0]} | ${isGroup ? 'GROUP' : 'PRIVATE'} | Text: "${text.substring(0, 50)}${text.length > 50 ? '...' : ''}"`);
 
             if (config.whitelist && config.whitelist.enabled) {
                 if (!this.isOwner(sender) && !this.isSudo(sender)) {
-                    logger.info(`🚫 Blocked by whitelist`);
+                    logger.info(`Blocked by whitelist`);
                     return;
                 }
             }
@@ -188,31 +194,31 @@ class MessageHandler {
             if (!command) {
                 if (isPrefixed) {
                     const suggestions = commandHandler.searchCommands(commandName);
-                    let response = `❌ Command "${commandName}" not found.\n`;
+                    let response = `Command "${commandName}" not found.\n`;
                     
                     if (suggestions && suggestions.length > 0) {
-                        response += `\n💡 Did you mean:\n`;
+                        response += `\nDid you mean:\n`;
                         suggestions.slice(0, 3).forEach(cmd => {
-                            response += `  • ${config.prefix}${cmd.name}\n`;
+                            response += `  ${config.prefix}${cmd.name}\n`;
                         });
                     }
                     
-                    response += `\n📚 Type ${config.prefix}help for all commands`;
+                    response += `\nType ${config.prefix}help for all commands`;
                     
                     await sock.sendMessage(from, { text: response }, { quoted: message });
                 }
                 return;
             }
 
-            logger.info(`⚡ EXECUTING: ${commandName} | User: ${sender.split('@')[0]} | Args: [${args.join(', ')}]`);
+            logger.info(`EXECUTING: ${commandName} | User: ${sender.split('@')[0]} | Args: [${args.join(', ')}]`);
             
             try {
                 await commandHandler.handleCommand(sock, message, commandName, args);
-                logger.info(`✅ Command ${commandName} executed successfully`);
+                logger.info(`Command ${commandName} executed successfully`);
             } catch (error) {
-                logger.error(`❌ Command ${commandName} failed:`, error);
+                logger.error(`Command ${commandName} failed:`, error);
                 await sock.sendMessage(from, {
-                    text: `❌ Error executing ${commandName}: ${error.message}`
+                    text: `Error executing ${commandName}: ${error.message}`
                 }, { quoted: message });
             }
 
