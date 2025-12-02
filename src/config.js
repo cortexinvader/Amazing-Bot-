@@ -1,9 +1,16 @@
 import 'dotenv/config';
 
+function normalizePhoneNumber(phone) {
+    if (!phone || phone.trim() === '') return null;
+    const cleaned = phone.trim().replace(/[^0-9]/g, '');
+    if (cleaned.length < 10) return null;
+    return `${cleaned}@s.whatsapp.net`;
+}
+
 const config = {
     botName: process.env.BOT_NAME || 'Ilom Bot',
     botVersion: process.env.BOT_VERSION || '1.0.0',
-    botDescription: process.env.BOT_DESCRIPTION || '🧠 Amazing Bot created by Ilom',
+    botDescription: process.env.BOT_DESCRIPTION || 'Amazing Bot created by Ilom',
     botThumbnail: process.env.BOT_THUMBNAIL || 'https://files.catbox.moe/13uws5.jpg',
     botRepository: process.env.BOT_REPOSITORY || 'https://github.com/NexusCoders-cyber/Amazing-Bot-.git',
     botWebsite: process.env.BOT_WEBSITE || 'https://ilom.tech',
@@ -13,14 +20,15 @@ const config = {
     noPrefixEnabled: process.env.NO_PREFIX_ENABLED === 'true',
     privateNoPrefixEnabled: process.env.PRIVATE_NO_PREFIX_ENABLED === 'true',
 
-    ownerNumbers: (process.env.OWNER_NUMBERS || 'YOUR_PHONE_NUMBER').split(',').map(num => 
-        num.includes('@') ? num : `${num.trim()}@s.whatsapp.net`
-    ),
+    ownerNumbers: (process.env.OWNER_NUMBERS || '').split(',')
+        .map(normalizePhoneNumber)
+        .filter(Boolean),
+    
     ownerName: process.env.OWNER_NAME || 'Ilom',
     
     sudoers: (process.env.SUDO_NUMBERS || '').split(',')
-        .filter(num => num.trim())
-        .map(num => num.includes('@') ? num : `${num.trim()}@s.whatsapp.net`),
+        .map(normalizePhoneNumber)
+        .filter(Boolean),
 
     publicMode: process.env.PUBLIC_MODE === 'true',
     selfMode: process.env.SELF_MODE === 'true',
@@ -250,11 +258,17 @@ function validateConfig() {
     const errors = [];
     
     if (!config.ownerNumbers || config.ownerNumbers.length === 0) {
-        errors.push('OWNER_NUMBERS is required');
+        console.warn('OWNER_NUMBERS is not set in .env file');
+    } else {
+        console.log(`Loaded ${config.ownerNumbers.length} owner number(s)`);
+    }
+    
+    if (config.sudoers && config.sudoers.length > 0) {
+        console.log(`Loaded ${config.sudoers.length} sudo user(s)`);
     }
     
     if (config.database.url === 'mongodb://localhost:27017/ilombot') {
-        console.warn('⚠️  Using default database URL. Consider setting DATABASE_URL for production.');
+        console.warn('Using default database URL. Consider setting DATABASE_URL for production.');
     }
     
     if (config.apis.openai.apiKey && !config.apis.openai.apiKey.startsWith('sk-')) {
@@ -262,20 +276,20 @@ function validateConfig() {
     }
     
     if (config.security.encryptionKey === 'default-key-change-this') {
-        console.warn('⚠️  Using default encryption key. Set ENCRYPTION_KEY for security.');
+        console.warn('Using default encryption key. Set ENCRYPTION_KEY for security.');
     }
     
     if (config.security.jwtSecret === 'jwt-secret-change-this') {
-        console.warn('⚠️  Using default JWT secret. Set JWT_SECRET for security.');
+        console.warn('Using default JWT secret. Set JWT_SECRET for security.');
     }
     
     if (errors.length > 0) {
-        console.error('❌ Configuration errors:');
+        console.error('Configuration errors:');
         errors.forEach(error => console.error(`  - ${error}`));
         process.exit(1);
     }
     
-    console.log('✅ Configuration validated successfully');
+    console.log('Configuration validated successfully');
 }
 
 function getEnvironmentInfo() {
