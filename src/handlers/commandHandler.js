@@ -27,10 +27,10 @@ class CommandHandler {
         try {
             await commandManager.initializeCommands();
             this.isInitialized = true;
-            logger.info(`✅ Command handler initialized successfully with ${getAllCommands().length} commands`);
+            logger.info(`Command handler initialized with ${getAllCommands().length} commands`);
             return true;
         } catch (error) {
-            logger.error('❌ Command handler initialization failed:', error);
+            logger.error('Command handler initialization failed:', error);
             return false;
         }
     }
@@ -67,13 +67,19 @@ class CommandHandler {
         return getSystemStats();
     }
 
+    normalizePhoneNumber(jid) {
+        if (!jid) return '';
+        return jid.split('@')[0].replace(/:\d+$/, '').replace(/[^0-9]/g, '');
+    }
+
     isOwner(sender) {
         if (!sender) return false;
-        const senderNumber = sender.split('@')[0].replace(/:\d+$/, '');
+        
+        const senderNumber = this.normalizePhoneNumber(sender);
         
         if (config.ownerNumbers && Array.isArray(config.ownerNumbers)) {
             return config.ownerNumbers.some(ownerJid => {
-                const ownerNumber = ownerJid.split('@')[0].replace(/:\d+$/, '');
+                const ownerNumber = this.normalizePhoneNumber(ownerJid);
                 return senderNumber === ownerNumber;
             });
         }
@@ -85,12 +91,12 @@ class CommandHandler {
         if (!sender) return false;
         if (this.isOwner(sender)) return true;
         
-        const sudoNumber = sender.split('@')[0].replace(/:\d+$/, '');
+        const senderNumber = this.normalizePhoneNumber(sender);
         
         if (config.sudoers && Array.isArray(config.sudoers)) {
             return config.sudoers.some(sudoJid => {
-                const sudoNum = sudoJid.split('@')[0].replace(/:\d+$/, '');
-                return sudoNumber === sudoNum;
+                const sudoNumber = this.normalizePhoneNumber(sudoJid);
+                return senderNumber === sudoNumber;
             });
         }
         
@@ -101,7 +107,7 @@ class CommandHandler {
         const command = this.getCommand(commandName);
         if (!command || !command.cooldown) return { onCooldown: false };
 
-        if (this.isOwner(sender)) return { onCooldown: false };
+        if (this.isOwner(sender) || this.isSudo(sender)) return { onCooldown: false };
 
         const cooldownKey = `${commandName}_${sender}`;
         const now = Date.now();
@@ -129,44 +135,47 @@ class CommandHandler {
         const from = message.key.remoteJid;
         const sender = message.key.participant || from;
 
-        if (command.ownerOnly && !this.isOwner(sender)) {
+        const isOwnerUser = this.isOwner(sender);
+        const isSudoUser = this.isSudo(sender);
+
+        if (command.ownerOnly && !isOwnerUser) {
             await sock.sendMessage(from, {
-                text: '❌ *Access Denied*\n\nThis command is only available to the bot owner.'
+                text: 'Access Denied\n\nThis command is only available to the bot owner.'
             }, { quoted: message });
             return false;
         }
 
-        if (command.sudoOnly && !this.isSudo(sender)) {
+        if (command.sudoOnly && !isSudoUser) {
             await sock.sendMessage(from, {
-                text: '❌ *Access Denied*\n\nThis command is only available to sudo users.'
+                text: 'Access Denied\n\nThis command is only available to sudo users.'
             }, { quoted: message });
             return false;
         }
 
         if (command.groupOnly && !isGroup) {
             await sock.sendMessage(from, {
-                text: '❌ *Group Only*\n\nThis command can only be used in groups.'
+                text: 'Group Only\n\nThis command can only be used in groups.'
             }, { quoted: message });
             return false;
         }
 
         if (command.privateOnly && isGroup) {
             await sock.sendMessage(from, {
-                text: '❌ *Private Only*\n\nThis command can only be used in private chat.'
+                text: 'Private Only\n\nThis command can only be used in private chat.'
             }, { quoted: message });
             return false;
         }
 
-        if (isGroup && command.adminOnly && !isGroupAdmin && !this.isOwner(sender)) {
+        if (isGroup && command.adminOnly && !isGroupAdmin && !isOwnerUser && !isSudoUser) {
             await sock.sendMessage(from, {
-                text: '❌ *Admin Only*\n\nThis command requires group admin privileges.'
+                text: 'Admin Only\n\nThis command requires group admin privileges.'
             }, { quoted: message });
             return false;
         }
 
         if (isGroup && command.botAdminRequired && !isBotAdmin) {
             await sock.sendMessage(from, {
-                text: '❌ *Bot Admin Required*\n\nI need admin privileges to execute this command.'
+                text: 'Bot Admin Required\n\nI need admin privileges to execute this command.'
             }, { quoted: message });
             return false;
         }
@@ -191,7 +200,7 @@ class CommandHandler {
             const cooldownCheck = await this.checkCooldown(commandName, sender);
             if (cooldownCheck.onCooldown) {
                 await sock.sendMessage(from, {
-                    text: `⏱️ *Cooldown*\n\nPlease wait ${cooldownCheck.timeLeft} seconds before using this command again.`
+                    text: `Cooldown\n\nPlease wait ${cooldownCheck.timeLeft} seconds before using this command again.`
                 }, { quoted: message });
                 return false;
             }
@@ -202,14 +211,27 @@ class CommandHandler {
             if (isGroup) {
                 try {
                     const groupMetadata = await sock.groupMetadata(from);
-                    const participant = groupMetadata.participants.find(p => p.id === sender);
+                    
+                    const senderNumber = this.normalizePhoneNumber(sender);
+                    const participant = groupMetadata.participants.find(p => {
+                        const participantNumber = this.normalizePhoneNumber(p.id);
+                        return participantNumber === senderNumber;
+                    });
+                    
                     isGroupAdmin = participant?.admin === 'admin' || participant?.admin === 'superadmin';
 
                     const botJid = sock.user?.id?.split(':')[0] + '@s.whatsapp.net';
-                    const botParticipant = groupMetadata.participants.find(p => p.id === botJid);
+                    const botNumber = this.normalizePhoneNumber(botJid);
+                    const botParticipant = groupMetadata.participants.find(p => {
+                        const participantNumber = this.normalizePhoneNumber(p.id);
+                        return participantNumber === botNumber;
+                    });
+                    
                     isBotAdmin = botParticipant?.admin === 'admin' || botParticipant?.admin === 'superadmin';
                 } catch (error) {
                     logger.error('Error fetching group metadata:', error);
+                    isGroupAdmin = false;
+                    isBotAdmin = false;
                 }
             }
 
@@ -224,17 +246,17 @@ class CommandHandler {
 
             if (command.minArgs && args.length < command.minArgs) {
                 await sock.sendMessage(from, {
-                    text: `❌ *Invalid Usage*\n\n*Usage:* ${config.prefix}${command.usage || command.name}\n*Example:* ${config.prefix}${command.example || command.name}`
+                    text: `Invalid Usage\n\nUsage: ${config.prefix}${command.usage || command.name}\nExample: ${config.prefix}${command.example || command.name}`
                 }, { quoted: message });
                 return false;
             }
 
-            logger.info(`⚡ Executing command: ${commandName} for ${sender.split('@')[0]}`);
+            logger.info(`Executing command: ${commandName} for ${sender.split('@')[0]}`);
 
             if (!command.execute || typeof command.execute !== 'function') {
                 logger.error(`Command ${commandName} has no execute function`);
                 await sock.sendMessage(from, {
-                    text: `❌ *Error*\n\nCommand ${commandName} is not properly configured.`
+                    text: `Error\n\nCommand ${commandName} is not properly configured.`
                 }, { quoted: message });
                 return false;
             }
@@ -252,24 +274,25 @@ class CommandHandler {
                 prefix: config.prefix,
                 pushName: message.pushName,
                 quoted: message.message?.extendedTextMessage?.contextInfo?.quotedMessage,
-                isOwner: this.isOwner(sender)
+                isOwner: this.isOwner(sender),
+                isSudo: this.isSudo(sender)
             });
             
             const executionTime = Date.now() - startTime;
             recordCommandUsage(commandName, executionTime, true);
             
-            logger.info(`✅ Command ${commandName} executed successfully in ${executionTime}ms`);
+            logger.info(`Command ${commandName} executed successfully in ${executionTime}ms`);
             return true;
 
         } catch (error) {
             const executionTime = Date.now() - startTime;
             recordCommandUsage(commandName, executionTime, false);
             
-            logger.error(`❌ Command execution error [${commandName}]:`, error);
+            logger.error(`Command execution error [${commandName}]:`, error);
 
             try {
                 await sock.sendMessage(from, {
-                    text: `❌ *Command Error*\n\n*Command:* ${commandName}\n*Error:* ${error.message}\n\nPlease try again or contact support if the issue persists.`
+                    text: `Command Error\n\nCommand: ${commandName}\nError: ${error.message}\n\nPlease try again or contact support if the issue persists.`
                 }, { quoted: message });
             } catch (sendError) {
                 logger.error('Failed to send error message:', sendError);
