@@ -2,7 +2,7 @@ import 'dotenv/config';
 
 function normalizePhoneNumber(phone) {
     if (!phone || phone.trim() === '') return null;
-    const cleaned = phone.trim().replace(/[^0-9]/g, '');
+    const cleaned = phone.trim().replace(/[^0-9]/g, '').replace(/:\d+$/, '');
     if (cleaned.length < 10) return null;
     return `${cleaned}@s.whatsapp.net`;
 }
