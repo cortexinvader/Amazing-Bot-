@@ -83,7 +83,10 @@ class MessageHandler {
 
     normalizePhoneNumber(jid) {
         if (!jid) return '';
-        return jid.split('@')[0].replace(/:\d+$/, '').replace(/[^0-9]/g, '');
+        let cleaned = jid.split('@')[0];
+        cleaned = cleaned.replace(/:\d+$/, '');
+        cleaned = cleaned.replace(/[^0-9]/g, '');
+        return cleaned;
     }
 
     isOwner(sender) {
@@ -210,12 +213,12 @@ class MessageHandler {
             if (!command) {
                 if (isPrefixed) {
                     const suggestions = commandHandler.searchCommands(commandName);
-                    let response = `Command "${commandName}" not found.\n`;
+                    let response = `❌ Command "${commandName}" not found.\n`;
                     
                     if (suggestions && suggestions.length > 0) {
-                        response += `\nDid you mean:\n`;
+                        response += `\n💡 Did you mean:\n`;
                         suggestions.slice(0, 3).forEach(cmd => {
-                            response += `  ${config.prefix}${cmd.name}\n`;
+                            response += `  • ${config.prefix}${cmd.name}\n`;
                         });
                     }
                     
@@ -234,7 +237,7 @@ class MessageHandler {
             } catch (error) {
                 logger.error(`Command ${commandName} failed:`, error);
                 await sock.sendMessage(from, {
-                    text: `Error executing ${commandName}: ${error.message}`
+                    text: `❌ Error executing ${commandName}: ${error.message}`
                 }, { quoted: message });
             }
 
