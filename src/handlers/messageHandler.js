@@ -143,6 +143,22 @@ class MessageHandler {
             }
 
             const text = messageContent.text;
+            const quotedMsg = message.message?.extendedTextMessage?.contextInfo;
+            
+            if (quotedMsg && quotedMsg.stanzaId) {
+                if (global.replyHandlers && global.replyHandlers[quotedMsg.stanzaId]) {
+                    const replyHandler = global.replyHandlers[quotedMsg.stanzaId];
+                    
+                    if (typeof replyHandler.handler === 'function') {
+                        try {
+                            await replyHandler.handler(text, message);
+                            return;
+                        } catch (error) {
+                            logger.error('Reply handler error:', error);
+                        }
+                    }
+                }
+            }
             
             if (!text || text.length === 0) {
                 return;
