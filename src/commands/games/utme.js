@@ -186,7 +186,7 @@ export default {
         const response = await axios.get(apiUrl, {
             headers: {
                 'Accept': 'application/json',
-                'AccessToken': 'QB-1e5c5f1553ccd8cd9e11'
+                'AccessToken': 'QB-e1bc44df0c670fa0b972'
             },
             timeout: 15000
         });
