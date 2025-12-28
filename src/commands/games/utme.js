@@ -1,16 +1,28 @@
-import { createCanvas } from '@napi-rs/canvas';
+import { createCanvas, loadImage } from '@napi-rs/canvas';
 import axios from 'axios';
+import Cerebras from '@cerebras/cerebras_cloud_sdk';
 
 const userScores = new Map();
 const userStreaks = new Map();
 const activeSessions = new Map();
 const AI_TIMEOUT = 30000;
 
-async function getAIExplanation(question, correctAnswer, userAnswer, subject, isCorrect) {
+const client = new Cerebras({
+    apiKey: process.env.CEREBRAS_API_KEY || "csk-prcc628w42cc6jhjn48n5pe8xwhyyd26tteyek8x4dy8dpf6",
+    warmTCPConnection: false
+});
+
+async function getAIExplanation(question, correctAnswer, userAnswer, subject, isCorrect, options) {
     try {
         const prompt = `You are a UTME/JAMB exam tutor. A student just answered a ${subject} question.
 
 Question: ${question}
+
+Options:
+A. ${options.a}
+B. ${options.b}
+C. ${options.c}
+D. ${options.d}
 
 Correct Answer: ${correctAnswer}
 Student's Answer: ${userAnswer}
@@ -20,24 +32,23 @@ ${isCorrect
     ? 'Provide a brief encouraging explanation (2-3 sentences) of why this answer is correct and reinforce the key concept.' 
     : 'Provide a clear, concise explanation (3-4 sentences) of: 1) Why their answer is wrong, 2) Why the correct answer is right, 3) Key concept to remember.'}
 
-Keep it simple, educational, and encouraging. Use Nigerian educational context where relevant.`;
+Keep it simple, educational, and encouraging. Use Nigerian educational context where relevant. Maximum 400 characters.`;
 
-        const apiUrl = `https://ab-blackboxai.abrahamdw882.workers.dev/?q=${encodeURIComponent(prompt)}`;
-        
-        const { data } = await axios.get(apiUrl, { 
-            timeout: AI_TIMEOUT,
-            headers: {
-                'User-Agent': 'Mozilla/5.0'
-            }
+        const response = await client.chat.completions.create({
+            model: "llama-3.3-70b",
+            messages: [
+                { role: "user", content: prompt }
+            ],
+            stream: false
         });
 
-        const aiResponse = data.content || data.response || data.reply || data.answer || data.text;
+        const aiResponse = response?.choices?.[0]?.message?.content || "";
         
         if (!aiResponse || aiResponse.length < 10) {
             return null;
         }
 
-        return aiResponse.substring(0, 500);
+        return aiResponse.substring(0, 400);
     } catch (error) {
         console.error('AI explanation error:', error);
         return null;
@@ -50,20 +61,12 @@ export default {
     category: 'games',
     description: 'Practice UTME/JAMB exam questions with AI-powered explanations',
     usage: 'utme <subject>',
-    example: 'utme mathematics\nutme english\nutme physics',
+    example: 'utme mathematics',
     cooldown: 2,
     permissions: ['user'],
     args: false,
     minArgs: 0,
     maxArgs: 1,
-    typing: true,
-    premium: false,
-    hidden: false,
-    ownerOnly: false,
-    supportsReply: true,
-    supportsChat: false,
-    supportsReact: true,
-    supportsButtons: false,
 
     subjects: {
         'mathematics': 'Mathematics',
@@ -222,12 +225,16 @@ export default {
         const percentage = stats.total > 0 ? Math.round((stats.correct / stats.total) * 100) : 0;
         const streak = userStreaks.get(sender);
 
-        let caption = '📚 ' + subjectName + ' Quiz\n\n';
-        caption += '📊 Your Stats: ' + stats.correct + '/' + stats.total + ' (' + percentage + '%)\n';
+        let caption = '┏━━━━━━━━━━━━━━━━━━━━━━━━┓\n';
+        caption += '┃  📚 ' + subjectName + '\n';
+        caption += '┗━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n';
+        caption += '📊 Stats: ' + stats.correct + '/' + stats.total + ' (' + percentage + '%)\n';
         if (streak > 0) {
             caption += '🔥 Streak: ' + streak + '\n';
         }
-        caption += '\n💡 Reply with: A, B, C, or D';
+        caption += '\n💡 Reply: A, B, C, or D\n';
+        caption += '⏭️ Type NEXT for next question\n';
+        caption += '🛑 Type STOP to end quiz';
 
         const sentMsg = await sock.sendMessage(from, {
             image: canvas,
@@ -235,18 +242,161 @@ export default {
         }, { quoted: message });
 
         if (sentMsg && sentMsg.key) {
-            const sessionKey = `${sender}_${sentMsg.key.id}`;
-            activeSessions.set(sessionKey, {
-                messageId: sentMsg.key.id,
-                sender: sender,
-                subject: subject,
-                subjectName: subjectName,
-                correctAnswer: correctAnswer,
-                questionData: questionData,
-                timestamp: Date.now()
-            });
+            const commandInstance = this;
+            
+            if (!global.replyHandlers) {
+                global.replyHandlers = {};
+            }
 
-            this.setupReplyHandler(sock, from, sentMsg.key.id, correctAnswer, questionData, subjectName, sender, subject, prefix);
+            global.replyHandlers[sentMsg.key.id] = {
+                command: this.name,
+                handler: async (replyText, replyMessage) => {
+                    const replySender = replyMessage.key.participant || replyMessage.key.remoteJid;
+
+                    if (replySender !== sender) {
+                        return await sock.sendMessage(from, {
+                            text: '❌ This is not your quiz!\n\n💡 Start your own: ' + prefix + 'utme <subject>'
+                        }, { quoted: replyMessage });
+                    }
+
+                    const input = replyText.toUpperCase().trim();
+
+                    if (input === 'NEXT' || input === 'N') {
+                        delete global.replyHandlers[sentMsg.key.id];
+                        
+                        return await commandInstance.loadQuestion({
+                            sock,
+                            message: replyMessage,
+                            from,
+                            sender,
+                            subject,
+                            subjectName,
+                            prefix
+                        });
+                    }
+
+                    if (input === 'STOP' || input === 'END' || input === 'QUIT') {
+                        delete global.replyHandlers[sentMsg.key.id];
+                        
+                        const userScore = userScores.get(sender);
+                        const stats = userScore?.subjects[subject];
+                        
+                        if (stats && stats.total > 0) {
+                            const percentage = Math.round((stats.correct / stats.total) * 100);
+                            return await sock.sendMessage(from, {
+                                text: '✋ Quiz Stopped\n\n📊 Session Stats:\n' + stats.correct + '/' + stats.total + ' (' + percentage + '%)\n\n💡 Continue: ' + prefix + 'utme ' + subject
+                            }, { quoted: replyMessage });
+                        }
+                        
+                        return await sock.sendMessage(from, {
+                            text: '✋ Quiz stopped\n\n💡 Start again: ' + prefix + 'utme'
+                        }, { quoted: replyMessage });
+                    }
+
+                    const answer = input;
+
+                    if (!['A', 'B', 'C', 'D'].includes(answer)) {
+                        return await sock.sendMessage(from, {
+                            text: '⚠️ Invalid answer\n\n✅ Reply: A, B, C, or D\n⏭️ Type NEXT\n🛑 Type STOP'
+                        }, { quoted: replyMessage });
+                    }
+
+                    await sock.sendMessage(from, {
+                        react: { text: '🤖', key: replyMessage.key }
+                    });
+
+                    const aiProcessMsg = await sock.sendMessage(from, {
+                        text: '🤖 AI Tutor analyzing your answer...'
+                    }, { quoted: replyMessage });
+
+                    const isCorrect = answer === correctAnswer.toUpperCase();
+                    
+                    const userScore = userScores.get(sender);
+                    userScore.total++;
+                    userScore.subjects[subject].total++;
+                    
+                    if (isCorrect) {
+                        userScore.correct++;
+                        userScore.subjects[subject].correct++;
+                        
+                        const currentStreak = userStreaks.get(sender) + 1;
+                        userStreaks.set(sender, currentStreak);
+                        
+                        if (!userScore.bestStreak || currentStreak > userScore.bestStreak) {
+                            userScore.bestStreak = currentStreak;
+                        }
+                    } else {
+                        userStreaks.set(sender, 0);
+                    }
+
+                    const aiExplanation = await getAIExplanation(
+                        questionData.question,
+                        questionData.option[correctAnswer.toLowerCase()],
+                        questionData.option[answer.toLowerCase()],
+                        subjectName,
+                        isCorrect,
+                        questionData.option
+                    );
+
+                    await sock.sendMessage(from, { delete: aiProcessMsg.key });
+                    
+                    const resultCanvas = await commandInstance.createResultCanvas(
+                        isCorrect, 
+                        correctAnswer, 
+                        questionData, 
+                        subjectName,
+                        sender,
+                        answer
+                    );
+
+                    const stats = userScore.subjects[subject];
+                    const percentage = Math.round((stats.correct / stats.total) * 100);
+                    const streak = userStreaks.get(sender);
+
+                    let resultText = '┏━━━━━━━━━━━━━━━━━━━━━━━━┓\n';
+                    resultText += '┃  ' + (isCorrect ? '✅ CORRECT!' : '❌ WRONG!') + '\n';
+                    resultText += '┗━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n';
+                    resultText += '📖 Subject: ' + subjectName + '\n';
+                    resultText += '💡 Your Answer: ' + answer + '\n';
+                    resultText += '✅ Correct: ' + correctAnswer.toUpperCase() + '\n';
+                    resultText += '\n📊 Score: ' + stats.correct + '/' + stats.total + ' (' + percentage + '%)';
+                    
+                    if (streak > 0) {
+                        resultText += '\n🔥 Streak: ' + streak;
+                    }
+
+                    if (aiExplanation) {
+                        resultText += '\n\n┏━━━━━━━━━━━━━━━━━━━━━━━━┓\n';
+                        resultText += '┃  🤖 AI Tutor Explains\n';
+                        resultText += '┗━━━━━━━━━━━━━━━━━━━━━━━━┛\n';
+                        resultText += aiExplanation;
+                    } else if (questionData.solution) {
+                        const shortSolution = questionData.solution.substring(0, 200);
+                        resultText += '\n\n💭 Explanation:\n' + shortSolution + (questionData.solution.length > 200 ? '...' : '');
+                    }
+                    
+                    resultText += '\n\n⏭️ Reply NEXT for another question';
+
+                    delete global.replyHandlers[sentMsg.key.id];
+
+                    const resultMsg = await sock.sendMessage(from, {
+                        image: resultCanvas,
+                        caption: resultText,
+                        mentions: [sender]
+                    }, { quoted: replyMessage });
+
+                    await sock.sendMessage(from, {
+                        react: { text: isCorrect ? '✅' : '❌', key: replyMessage.key }
+                    });
+
+                    if (resultMsg && resultMsg.key) {
+                        global.replyHandlers[resultMsg.key.id] = {
+                            command: commandInstance.name,
+                            handler: global.replyHandlers[sentMsg.key.id].handler
+                        };
+                    }
+                }
+            };
         }
 
         await sock.sendMessage(from, {
@@ -265,11 +415,15 @@ export default {
         }
 
         const overallPercentage = Math.round((userScore.correct / userScore.total) * 100);
-        let statsText = '📊 Your UTME Stats\n\n';
+        let statsText = '┏━━━━━━━━━━━━━━━━━━━━━━━━┓\n';
+        statsText += '┃  📊 Your UTME Stats\n';
+        statsText += '┗━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n';
         statsText += '🎯 Overall: ' + userScore.correct + '/' + userScore.total + ' (' + overallPercentage + '%)\n';
         statsText += '🔥 Current Streak: ' + streak + '\n';
         statsText += '⭐ Best Streak: ' + (userScore.bestStreak || 0) + '\n\n';
-        statsText += '📚 By Subject:\n\n';
+        statsText += '┏━━━━━━━━━━━━━━━━━━━━━━━━┓\n';
+        statsText += '┃  📚 By Subject\n';
+        statsText += '┗━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n';
 
         const sortedSubjects = Object.entries(userScore.subjects)
             .sort((a, b) => b[1].correct - a[1].correct)
@@ -278,8 +432,8 @@ export default {
         sortedSubjects.forEach(([subject, stats]) => {
             const percentage = Math.round((stats.correct / stats.total) * 100);
             const subjectName = this.subjects[subject] || subject;
-            statsText += '  ' + subjectName + '\n';
-            statsText += '  ' + stats.correct + '/' + stats.total + ' (' + percentage + '%)\n\n';
+            statsText += '📌 ' + subjectName + '\n';
+            statsText += '   ' + stats.correct + '/' + stats.total + ' (' + percentage + '%)\n\n';
         });
 
         await sock.sendMessage(from, {
@@ -291,7 +445,9 @@ export default {
         const userScore = userScores.get(sender);
         const hasStats = userScore && userScore.total > 0;
 
-        let subjectsText = '📚 UTME SUBJECTS BY DEPARTMENT\n\n';
+        let subjectsText = '┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n';
+        subjectsText += '┃  📚 UTME SUBJECTS BY DEPARTMENT\n';
+        subjectsText += '┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n';
         
         for (const [category, depts] of Object.entries(this.departments)) {
             subjectsText += category + '\n';
@@ -306,362 +462,129 @@ export default {
             subjectsText += '\n';
         }
 
-        subjectsText += '💡 Example: ' + prefix + 'utme mathematics\n';
+        subjectsText += '┏━━━━━━━━━━━━━━━━━━━━━━━━┓\n';
+        subjectsText += '┃  💡 Commands\n';
+        subjectsText += '┗━━━━━━━━━━━━━━━━━━━━━━━━┛\n';
+        subjectsText += '📝 Start: ' + prefix + 'utme mathematics\n';
         if (hasStats) {
-            subjectsText += '📊 View stats: ' + prefix + 'utme score\n';
+            subjectsText += '📊 Stats: ' + prefix + 'utme score\n';
         }
-        subjectsText += '🔄 Reset stats: ' + prefix + 'utme reset\n\n';
-        subjectsText += '🤖 AI-Powered: Get instant explanations for every answer!';
+        subjectsText += '🔄 Reset: ' + prefix + 'utme reset\n\n';
+        subjectsText += '🤖 Powered by Cerebras AI for instant explanations!';
 
         await sock.sendMessage(from, {
             text: subjectsText
         }, { quoted: message });
     },
 
-    setupReplyHandler(sock, from, messageId, correctAnswer, questionData, subjectName, sender, subject, prefix) {
-        const sessionKey = `${sender}_${messageId}`;
-        
-        const replyTimeout = setTimeout(() => {
-            if (global.replyHandlers && global.replyHandlers[messageId]) {
-                delete global.replyHandlers[messageId];
-            }
-            activeSessions.delete(sessionKey);
-        }, 180000);
-
-        if (!global.replyHandlers) {
-            global.replyHandlers = {};
-        }
-
-        const commandInstance = this;
-
-        global.replyHandlers[messageId] = {
-            command: this.name,
-            timeout: replyTimeout,
-            handler: async (replyText, replyMessage) => {
-                const replySender = replyMessage.key.participant || replyMessage.key.remoteJid;
-                const session = activeSessions.get(sessionKey);
-
-                if (!session) {
-                    return;
-                }
-
-                if (replySender !== sender) {
-                    return await sock.sendMessage(from, {
-                        text: '❌ This is not your quiz!\n\n💡 Start your own quiz with: ' + prefix + 'utme <subject>'
-                    }, { quoted: replyMessage });
-                }
-
-                const input = replyText.toUpperCase().trim();
-
-                if (input === 'NEXT' || input === 'N') {
-                    clearTimeout(replyTimeout);
-                    delete global.replyHandlers[messageId];
-                    activeSessions.delete(sessionKey);
-                    
-                    return await commandInstance.loadQuestion({
-                        sock,
-                        message: replyMessage,
-                        from,
-                        sender,
-                        subject,
-                        subjectName,
-                        prefix
-                    });
-                }
-
-                if (input === 'STOP' || input === 'END' || input === 'QUIT') {
-                    clearTimeout(replyTimeout);
-                    delete global.replyHandlers[messageId];
-                    activeSessions.delete(sessionKey);
-                    
-                    const userScore = userScores.get(sender);
-                    const stats = userScore?.subjects[subject];
-                    
-                    if (stats && stats.total > 0) {
-                        const percentage = Math.round((stats.correct / stats.total) * 100);
-                        return await sock.sendMessage(from, {
-                            text: '✋ Quiz Stopped\n\n📊 Session Stats:\n' + stats.correct + '/' + stats.total + ' (' + percentage + '%)\n\n💡 Use ' + prefix + 'utme ' + subject + ' to continue!'
-                        }, { quoted: replyMessage });
-                    }
-                    
-                    return await sock.sendMessage(from, {
-                        text: '✋ Quiz stopped. Use ' + prefix + 'utme to start again!'
-                    }, { quoted: replyMessage });
-                }
-
-                const answer = input;
-
-                if (!['A', 'B', 'C', 'D'].includes(answer)) {
-                    return await sock.sendMessage(from, {
-                        text: '⚠️ Invalid answer\n\nReply with:\n• A, B, C, or D to answer\n• NEXT for next question\n• STOP to end quiz'
-                    }, { quoted: replyMessage });
-                }
-
-                await sock.sendMessage(from, {
-                    react: { text: '🤖', key: replyMessage.key }
-                });
-
-                const aiProcessMsg = await sock.sendMessage(from, {
-                    text: '🤖 AI is analyzing your answer...'
-                }, { quoted: replyMessage });
-
-                const isCorrect = answer === correctAnswer.toUpperCase();
-                
-                const userScore = userScores.get(sender);
-                userScore.total++;
-                userScore.subjects[subject].total++;
-                
-                if (isCorrect) {
-                    userScore.correct++;
-                    userScore.subjects[subject].correct++;
-                    
-                    const currentStreak = userStreaks.get(sender) + 1;
-                    userStreaks.set(sender, currentStreak);
-                    
-                    if (!userScore.bestStreak || currentStreak > userScore.bestStreak) {
-                        userScore.bestStreak = currentStreak;
-                    }
-                } else {
-                    userStreaks.set(sender, 0);
-                }
-
-                const aiExplanation = await getAIExplanation(
-                    questionData.question,
-                    questionData.option[correctAnswer.toLowerCase()],
-                    questionData.option[answer.toLowerCase()],
-                    subjectName,
-                    isCorrect
-                );
-
-                await sock.sendMessage(from, { delete: aiProcessMsg.key });
-                
-                const resultCanvas = await commandInstance.createResultCanvas(
-                    isCorrect, 
-                    correctAnswer, 
-                    questionData, 
-                    subjectName,
-                    sender
-                );
-
-                const stats = userScore.subjects[subject];
-                const percentage = Math.round((stats.correct / stats.total) * 100);
-                const streak = userStreaks.get(sender);
-
-                let resultText = (isCorrect ? '✅ CORRECT!' : '❌ WRONG!') + '\n\n';
-                resultText += '📖 Subject: ' + subjectName + '\n';
-                resultText += '💡 Your Answer: ' + answer + '\n';
-                resultText += '✅ Correct Answer: ' + correctAnswer.toUpperCase() + '\n';
-                resultText += '\n📊 Score: ' + stats.correct + '/' + stats.total + ' (' + percentage + '%)';
-                
-                if (streak > 0) {
-                    resultText += '\n🔥 Streak: ' + streak;
-                }
-
-                if (aiExplanation) {
-                    resultText += '\n\n🤖 AI Tutor Explains:\n' + aiExplanation;
-                } else if (questionData.solution) {
-                    const shortSolution = questionData.solution.substring(0, 150);
-                    resultText += '\n\n💭 Explanation:\n' + shortSolution + (questionData.solution.length > 150 ? '...' : '');
-                }
-                
-                resultText += '\n\n💡 Reply NEXT for another question';
-
-                clearTimeout(replyTimeout);
-                delete global.replyHandlers[messageId];
-                activeSessions.delete(sessionKey);
-
-                const resultMsg = await sock.sendMessage(from, {
-                    image: resultCanvas,
-                    caption: resultText,
-                    mentions: [sender]
-                }, { quoted: replyMessage });
-
-                await sock.sendMessage(from, {
-                    react: { text: isCorrect ? '✅' : '❌', key: replyMessage.key }
-                });
-
-                if (resultMsg && resultMsg.key) {
-                    const newSessionKey = `${sender}_${resultMsg.key.id}`;
-                    activeSessions.set(newSessionKey, {
-                        messageId: resultMsg.key.id,
-                        sender: sender,
-                        subject: subject,
-                        subjectName: subjectName,
-                        correctAnswer: correctAnswer,
-                        questionData: questionData,
-                        timestamp: Date.now()
-                    });
-
-                    commandInstance.setupReplyHandler(sock, from, resultMsg.key.id, correctAnswer, questionData, subjectName, sender, subject, prefix);
-                }
-            }
-        };
-    },
-
     async createQuestionCanvas(questionData, subjectName, sender) {
-        const canvas = createCanvas(1200, 850);
+        const canvas = createCanvas(1400, 1000);
         const ctx = canvas.getContext('2d');
 
         const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-        gradient.addColorStop(0, '#667eea');
-        gradient.addColorStop(0.5, '#764ba2');
-        gradient.addColorStop(1, '#f093fb');
+        gradient.addColorStop(0, '#1a1a2e');
+        gradient.addColorStop(0.5, '#16213e');
+        gradient.addColorStop(1, '#0f3460');
         ctx.fillStyle = gradient;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-        for (let i = 0; i < 50; i++) {
+        for (let i = 0; i < 100; i++) {
             const x = Math.random() * canvas.width;
             const y = Math.random() * canvas.height;
-            const size = Math.random() * 2 + 1;
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+            const size = Math.random() * 3;
+            const opacity = Math.random() * 0.7;
+            ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
             ctx.beginPath();
             ctx.arc(x, y, size, 0, Math.PI * 2);
             ctx.fill();
         }
 
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-        this.roundRect(ctx, 40, 40, canvas.width - 80, canvas.height - 80, 25);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.03)';
+        this.roundRect(ctx, 50, 50, canvas.width - 100, canvas.height - 100, 30);
         ctx.fill();
 
-        ctx.font = 'bold 60px Arial';
-        ctx.fillStyle = '#ffd700';
-        ctx.textAlign = 'center';
-        ctx.fillText('📚 UTME QUIZ', canvas.width / 2, 110);
+        ctx.strokeStyle = isCorrect ? 'rgba(83, 211, 156, 0.4)' : 'rgba(255, 107, 157, 0.4)';
+        ctx.lineWidth = 4;
+        ctx.stroke();
 
-        ctx.font = 'bold 32px Arial';
-        ctx.fillStyle = '#00ff88';
-        ctx.fillText(subjectName, canvas.width / 2, 160);
+        ctx.fillStyle = 'rgba(26, 26, 46, 0.95)';
+        this.roundRect(ctx, 70, 70, canvas.width - 140, 200, 20);
+        ctx.fill();
+
+        ctx.font = 'bold 72px Arial';
+        ctx.fillStyle = isCorrect ? '#53d38c' : '#ff6b9d';
+        ctx.textAlign = 'center';
+        ctx.fillText(isCorrect ? '✅ CORRECT!' : '❌ WRONG!', canvas.width / 2, 145);
+
+        ctx.font = 'bold 38px Arial';
+        ctx.fillStyle = '#ffd700';
+        ctx.fillText(subjectName, canvas.width / 2, 210);
 
         const userScore = userScores.get(sender);
         if (userScore) {
             const streak = userStreaks.get(sender);
-            ctx.font = '24px Arial';
-            ctx.fillStyle = '#ffd700';
+            ctx.font = '28px Arial';
+            ctx.fillStyle = '#b8b8b8';
             let statsText = 'Score: ' + userScore.correct + '/' + userScore.total;
             if (streak > 0) {
-                statsText += ' | Streak: ' + streak + ' 🔥';
+                statsText += ' | 🔥 Streak: ' + streak;
             }
-            ctx.fillText(statsText, canvas.width / 2, 195);
+            ctx.fillText(statsText, canvas.width / 2, 250);
         }
 
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
-        this.roundRect(ctx, 80, 220, canvas.width - 160, 530, 20);
+        ctx.fillStyle = 'rgba(26, 26, 46, 0.95)';
+        this.roundRect(ctx, 90, 300, canvas.width - 180, 180, 20);
         ctx.fill();
 
-        ctx.font = 'bold 26px Arial';
-        ctx.fillStyle = '#ffffff';
-        ctx.textAlign = 'left';
-        ctx.fillText('Question:', 100, 260);
-
-        const questionText = questionData.question;
-        ctx.font = '24px Arial';
-        ctx.fillStyle = '#e0e0e0';
-        const wrappedQuestion = this.wrapText(ctx, questionText, canvas.width - 200);
-        let questionY = 295;
-        wrappedQuestion.slice(0, 3).forEach(line => {
-            ctx.fillText(line, 100, questionY);
-            questionY += 32;
-        });
-
-        const optionsY = questionY + 25;
-        const options = [
-            { label: 'A', text: questionData.option.a, color: '#00ff88' },
-            { label: 'B', text: questionData.option.b, color: '#ffd700' },
-            { label: 'C', text: questionData.option.c, color: '#ff6b9d' },
-            { label: 'D', text: questionData.option.d, color: '#8a87fa' }
-        ];
-
-        let currentY = optionsY;
-        options.forEach((opt) => {
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
-            this.roundRect(ctx, 100, currentY, canvas.width - 220, 65, 10);
-            ctx.fill();
-
-            ctx.font = 'bold 30px Arial';
-            ctx.fillStyle = opt.color;
-            ctx.fillText(opt.label + '.', 120, currentY + 42);
-
-            ctx.font = '22px Arial';
-            ctx.fillStyle = '#ffffff';
-            const wrappedOption = this.wrapText(ctx, opt.text, canvas.width - 340);
-            const displayText = wrappedOption[0].substring(0, 80) + (wrappedOption[0].length > 80 ? '...' : '');
-            ctx.fillText(displayText, 170, currentY + 42);
-
-            currentY += 80;
-        });
-
-        ctx.font = '20px Arial';
-        ctx.fillStyle = '#a0a0a0';
-        ctx.textAlign = 'center';
-        ctx.fillText('Reply: A, B, C, D | NEXT for next question | STOP to end', canvas.width / 2, canvas.height - 50);
-
-        return canvas.toBuffer('image/png');
-    },
-
-    async createResultCanvas(isCorrect, correctAnswer, questionData, subjectName, sender) {
-        const canvas = createCanvas(1200, 650);
-        const ctx = canvas.getContext('2d');
-
-        const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-        if (isCorrect) {
-            gradient.addColorStop(0, '#00ff88');
-            gradient.addColorStop(0.5, '#00d4ff');
-            gradient.addColorStop(1, '#667eea');
-        } else {
-            gradient.addColorStop(0, '#ff6b9d');
-            gradient.addColorStop(0.5, '#ff0844');
-            gradient.addColorStop(1, '#764ba2');
-        }
-        ctx.fillStyle = gradient;
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-        this.roundRect(ctx, 40, 40, canvas.width - 80, canvas.height - 80, 25);
-        ctx.fill();
-
-        ctx.font = 'bold 70px Arial';
-        ctx.fillStyle = '#ffffff';
-        ctx.textAlign = 'center';
-        ctx.fillText(isCorrect ? '✅ CORRECT!' : '❌ WRONG!', canvas.width / 2, 120);
+        ctx.strokeStyle = 'rgba(83, 211, 156, 0.2)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
 
         ctx.font = 'bold 32px Arial';
-        ctx.fillStyle = '#ffd700';
-        ctx.fillText(subjectName, canvas.width / 2, 175);
-
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
-        this.roundRect(ctx, 80, 215, canvas.width - 160, 110, 15);
-        ctx.fill();
-
-        ctx.font = 'bold 28px Arial';
-        ctx.fillStyle = '#ffffff';
+        ctx.fillStyle = '#4fa3d8';
         ctx.textAlign = 'left';
-        ctx.fillText('✅ Correct Answer: ' + correctAnswer.toUpperCase(), 100, 260);
+        ctx.fillText('YOUR ANSWER:', 120, 345);
+        
+        ctx.font = '28px Arial';
+        ctx.fillStyle = isCorrect ? '#53d38c' : '#ff6b9d';
+        ctx.fillText(userAnswer, 350, 345);
+
+        ctx.font = 'bold 32px Arial';
+        ctx.fillStyle = '#53d38c';
+        ctx.fillText('CORRECT ANSWER:', 120, 400);
+        
+        ctx.font = '28px Arial';
+        ctx.fillStyle = '#53d38c';
+        ctx.fillText(correctAnswer.toUpperCase(), 420, 400);
 
         ctx.font = '24px Arial';
         ctx.fillStyle = '#e0e0e0';
         const correctOption = questionData.option[correctAnswer.toLowerCase()];
-        const wrappedCorrect = this.wrapText(ctx, correctOption, canvas.width - 200);
-        const displayCorrect = wrappedCorrect[0].substring(0, 90) + (wrappedCorrect[0].length > 90 ? '...' : '');
-        ctx.fillText(displayCorrect, 100, 300);
+        const wrappedCorrect = this.wrapText(ctx, correctOption, canvas.width - 240);
+        const displayCorrect = wrappedCorrect[0].substring(0, 100) + (wrappedCorrect[0].length > 100 ? '...' : '');
+        ctx.fillText(displayCorrect, 120, 445);
 
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
-        this.roundRect(ctx, 80, 355, canvas.width - 160, 150, 15);
+        ctx.fillStyle = 'rgba(26, 26, 46, 0.95)';
+        this.roundRect(ctx, 90, 510, canvas.width - 180, 280, 20);
         ctx.fill();
 
-        ctx.font = 'bold 28px Arial';
-        ctx.fillStyle = '#00ff88';
-        ctx.fillText('🤖 AI Tutor is Preparing...', 100, 395);
+        ctx.strokeStyle = 'rgba(79, 163, 216, 0.3)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        ctx.font = 'bold 36px Arial';
+        ctx.fillStyle = '#4fa3d8';
+        ctx.fillText('🤖 AI TUTOR EXPLANATION', 120, 565);
+
+        ctx.font = '24px Arial';
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText('Generating personalized explanation...', 120, 620);
+        ctx.fillText('Check the caption below for AI insights!', 120, 660);
 
         ctx.font = '22px Arial';
-        ctx.fillStyle = '#ffffff';
-        ctx.fillText('Your personalized explanation is being generated!', 100, 430);
-        ctx.fillText('Check the message caption for AI insights...', 100, 465);
+        ctx.fillStyle = '#b8b8b8';
+        ctx.textAlign = 'center';
+        ctx.fillText('Reply NEXT for another question', canvas.width / 2, canvas.height - 50);
 
         return canvas.toBuffer('image/png');
     },
@@ -704,3 +627,172 @@ export default {
         ctx.closePath();
     }
 };
+
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.03)';
+        this.roundRect(ctx, 50, 50, canvas.width - 100, canvas.height - 100, 30);
+        ctx.fill();
+
+        ctx.strokeStyle = 'rgba(83, 211, 156, 0.3)';
+        ctx.lineWidth = 4;
+        ctx.stroke();
+
+        ctx.fillStyle = 'rgba(26, 26, 46, 0.95)';
+        this.roundRect(ctx, 70, 70, canvas.width - 140, 180, 20);
+        ctx.fill();
+
+        ctx.font = 'bold 56px Arial';
+        const headerGradient = ctx.createLinearGradient(0, 100, canvas.width, 100);
+        headerGradient.addColorStop(0, '#53d38c');
+        headerGradient.addColorStop(1, '#4fa3d8');
+        ctx.fillStyle = headerGradient;
+        ctx.textAlign = 'center';
+        ctx.fillText('📚 UTME QUIZ', canvas.width / 2, 130);
+
+        ctx.font = 'bold 38px Arial';
+        ctx.fillStyle = '#ffd700';
+        ctx.fillText(subjectName, canvas.width / 2, 190);
+
+        const userScore = userScores.get(sender);
+        if (userScore) {
+            const streak = userStreaks.get(sender);
+            ctx.font = '28px Arial';
+            ctx.fillStyle = '#b8b8b8';
+            let statsText = 'Score: ' + userScore.correct + '/' + userScore.total;
+            if (streak > 0) {
+                statsText += ' | 🔥 Streak: ' + streak;
+            }
+            ctx.fillText(statsText, canvas.width / 2, 230);
+        }
+
+        ctx.fillStyle = 'rgba(26, 26, 46, 0.95)';
+        this.roundRect(ctx, 90, 280, canvas.width - 180, 620, 20);
+        ctx.fill();
+
+        ctx.strokeStyle = 'rgba(83, 211, 156, 0.2)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        ctx.font = 'bold 32px Arial';
+        ctx.fillStyle = '#53d38c';
+        ctx.textAlign = 'left';
+        ctx.fillText('QUESTION:', 120, 330);
+
+        let questionText = questionData.question;
+        if (questionData.instruction) {
+            questionText = questionData.instruction + '\n\n' + questionText;
+        }
+
+        ctx.font = '26px Arial';
+        ctx.fillStyle = '#ffffff';
+        const wrappedQuestion = this.wrapText(ctx, questionText, canvas.width - 240);
+        let questionY = 375;
+        wrappedQuestion.slice(0, 5).forEach(line => {
+            ctx.fillText(line, 120, questionY);
+            questionY += 36;
+        });
+
+        if (questionData.image) {
+            try {
+                const imgResponse = await axios.get(questionData.image, { responseType: 'arraybuffer' });
+                const img = await loadImage(Buffer.from(imgResponse.data));
+                
+                const maxImgWidth = 400;
+                const maxImgHeight = 200;
+                let imgWidth = img.width;
+                let imgHeight = img.height;
+                
+                if (imgWidth > maxImgWidth) {
+                    imgHeight = (maxImgWidth / imgWidth) * imgHeight;
+                    imgWidth = maxImgWidth;
+                }
+                if (imgHeight > maxImgHeight) {
+                    imgWidth = (maxImgHeight / imgHeight) * imgWidth;
+                    imgHeight = maxImgHeight;
+                }
+                
+                const imgX = (canvas.width - imgWidth) / 2;
+                const imgY = questionY + 10;
+                
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+                this.roundRect(ctx, imgX - 10, imgY - 10, imgWidth + 20, imgHeight + 20, 10);
+                ctx.fill();
+                
+                ctx.drawImage(img, imgX, imgY, imgWidth, imgHeight);
+                questionY = imgY + imgHeight + 30;
+            } catch (error) {
+                console.error('Error loading question image:', error);
+            }
+        }
+
+        const optionsY = Math.max(questionY + 20, 550);
+        const options = [
+            { label: 'A', text: questionData.option.a, color: '#53d38c', bg: 'rgba(83, 211, 156, 0.15)' },
+            { label: 'B', text: questionData.option.b, color: '#ffd700', bg: 'rgba(255, 215, 0, 0.15)' },
+            { label: 'C', text: questionData.option.c, color: '#ff6b9d', bg: 'rgba(255, 107, 157, 0.15)' },
+            { label: 'D', text: questionData.option.d, color: '#4fa3d8', bg: 'rgba(79, 163, 216, 0.15)' }
+        ];
+
+        let currentY = optionsY;
+        options.forEach((opt) => {
+            ctx.fillStyle = opt.bg;
+            this.roundRect(ctx, 120, currentY, canvas.width - 240, 70, 12);
+            ctx.fill();
+
+            ctx.strokeStyle = opt.color + '80';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            ctx.fillStyle = opt.color;
+            this.roundRect(ctx, 130, currentY + 10, 50, 50, 8);
+            ctx.fill();
+
+            ctx.font = 'bold 36px Arial';
+            ctx.fillStyle = '#1a1a2e';
+            ctx.textAlign = 'center';
+            ctx.fillText(opt.label, 155, currentY + 46);
+
+            ctx.font = '24px Arial';
+            ctx.fillStyle = '#ffffff';
+            ctx.textAlign = 'left';
+            const wrappedOption = this.wrapText(ctx, opt.text, canvas.width - 420);
+            const displayText = wrappedOption[0].substring(0, 90) + (wrappedOption[0].length > 90 ? '...' : '');
+            ctx.fillText(displayText, 200, currentY + 46);
+
+            currentY += 85;
+        });
+
+        ctx.font = '24px Arial';
+        ctx.fillStyle = '#b8b8b8';
+        ctx.textAlign = 'center';
+        ctx.fillText('Reply: A, B, C, D | NEXT for next | STOP to end', canvas.width / 2, canvas.height - 50);
+
+        return canvas.toBuffer('image/png');
+    },
+
+    async createResultCanvas(isCorrect, correctAnswer, questionData, subjectName, sender, userAnswer) {
+        const canvas = createCanvas(1400, 850);
+        const ctx = canvas.getContext('2d');
+
+        const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+        if (isCorrect) {
+            gradient.addColorStop(0, '#0f3460');
+            gradient.addColorStop(0.5, '#16213e');
+            gradient.addColorStop(1, '#1a5e3a');
+        } else {
+            gradient.addColorStop(0, '#3d1010');
+            gradient.addColorStop(0.5, '#16213e');
+            gradient.addColorStop(1, '#0f3460');
+        }
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        for (let i = 0; i < 100; i++) {
+            const x = Math.random() * canvas.width;
+            const y = Math.random() * canvas.height;
+            const size = Math.random() * 3;
+            const opacity = Math.random() * 0.7;
+            ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
+            ctx.beginPath();
+            ctx.arc(x, y, size, 0, Math.PI * 2);
+            ctx.fill();
+        }
