@@ -6,8 +6,6 @@ import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-let noPrefux = ["ai"];
-
 const settingsFile = path.join(__dirname, "ai_model.json");
 const historyFile = path.join(__dirname, "ai_history.json");
 
@@ -69,15 +67,6 @@ function resetHistory(uid) {
     fs.writeFileSync(historyFile, JSON.stringify(all, null, 2));
 }
 
-function normalizeCommand(body) {
-    if (!body) return { usedPrefix: null, prompt: "" };
-    const lower = body.toLowerCase();
-    const used = noPrefux.find(p => lower.startsWith(p));
-    if (!used) return { usedPrefix: null, prompt: "" };
-    const prompt = body.substring(used.length).trim();
-    return { usedPrefix: used, prompt };
-}
-
 async function callCerebrasChat({ model, messages, stream = false }) {
     const resp = await client.chat.completions.create({
         model,
@@ -96,163 +85,144 @@ async function callCerebrasChat({ model, messages, stream = false }) {
 }
 
 export default {
-    config: {
-        name: "ai",
-        version: "2.0.1",
-        role: 0,
-        category: "AI",
-        author: "lance",
-        description:
-            "Smart AI using Cerebras models with per-user chat history, reply chaining, and quick model switching."
-    },
+    name: "ai",
+    aliases: ["chatgpt", "gpt"],
+    category: "AI",
+    description: "Smart AI using Cerebras models with per-user chat history",
+    usage: "ai <your question>",
+    example: "ai what is quantum computing",
+    cooldown: 3,
+    permissions: ["user"],
+    args: false,
+    minArgs: 0,
+    maxArgs: 999,
 
-    onRun: async function () {},
+    async execute({ sock, message, args, from, sender }) {
+        const body = args.join(" ");
+        const uid = sender;
 
-    onChat: async function ({
-        senderID,
-        threadID,
-        args,
-        message,
-        event,
-        sock
-    }) {
-        const body = args;
-        if (!body) return;
-
-        const lower = body.toLowerCase();
-        const uid = senderID;
-
-        if (lower === "ai -set:1") {
-            saveModel(AVAILABLE_MODELS[0]);
-            return await message.reply(
-                `✅ AI model has been set to "${AVAILABLE_MODELS[0]}".`
-            );
-        }
-        if (lower === "ai -set:2") {
-            saveModel(AVAILABLE_MODELS[1]);
-            return await message.reply(
-                `✅ AI model has been set to "${AVAILABLE_MODELS[1]}".`
-            );
-        }
-        if (lower === "ai -set:3") {
-            saveModel(AVAILABLE_MODELS[2]);
-            return await message.reply(
-                `✅ AI model has been set to "${AVAILABLE_MODELS[2]}".`
-            );
-        }
-        if (["ai clear"].includes(lower)) {
+        if (body.toLowerCase() === "clear") {
             resetHistory(uid);
-            return await message.reply("🧹 Chat history cleared for you.");
+            return await sock.sendMessage(from, {
+                text: "🧹 Chat history cleared for you."
+            }, { quoted: message });
         }
 
-        if (["ai my details"].includes(lower)) {
-            return await message.reply(
-                `👤 Your Details:\n• UID: ${uid}\n• Name: ${senderID}\n• Prefix Used: ${noPrefux.join(
-                    ", "
-                )}`
-            );
+        if (body.toLowerCase() === "-set:1") {
+            saveModel(AVAILABLE_MODELS[0]);
+            return await sock.sendMessage(from, {
+                text: `✅ AI model has been set to "${AVAILABLE_MODELS[0]}".`
+            }, { quoted: message });
+        }
+        
+        if (body.toLowerCase() === "-set:2") {
+            saveModel(AVAILABLE_MODELS[1]);
+            return await sock.sendMessage(from, {
+                text: `✅ AI model has been set to "${AVAILABLE_MODELS[1]}".`
+            }, { quoted: message });
+        }
+        
+        if (body.toLowerCase() === "-set:3") {
+            saveModel(AVAILABLE_MODELS[2]);
+            return await sock.sendMessage(from, {
+                text: `✅ AI model has been set to "${AVAILABLE_MODELS[2]}".`
+            }, { quoted: message });
         }
 
-        const { usedPrefix, prompt } = normalizeCommand(body);
-        if (!usedPrefix) return;
-        if (!prompt) {
+        if (!body || body.trim() === "") {
             const greetings = [
                 "👑 AI here! Ask me anything.",
                 "🌟 Hi! Ready to chat?",
                 "💡 Say something and I'll respond!",
                 "✨ What shall we explore today?"
             ];
-            const random =
-                greetings[Math.floor(Math.random() * greetings.length)];
-            return await message.reply(random);
+            const random = greetings[Math.floor(Math.random() * greetings.length)];
+            return await sock.sendMessage(from, {
+                text: random
+            }, { quoted: message });
         }
 
-        const thinking = await message.reply("🧠 Thinking...");
+        const thinking = await sock.sendMessage(from, {
+            text: "🧠 Thinking..."
+        }, { quoted: message });
+
         const { model } = loadModel();
 
         try {
             const all = loadHistory(uid);
             const historyArr = all[uid];
 
-            historyArr.push({ role: "user", content: prompt });
+            historyArr.push({ role: "user", content: body });
             saveHistory(uid, historyArr);
 
-            const replyText =
-                (await callCerebrasChat({
-                    model,
-                    messages: historyArr,
-                    stream: false
-                })) || "❌ No response found.";
+            const replyText = await callCerebrasChat({
+                model,
+                messages: historyArr,
+                stream: false
+            }) || "❌ No response found.";
 
             historyArr.push({ role: "assistant", content: replyText });
             saveHistory(uid, historyArr);
 
-            await sock.sendMessage(threadID, {
+            await sock.sendMessage(from, {
                 text: replyText,
                 edit: thinking.key
             });
 
-            global.client.replies.set(thinking.key.id, {
-                commandName: "ai",
-                messageID: thinking.key.id,
-                author: senderID
-            });
+            if (!global.replyHandlers) {
+                global.replyHandlers = {};
+            }
+
+            global.replyHandlers[thinking.key.id] = {
+                command: "ai",
+                handler: async (replyText, replyMessage) => {
+                    const replySender = replyMessage.key.participant || replyMessage.key.remoteJid;
+                    
+                    if (replySender !== sender) {
+                        return;
+                    }
+
+                    const userText = replyText.trim();
+                    if (!userText) return;
+
+                    const thinkingReply = await sock.sendMessage(from, {
+                        text: "🧠 Thinking..."
+                    }, { quoted: replyMessage });
+
+                    try {
+                        const { model } = loadModel();
+                        const all = loadHistory(uid);
+                        const historyArr = all[uid];
+
+                        historyArr.push({ role: "user", content: userText });
+                        saveHistory(uid, historyArr);
+
+                        const replyText = await callCerebrasChat({
+                            model,
+                            messages: historyArr,
+                            stream: false
+                        }) || "❌ No response found.";
+
+                        historyArr.push({ role: "assistant", content: replyText });
+                        saveHistory(uid, historyArr);
+
+                        await sock.sendMessage(from, {
+                            text: replyText,
+                            edit: thinkingReply.key
+                        });
+
+                        global.replyHandlers[thinkingReply.key.id] = global.replyHandlers[thinking.key.id];
+                    } catch (err) {
+                        await sock.sendMessage(from, {
+                            text: "⚠️ Error! Try again later.",
+                            edit: thinkingReply.key
+                        });
+                    }
+                }
+            };
+
         } catch (err) {
-            await sock.sendMessage(threadID, {
-                text: "⚠️ Error! Try again later.",
-                edit: thinking.key
-            });
-        }
-    },
-
-    onReply: async function ({
-        sock,
-        message,
-        event,
-        data,
-        args,
-        threadID,
-        senderID
-    }) {
-        if (!data || senderID !== data.author) return;
-
-        const userText = typeof args === 'string' ? args : (Array.isArray(args) ? args.join(' ') : '');
-        if (!userText || !userText.trim()) return;
-        if (!userText) return;
-
-        const uid = senderID;
-        const thinking = await message.reply("🧠 Thinking...");
-
-        try {
-            const { model } = loadModel();
-            const all = loadHistory(uid);
-            const historyArr = all[uid];
-
-            historyArr.push({ role: "user", content: userText });
-            saveHistory(uid, historyArr);
-
-            const replyText =
-                (await callCerebrasChat({
-                    model,
-                    messages: historyArr,
-                    stream: false
-                })) || "❌ No response found.";
-
-            historyArr.push({ role: "assistant", content: replyText });
-            saveHistory(uid, historyArr);
-
-            await sock.sendMessage(threadID, {
-                text: replyText,
-                edit: thinking.key
-            });
-
-            global.client.replies.set(thinking.key.id, {
-                commandName: "ai",
-                messageID: thinking.key.id,
-                author: senderID
-            });
-        } catch (err) {
-            await sock.sendMessage(threadID, {
+            await sock.sendMessage(from, {
                 text: "⚠️ Error! Try again later.",
                 edit: thinking.key
             });
