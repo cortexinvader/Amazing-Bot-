@@ -2,7 +2,9 @@ import 'dotenv/config';
 
 function normalizePhoneNumber(phone) {
     if (!phone || phone.trim() === '') return null;
-    const cleaned = phone.trim().replace(/[^0-9]/g, '').replace(/:\d+$/, '');
+    let cleaned = phone.trim();
+    cleaned = cleaned.split(':')[0];
+    cleaned = cleaned.replace(/[^0-9]/g, '');
     if (cleaned.length < 10) return null;
     return `${cleaned}@s.whatsapp.net`;
 }
@@ -258,17 +260,17 @@ function validateConfig() {
     const errors = [];
     
     if (!config.ownerNumbers || config.ownerNumbers.length === 0) {
-        console.warn('OWNER_NUMBERS is not set in .env file');
+        console.warn('⚠️  OWNER_NUMBERS is not set in .env file');
     } else {
-        console.log(`Loaded ${config.ownerNumbers.length} owner number(s)`);
+        console.log(`✅ Loaded ${config.ownerNumbers.length} owner number(s): ${config.ownerNumbers.map(n => n.split('@')[0]).join(', ')}`);
     }
     
     if (config.sudoers && config.sudoers.length > 0) {
-        console.log(`Loaded ${config.sudoers.length} sudo user(s)`);
+        console.log(`✅ Loaded ${config.sudoers.length} sudo user(s): ${config.sudoers.map(n => n.split('@')[0]).join(', ')}`);
     }
     
     if (config.database.url === 'mongodb://localhost:27017/ilombot') {
-        console.warn('Using default database URL. Consider setting DATABASE_URL for production.');
+        console.warn('⚠️  Using default database URL. Consider setting DATABASE_URL for production.');
     }
     
     if (config.apis.openai.apiKey && !config.apis.openai.apiKey.startsWith('sk-')) {
@@ -276,11 +278,11 @@ function validateConfig() {
     }
     
     if (config.security.encryptionKey === 'default-key-change-this') {
-        console.warn('Using default encryption key. Set ENCRYPTION_KEY for security.');
+        console.warn('⚠️  Using default encryption key. Set ENCRYPTION_KEY for security.');
     }
     
     if (config.security.jwtSecret === 'jwt-secret-change-this') {
-        console.warn('Using default JWT secret. Set JWT_SECRET for security.');
+        console.warn('⚠️  Using default JWT secret. Set JWT_SECRET for security.');
     }
     
     if (errors.length > 0) {
@@ -289,7 +291,7 @@ function validateConfig() {
         process.exit(1);
     }
     
-    console.log('Configuration validated successfully');
+    console.log('✅ Configuration validated successfully');
 }
 
 function getEnvironmentInfo() {
