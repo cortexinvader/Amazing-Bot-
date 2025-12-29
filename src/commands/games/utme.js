@@ -246,150 +246,152 @@ export default {
                 global.replyHandlers = {};
             }
 
-            global.replyHandlers[sentMsg.key.id] = {
-                command: this.name,
-                handler: async (replyText, replyMessage) => {
-                    const replySender = replyMessage.key.participant || replyMessage.key.remoteJid;
+            const replyHandler = async (replyText, replyMessage) => {
+                const replySender = replyMessage.key.participant || replyMessage.key.remoteJid;
 
-                    if (replySender !== sender) {
-                        return await sock.sendMessage(from, {
-                            text: '❌ This is not your quiz!\n\n💡 Start your own: ' + prefix + 'utme <subject>'
-                        }, { quoted: replyMessage });
-                    }
-
-                    const input = replyText.toUpperCase().trim();
-
-                    if (input === 'NEXT' || input === 'N') {
-                        delete global.replyHandlers[sentMsg.key.id];
-                        
-                        return await commandInstance.loadQuestion({
-                            sock,
-                            message: replyMessage,
-                            from,
-                            sender,
-                            subject,
-                            subjectName,
-                            prefix
-                        });
-                    }
-
-                    if (input === 'STOP' || input === 'END' || input === 'QUIT') {
-                        delete global.replyHandlers[sentMsg.key.id];
-                        
-                        const userScore = userScores.get(sender);
-                        const stats = userScore?.subjects[subject];
-                        
-                        if (stats && stats.total > 0) {
-                            const percentage = Math.round((stats.correct / stats.total) * 100);
-                            return await sock.sendMessage(from, {
-                                text: '✋ Quiz Stopped\n\n📊 Session Stats:\n' + stats.correct + '/' + stats.total + ' (' + percentage + '%)\n\n💡 Continue: ' + prefix + 'utme ' + subject
-                            }, { quoted: replyMessage });
-                        }
-                        
-                        return await sock.sendMessage(from, {
-                            text: '✋ Quiz stopped\n\n💡 Start again: ' + prefix + 'utme'
-                        }, { quoted: replyMessage });
-                    }
-
-                    const answer = input;
-
-                    if (!['A', 'B', 'C', 'D'].includes(answer)) {
-                        return await sock.sendMessage(from, {
-                            text: '⚠️ Invalid answer\n\n✅ Reply: A, B, C, or D\n⏭️ Type NEXT\n🛑 Type STOP'
-                        }, { quoted: replyMessage });
-                    }
-
-                    await sock.sendMessage(from, {
-                        react: { text: '🤖', key: replyMessage.key }
-                    });
-
-                    const aiProcessMsg = await sock.sendMessage(from, {
-                        text: '🤖 AI Tutor analyzing your answer...'
+                if (replySender !== sender) {
+                    return await sock.sendMessage(from, {
+                        text: '❌ This is not your quiz!\n\n💡 Start your own: ' + prefix + 'utme <subject>'
                     }, { quoted: replyMessage });
+                }
 
-                    const isCorrect = answer === correctAnswer.toUpperCase();
+                const input = replyText.toUpperCase().trim();
+
+                if (input === 'NEXT' || input === 'N') {
+                    delete global.replyHandlers[sentMsg.key.id];
+                    
+                    return await commandInstance.loadQuestion({
+                        sock,
+                        message: replyMessage,
+                        from,
+                        sender,
+                        subject,
+                        subjectName,
+                        prefix
+                    });
+                }
+
+                if (input === 'STOP' || input === 'END' || input === 'QUIT') {
+                    delete global.replyHandlers[sentMsg.key.id];
                     
                     const userScore = userScores.get(sender);
-                    userScore.total++;
-                    userScore.subjects[subject].total++;
+                    const stats = userScore?.subjects[subject];
                     
-                    if (isCorrect) {
-                        userScore.correct++;
-                        userScore.subjects[subject].correct++;
-                        
-                        const currentStreak = userStreaks.get(sender) + 1;
-                        userStreaks.set(sender, currentStreak);
-                        
-                        if (!userScore.bestStreak || currentStreak > userScore.bestStreak) {
-                            userScore.bestStreak = currentStreak;
-                        }
-                    } else {
-                        userStreaks.set(sender, 0);
-                    }
-
-                    const aiExplanation = await getAIExplanation(
-                        questionData.question,
-                        questionData.option[correctAnswer.toLowerCase()],
-                        questionData.option[answer.toLowerCase()],
-                        subjectName,
-                        isCorrect,
-                        questionData.option
-                    );
-
-                    await sock.sendMessage(from, { delete: aiProcessMsg.key });
-                    
-                    const resultCanvas = await commandInstance.createResultCanvas(
-                        isCorrect, 
-                        correctAnswer, 
-                        questionData, 
-                        subjectName,
-                        sender,
-                        answer
-                    );
-
-                    const stats = userScore.subjects[subject];
-                    const percentage = Math.round((stats.correct / stats.total) * 100);
-                    const streak = userStreaks.get(sender);
-
-                    let resultText = isCorrect ? '✅ CORRECT!\n\n' : '❌ WRONG!\n\n';
-                    resultText += '📖 Subject: ' + subjectName + '\n';
-                    resultText += '💡 Your Answer: ' + answer + '\n';
-                    resultText += '✅ Correct: ' + correctAnswer.toUpperCase() + '\n';
-                    resultText += '\n📊 Score: ' + stats.correct + '/' + stats.total + ' (' + percentage + '%)';
-                    
-                    if (streak > 0) {
-                        resultText += '\n🔥 Streak: ' + streak;
-                    }
-
-                    if (aiExplanation) {
-                        resultText += '\n\n🤖 AI Tutor Explains:\n';
-                        resultText += aiExplanation;
-                    } else if (questionData.solution) {
-                        const shortSolution = questionData.solution.substring(0, 200);
-                        resultText += '\n\n💭 Explanation:\n' + shortSolution + (questionData.solution.length > 200 ? '...' : '');
+                    if (stats && stats.total > 0) {
+                        const percentage = Math.round((stats.correct / stats.total) * 100);
+                        return await sock.sendMessage(from, {
+                            text: '✋ Quiz Stopped\n\n📊 Session Stats:\n' + stats.correct + '/' + stats.total + ' (' + percentage + '%)\n\n💡 Continue: ' + prefix + 'utme ' + subject
+                        }, { quoted: replyMessage });
                     }
                     
-                    resultText += '\n\n⏭️ Reply NEXT for another question';
-
-                    delete global.replyHandlers[sentMsg.key.id];
-
-                    const resultMsg = await sock.sendMessage(from, {
-                        image: resultCanvas,
-                        caption: resultText,
-                        mentions: [sender]
+                    return await sock.sendMessage(from, {
+                        text: '✋ Quiz stopped\n\n💡 Start again: ' + prefix + 'utme'
                     }, { quoted: replyMessage });
-
-                    await sock.sendMessage(from, {
-                        react: { text: isCorrect ? '✅' : '❌', key: replyMessage.key }
-                    });
-
-                    if (resultMsg && resultMsg.key) {
-                        global.replyHandlers[resultMsg.key.id] = {
-                            command: commandInstance.name,
-                            handler: global.replyHandlers[sentMsg.key.id].handler
-                        };
-                    }
                 }
+
+                const answer = input;
+
+                if (!['A', 'B', 'C', 'D'].includes(answer)) {
+                    return await sock.sendMessage(from, {
+                        text: '⚠️ Invalid answer\n\n✅ Reply: A, B, C, or D\n⏭️ Type NEXT\n🛑 Type STOP'
+                    }, { quoted: replyMessage });
+                }
+
+                await sock.sendMessage(from, {
+                    react: { text: '🤖', key: replyMessage.key }
+                });
+
+                const aiProcessMsg = await sock.sendMessage(from, {
+                    text: '🤖 AI Tutor analyzing your answer...'
+                }, { quoted: replyMessage });
+
+                const isCorrect = answer === correctAnswer.toUpperCase();
+                
+                const userScore = userScores.get(sender);
+                userScore.total++;
+                userScore.subjects[subject].total++;
+                
+                if (isCorrect) {
+                    userScore.correct++;
+                    userScore.subjects[subject].correct++;
+                    
+                    const currentStreak = userStreaks.get(sender) + 1;
+                    userStreaks.set(sender, currentStreak);
+                    
+                    if (!userScore.bestStreak || currentStreak > userScore.bestStreak) {
+                        userScore.bestStreak = currentStreak;
+                    }
+                } else {
+                    userStreaks.set(sender, 0);
+                }
+
+                const aiExplanation = await getAIExplanation(
+                    questionData.question,
+                    questionData.option[correctAnswer.toLowerCase()],
+                    questionData.option[answer.toLowerCase()],
+                    subjectName,
+                    isCorrect,
+                    questionData.option
+                );
+
+                await sock.sendMessage(from, { delete: aiProcessMsg.key });
+                
+                const resultCanvas = await commandInstance.createResultCanvas(
+                    isCorrect, 
+                    correctAnswer, 
+                    questionData, 
+                    subjectName,
+                    sender,
+                    answer
+                );
+
+                const stats = userScore.subjects[subject];
+                const percentage = Math.round((stats.correct / stats.total) * 100);
+                const streak = userStreaks.get(sender);
+
+                let resultText = isCorrect ? '✅ CORRECT!\n\n' : '❌ WRONG!\n\n';
+                resultText += '📖 Subject: ' + subjectName + '\n';
+                resultText += '💡 Your Answer: ' + answer + '\n';
+                resultText += '✅ Correct: ' + correctAnswer.toUpperCase() + '\n';
+                resultText += '\n📊 Score: ' + stats.correct + '/' + stats.total + ' (' + percentage + '%)';
+                
+                if (streak > 0) {
+                    resultText += '\n🔥 Streak: ' + streak;
+                }
+
+                if (aiExplanation) {
+                    resultText += '\n\n🤖 AI Tutor Explains:\n';
+                    resultText += aiExplanation;
+                } else if (questionData.solution) {
+                    const shortSolution = questionData.solution.substring(0, 200);
+                    resultText += '\n\n💭 Explanation:\n' + shortSolution + (questionData.solution.length > 200 ? '...' : '');
+                }
+                
+                resultText += '\n\n⏭️ Reply NEXT for another question';
+
+                delete global.replyHandlers[sentMsg.key.id];
+
+                const resultMsg = await sock.sendMessage(from, {
+                    image: resultCanvas,
+                    caption: resultText,
+                    mentions: [sender]
+                }, { quoted: replyMessage });
+
+                await sock.sendMessage(from, {
+                    react: { text: isCorrect ? '✅' : '❌', key: replyMessage.key }
+                });
+
+                if (resultMsg && resultMsg.key) {
+                    global.replyHandlers[resultMsg.key.id] = {
+                        command: commandInstance.name,
+                        handler: replyHandler
+                    };
+                }
+            };
+
+            global.replyHandlers[sentMsg.key.id] = {
+                command: this.name,
+                handler: replyHandler
             };
         }
 
