@@ -321,8 +321,21 @@ class CommandHandler {
     getTopCommands(limit = 5) {
         try {
             const stats = getSystemStats();
-            return [];
+            if (!stats || !stats.commandUsage) {
+                return [];
+            }
+            
+            return Object.entries(stats.commandUsage)
+                .sort((a, b) => b[1].count - a[1].count)
+                .slice(0, limit)
+                .map(([name, data]) => ({
+                    name,
+                    used: data.count,
+                    successRate: data.count > 0 ? 
+                        ((data.successCount / data.count) * 100).toFixed(1) : '0'
+                }));
         } catch (error) {
+            logger.error('Error getting top commands:', error);
             return [];
         }
     }
