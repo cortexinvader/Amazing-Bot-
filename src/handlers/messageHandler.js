@@ -1,6 +1,7 @@
 import config from '../config.js';
 import logger from '../utils/logger.js';
 import { cache } from '../utils/cache.js';
+import { handleAutoDownload } from '../commands/media/autolink.js';
 
 class MessageHandler {
     constructor() {
