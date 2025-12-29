@@ -184,124 +184,126 @@ class CommandHandler {
  }
 
     async handleCommand(sock, message, commandName, args) {
-        const startTime = Date.now();
-        const from = message.key.remoteJid;
-        const sender = message.key.participant || from;
-        const isGroup = from.endsWith('@g.us');
+    const startTime = Date.now();
+    const from = message.key.remoteJid;
+    const sender = message.key.participant || from;
+    const isGroup = from.endsWith('@g.us');
 
-        try {
-            const command = this.getCommand(commandName);
-            
-            if (!command) {
-                logger.warn(`Command not found: ${commandName}`);
-                return false;
-            }
-
-            const cooldownCheck = await this.checkCooldown(commandName, sender);
-            if (cooldownCheck.onCooldown) {
-                await sock.sendMessage(from, {
-                    text: `⏰ Cooldown\n\nPlease wait ${cooldownCheck.timeLeft} seconds before using this command again.`
-                }, { quoted: message });
-                return false;
-            }
-
-            let isGroupAdmin = false;
-            let isBotAdmin = false;
-
-            if (isGroup) {
-                try {
-                    const groupMetadata = await sock.groupMetadata(from);
-                    
-                    const senderNumber = this.normalizePhoneNumber(sender);
-                    const participant = groupMetadata.participants.find(p => {
-                        const participantNumber = this.normalizePhoneNumber(p.id);
-                        return participantNumber === senderNumber;
-                    });
-                    
-                    isGroupAdmin = participant?.admin === 'admin' || participant?.admin === 'superadmin';
-
-                    const botJid = sock.user?.id;
-                    const botNumber = this.normalizePhoneNumber(botJid);
-                    const botParticipant = groupMetadata.participants.find(p => {
-                        const participantNumber = this.normalizePhoneNumber(p.id);
-                        return participantNumber === botNumber;
-                    });
-                    
-                    isBotAdmin = botParticipant?.admin === 'admin' || botParticipant?.admin === 'superadmin';
-                } catch (error) {
-                    logger.error('Error fetching group metadata:', error);
-                    isGroupAdmin = false;
-                    isBotAdmin = false;
-                }
-            }
-
-            const hasPermission = await this.checkPermissions(
-                command, sock, message, isGroup, isGroupAdmin, isBotAdmin
-            );
-
-            if (!hasPermission) {
-                recordCommandUsage(commandName, Date.now() - startTime, false);
-                return false;
-            }
-
-            if (command.minArgs && args.length < command.minArgs) {
-                await sock.sendMessage(from, {
-                    text: `❌ Invalid Usage\n\nUsage: ${config.prefix}${command.usage || command.name}\nExample: ${config.prefix}${command.example || command.name}`
-                }, { quoted: message });
-                return false;
-            }
-
-            logger.info(`Executing command: ${commandName} for ${sender.split('@')[0]}`);
-
-            if (!command.execute || typeof command.execute !== 'function') {
-                logger.error(`Command ${commandName} has no execute function`);
-                await sock.sendMessage(from, {
-                    text: `❌ Error\n\nCommand ${commandName} is not properly configured.`
-                }, { quoted: message });
-                return false;
-            }
-
-            await command.execute({
-                sock,
-                message,
-                args,
-                command,
-                from,
-                sender,
-                isGroup,
-                isGroupAdmin,
-                isBotAdmin,
-                prefix: config.prefix,
-                pushName: message.pushName,
-                quoted: message.message?.extendedTextMessage?.contextInfo?.quotedMessage,
-                isOwner: this.isOwner(sender),
-                isSudo: this.isSudo(sender)
-            });
-            
-            const executionTime = Date.now() - startTime;
-            recordCommandUsage(commandName, executionTime, true);
-            
-            logger.info(`Command ${commandName} executed successfully in ${executionTime}ms`);
-            return true;
-
-        } catch (error) {
-            const executionTime = Date.now() - startTime;
-            recordCommandUsage(commandName, executionTime, false);
-            
-            logger.error(`Command execution error [${commandName}]:`, error);
-
-            try {
-                await sock.sendMessage(from, {
-                    text: `❌ Command Error\n\nCommand: ${commandName}\nError: ${error.message}\n\nPlease try again or contact support if the issue persists.`
-                }, { quoted: message });
-            } catch (sendError) {
-                logger.error('Failed to send error message:', sendError);
-            }
-
+    try {
+        const command = this.getCommand(commandName);
+        
+        if (!command) {
+            logger.warn(`Command not found: ${commandName}`);
             return false;
         }
-    }
 
+        const isOwnerUser = this.isOwner(sender);
+        const isSudoUser = this.isSudo(sender);
+
+        const cooldownCheck = await this.checkCooldown(commandName, sender);
+        if (cooldownCheck.onCooldown) {
+            await sock.sendMessage(from, {
+                text: `⏰ Cooldown\n\nPlease wait ${cooldownCheck.timeLeft} seconds before using this command again.`
+            }, { quoted: message });
+            return false;
+        }
+
+        let isGroupAdmin = false;
+        let isBotAdmin = false;
+
+        if (isGroup) {
+            try {
+                const groupMetadata = await sock.groupMetadata(from);
+                
+                const senderNumber = this.normalizePhoneNumber(sender);
+                const participant = groupMetadata.participants.find(p => {
+                    const participantNumber = this.normalizePhoneNumber(p.id);
+                    return participantNumber === senderNumber;
+                });
+                
+                isGroupAdmin = participant?.admin === 'admin' || participant?.admin === 'superadmin' || isOwnerUser || isSudoUser;
+
+                const botJid = sock.user?.id;
+                const botNumber = this.normalizePhoneNumber(botJid);
+                const botParticipant = groupMetadata.participants.find(p => {
+                    const participantNumber = this.normalizePhoneNumber(p.id);
+                    return participantNumber === botNumber;
+                });
+                
+                isBotAdmin = botParticipant?.admin === 'admin' || botParticipant?.admin === 'superadmin';
+            } catch (error) {
+                logger.error('Error fetching group metadata:', error);
+                isGroupAdmin = isOwnerUser || isSudoUser;
+                isBotAdmin = false;
+            }
+        }
+
+        const hasPermission = await this.checkPermissions(
+            command, sock, message, isGroup, isGroupAdmin, isBotAdmin
+        );
+
+        if (!hasPermission) {
+            recordCommandUsage(commandName, Date.now() - startTime, false);
+            return false;
+        }
+
+        if (command.args && args.length < (command.minArgs || 1)) {
+            await sock.sendMessage(from, {
+                text: `❌ Invalid Usage\n\nUsage: ${config.prefix}${command.usage || command.name}\nExample: ${config.prefix}${command.example || command.name}`
+            }, { quoted: message });
+            return false;
+        }
+
+        logger.info(`Executing command: ${commandName} for ${sender.split('@')[0]}`);
+
+        if (!command.execute || typeof command.execute !== 'function') {
+            logger.error(`Command ${commandName} has no execute function`);
+            await sock.sendMessage(from, {
+                text: `❌ Error\n\nCommand ${commandName} is not properly configured.`
+            }, { quoted: message });
+            return false;
+        }
+
+        await command.execute({
+            sock,
+            message,
+            args,
+            command,
+            from,
+            sender,
+            isGroup,
+            isGroupAdmin,
+            isBotAdmin,
+            prefix: config.prefix,
+            pushName: message.pushName,
+            quoted: message.message?.extendedTextMessage?.contextInfo?.quotedMessage,
+            isOwner: isOwnerUser,
+            isSudo: isSudoUser
+        });
+        
+        const executionTime = Date.now() - startTime;
+        recordCommandUsage(commandName, executionTime, true);
+        
+        logger.info(`Command ${commandName} executed successfully in ${executionTime}ms`);
+        return true;
+
+    } catch (error) {
+        const executionTime = Date.now() - startTime;
+        recordCommandUsage(commandName, executionTime, false);
+        
+        logger.error(`Command execution error [${commandName}]:`, error);
+
+        try {
+            await sock.sendMessage(from, {
+                text: `❌ Command Error\n\nCommand: ${commandName}\nError: ${error.message}\n\nPlease try again or contact support if the issue persists.`
+            }, { quoted: message });
+        } catch (sendError) {
+            logger.error('Failed to send error message:', sendError);
+        }
+
+        return false;
+    }
+}
     getTopCommands(limit = 5) {
         try {
             const stats = getSystemStats();
