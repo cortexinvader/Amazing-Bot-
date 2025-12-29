@@ -38,14 +38,20 @@ export default {
             const commandStats = commandHandler.getCommandStats();
             const categories = commandHandler.getAllCategories();
             
-            const topCommands = Object.entries(commandStats.commandUsage || {})
-                .sort((a, b) => b[1].count - a[1].count)
-                .slice(0, 5)
-                .map(([name, data]) => ({
-                    name,
-                    count: data.count,
-                    avgTime: data.totalTime ? (data.totalTime / data.count).toFixed(0) : 0
-                }));
+            const topCommands = [];
+            if (commandStats && commandStats.commandUsage) {
+                const sortedCommands = Object.entries(commandStats.commandUsage)
+                    .sort((a, b) => b[1].count - a[1].count)
+                    .slice(0, 5);
+                
+                sortedCommands.forEach(([name, data]) => {
+                    topCommands.push({
+                        name,
+                        count: data.count,
+                        avgTime: data.avgTime || 0
+                    });
+                });
+            }
             
             const now = moment();
             const currentDate = now.format('DD MMM YYYY');
@@ -119,7 +125,7 @@ export default {
                     { label: 'Total', value: commandCount.toString(), color: '#00d4ff' },
                     { label: 'Categories', value: categories.length.toString(), color: '#7928ca' },
                     { label: 'Executed', value: (commandStats.totalExecutions || 0).toString(), color: '#ff0080' },
-                    { label: 'Success Rate', value: commandStats.totalExecutions ? 
+                    { label: 'Success Rate', value: commandStats.totalExecutions > 0 ? 
                         `${((commandStats.successfulExecutions / commandStats.totalExecutions) * 100).toFixed(1)}%` : '0%', 
                         color: '#00ff87' }
                 ]
