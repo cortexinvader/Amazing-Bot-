@@ -153,6 +153,10 @@ class MessageHandler {
             }
 
             const text = messageContent.text;
+            const autoDownloadHandled = await handleAutoDownload(sock, message, from, sender, text);
+if (autoDownloadHandled) {
+    return;
+ }
             const quotedMsg = message.message?.extendedTextMessage?.contextInfo;
             
             if (quotedMsg && quotedMsg.stanzaId) {
