@@ -84,7 +84,7 @@ class MessageHandler {
     normalizePhoneNumber(jid) {
         if (!jid) return '';
         let cleaned = jid.split('@')[0];
-        cleaned = cleaned.replace(/:\d+$/, '');
+        cleaned = cleaned.split(':')[0];
         cleaned = cleaned.replace(/[^0-9]/g, '');
         return cleaned;
     }
@@ -95,10 +95,16 @@ class MessageHandler {
         const senderNumber = this.normalizePhoneNumber(sender);
         
         if (config.ownerNumbers && Array.isArray(config.ownerNumbers)) {
-            return config.ownerNumbers.some(ownerJid => {
+            const isOwnerResult = config.ownerNumbers.some(ownerJid => {
                 const ownerNumber = this.normalizePhoneNumber(ownerJid);
                 return senderNumber === ownerNumber;
             });
+            
+            if (isOwnerResult) {
+                logger.debug(`Owner verified: ${senderNumber}`);
+            }
+            
+            return isOwnerResult;
         }
         
         return false;
@@ -167,16 +173,18 @@ class MessageHandler {
                 return;
             }
 
-            logger.info(`MESSAGE | From: ${sender.split('@')[0]} | ${isGroup ? 'GROUP' : 'PRIVATE'} | Text: "${text.substring(0, 50)}${text.length > 50 ? '...' : ''}"`);
+            const isOwnerUser = this.isOwner(sender);
+            const isSudoUser = this.isSudo(sender);
+
+            logger.info(`MESSAGE | From: ${sender.split('@')[0]} | ${isGroup ? 'GROUP' : 'PRIVATE'} | Owner: ${isOwnerUser} | Sudo: ${isSudoUser} | Text: "${text.substring(0, 50)}${text.length > 50 ? '...' : ''}"`);
 
             if (config.whitelist && config.whitelist.enabled) {
-                if (!this.isOwner(sender) && !this.isSudo(sender)) {
-                    logger.info(`Blocked by whitelist`);
+                if (!isOwnerUser && !isSudoUser) {
+                    logger.info(`Blocked by whitelist: ${sender.split('@')[0]}`);
                     return;
                 }
             }
 
-            const isOwnerUser = this.isOwner(sender);
             const ownerNoPrefix = config.ownerNoPrefix && isOwnerUser;
             const isPrefixed = text.startsWith(config.prefix);
             
