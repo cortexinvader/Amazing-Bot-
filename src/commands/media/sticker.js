@@ -1,179 +1,130 @@
-import fs from 'fs';
-import path from 'path';
-import fileTypeModule from 'file-type';
-const { fileTypeFromBuffer } = fileTypeModule;
-import sharp from 'sharp';
-import ffmpeg from 'fluent-ffmpeg';
-import config from '../../config.js';
-
-const TEMP_DIR = path.join(process.cwd(), 'temp');
-if (!fs.existsSync(TEMP_DIR)) {
-    fs.mkdirSync(TEMP_DIR, { recursive: true });
-}
-
-function cleanTempFile(filePath) {
-    if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
-    }
-}
-
-async function streamToBuffer(stream) {
-    let buffer = Buffer.from([]);
-    for await (const chunk of stream) {
-        buffer = Buffer.concat([buffer, chunk]);
-    }
-    return buffer;
-}
-
-async function createImageStickerBuffer(mediaBuffer) {
-    const processedBuffer = await sharp(mediaBuffer)
-        .resize(512, 512, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
-        .png()
-        .webp({ lossless: true })
-        .toBuffer();
-    return processedBuffer;
-}
-
-async function createVideoStickerBuffer(mediaBuffer, fileTypeExt) {
-    return new Promise((resolve, reject) => {
-        const inputPath = path.join(TEMP_DIR, `video_input.${fileTypeExt}`);
-        const outputPath = path.join(TEMP_DIR, `sticker_${Date.now()}.webp`);
-
-        fs.writeFileSync(inputPath, mediaBuffer);
-
-        ffmpeg(inputPath)
-            .videoFilters(['scale=512:512:force_original_aspect_ratio=decrease', 'fps=10'])
-            .outputOptions(['-vcodec libwebp', '-lossless 1', '-loop 0', '-an', '-t 10']) // 10s max, no audio
-            .on('error', (err) => {
-                cleanTempFile(inputPath);
-                reject(err);
-            })
-            .on('end', () => {
-                cleanTempFile(inputPath);
-                const stickerBuffer = fs.readFileSync(outputPath);
-                cleanTempFile(outputPath);
-                resolve(stickerBuffer);
-            })
-            .save(outputPath);
-    });
-}
+import { Sticker, StickerTypes } from "wa-sticker-formatter";
+import { downloadMediaMessage } from "@whiskeysockets/baileys";
 
 export default {
     name: 'sticker',
-    aliases: ['s', 'stik'],
+    aliases: ['stik', 's', 'stick'],
     category: 'media',
-    description: 'Create a sticker from replied image, GIF, or short video (<10s)',
-    usage: 'sticker [reply to image/video/GIF]',
-    example: 'Reply to image/video with sticker',
+    description: 'Create a sticker from an image, GIF, or short video',
+    usage: 'sticker <reply to media>',
+    example: 'sticker (reply to image/video/gif)',
     cooldown: 5,
     permissions: ['user'],
     args: false,
     minArgs: 0,
     maxArgs: 0,
-    typing: true,
-    premium: false,
-    hidden: false,
-    ownerOnly: false,
-    supportsReply: true,
-    supportsChat: true,
-    supportsReact: true,
-    supportsButtons: false,
 
-    async execute({ sock, message, from, prefix }) {
+    async execute({ sock, message, from, sender, prefix }) {
+        const quoted = message.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+
+        if (!quoted) {
+            return await sock.sendMessage(from, {
+                text: '❌ Please reply to an image, GIF, or short video to create a sticker.\n\n' +
+                      '💡 Usage: ' + prefix + 'sticker (reply to media)'
+            }, { quoted: message });
+        }
+
         try {
-            let mediaMessage = null;
-            let isVideo = false;
-            let isSticker = false;
-            let videoSeconds = 0;
-            if (message.message?.imageMessage) {
-                mediaMessage = message.message.imageMessage;
-            } else if (message.message?.videoMessage) {
-                mediaMessage = message.message.videoMessage;
-                isVideo = true;
-                videoSeconds = mediaMessage.seconds || 0;
-            } else {
-                const quoted = message.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-                if (quoted?.imageMessage) {
-                    mediaMessage = quoted.imageMessage;
-                } else if (quoted?.videoMessage) {
-                    mediaMessage = quoted.videoMessage;
-                    isVideo = true;
-                    videoSeconds = mediaMessage.seconds || 0;
-                } else if (quoted?.stickerMessage && quoted.stickerMessage.isAnimated) {
-                    mediaMessage = quoted.stickerMessage;
-                    isSticker = true;
-                    isVideo = true;
-                    videoSeconds = 5;
-                }
-            }
-
-            if (!mediaMessage) {
-                await sock.sendMessage(from, {
-                    text: `❌ *Error*\nReply to an image, GIF, short video (<10s), or animated sticker!\n\n💡 Example: Reply with \`${prefix}sticker\``
-                }, { quoted: message });
-                return;
-            }
-
-            if (isVideo && videoSeconds > 10) {
-                await sock.sendMessage(from, {
-                    text: `❌ *Error*\nVideo too long (${videoSeconds}s). Use under 10 seconds.`
-                }, { quoted: message });
-                return;
-            }
-
             await sock.sendMessage(from, {
-                react: { text: '✨', key: message.key }
+                react: { text: '⏳', key: message.key }
             });
 
-            let mediaType = 'image';
-            if (isSticker) {
-                mediaType = 'sticker';
-            } else if (isVideo) {
+            let mediaBuffer;
+            let mediaType;
+
+            if (quoted.imageMessage) {
+                mediaBuffer = await downloadMediaMessage(
+                    { message: { imageMessage: quoted.imageMessage } },
+                    "buffer",
+                    {},
+                    { 
+                        logger: console,
+                        reuploadRequest: sock.updateMediaMessage
+                    }
+                );
+                mediaType = 'image';
+            } else if (quoted.videoMessage) {
+                const videoSeconds = quoted.videoMessage.seconds || 0;
+                
+                if (videoSeconds > 10) {
+                    await sock.sendMessage(from, {
+                        react: { text: '❌', key: message.key }
+                    });
+                    return await sock.sendMessage(from, {
+                        text: '❌ Video too long!\n\n' +
+                              '⚠️ Please use a video under 10 seconds.\n' +
+                              '📹 Current length: ' + videoSeconds + 's'
+                    }, { quoted: message });
+                }
+
+                mediaBuffer = await downloadMediaMessage(
+                    { message: { videoMessage: quoted.videoMessage } },
+                    "buffer",
+                    {},
+                    { 
+                        logger: console,
+                        reuploadRequest: sock.updateMediaMessage
+                    }
+                );
                 mediaType = 'video';
-            }
-            const { downloadContentFromMessage } = await import('@whiskeysockets/baileys');
-            const stream = await downloadContentFromMessage(mediaMessage, mediaType);
-            const mediaBuffer = await streamToBuffer(stream);
-
-            const fileType = await fileTypeFromBuffer(mediaBuffer);
-
-            if (!fileType || (!isVideo && !['jpg', 'jpeg', 'png', 'gif'].includes(fileType.ext))) {
-                await sock.sendMessage(from, {
-                    text: `❌ *Error*\nUnsupported format. Use JPG/PNG/GIF images or MP4/WEBM videos.`
-                }, { quoted: message });
-                return;
-            }
-
-            let stickerBuffer;
-            let isAnimated = false;
-
-            if (isVideo && ['mp4', 'webm', 'gif'].includes(fileType.ext)) {
-                stickerBuffer = await createVideoStickerBuffer(mediaBuffer, fileType.ext);
-                isAnimated = true;
+            } else if (quoted.stickerMessage) {
+                mediaBuffer = await downloadMediaMessage(
+                    { message: { stickerMessage: quoted.stickerMessage } },
+                    "buffer",
+                    {},
+                    { 
+                        logger: console,
+                        reuploadRequest: sock.updateMediaMessage
+                    }
+                );
+                mediaType = 'sticker';
             } else {
-                stickerBuffer = await createImageStickerBuffer(mediaBuffer);
-                isAnimated = false;
+                await sock.sendMessage(from, {
+                    react: { text: '❌', key: message.key }
+                });
+                return await sock.sendMessage(from, {
+                    text: '❌ Unsupported media type!\n\n' +
+                          '✅ Supported: Image, GIF, Video (under 10s)\n' +
+                          '💡 Reply to media with: ' + prefix + 'sticker'
+                }, { quoted: message });
             }
 
-            // Send sticker
+            if (!mediaBuffer || mediaBuffer.length === 0) {
+                throw new Error('Failed to download media');
+            }
+
+            const sticker = new Sticker(mediaBuffer, {
+                pack: "Created with",
+                author: "WhatsApp Bot",
+                type: StickerTypes.FULL,
+                quality: 50
+            });
+
+            const stickerBuffer = await sticker.toBuffer();
+
             await sock.sendMessage(from, {
-                sticker: stickerBuffer,
-                mimetype: 'image/webp'
+                sticker: stickerBuffer
             }, { quoted: message });
 
-            // Success react
             await sock.sendMessage(from, {
                 react: { text: '✅', key: message.key }
             });
 
         } catch (error) {
-            console.error('Sticker command error:', error);
-            await sock.sendMessage(from, {
-                text: `❌ *Error*\nFailed to create sticker: ${error.message}\n\n💡 Ensure FFmpeg for videos.`
-            }, { quoted: message });
+            console.error('Sticker creation error:', error);
+            
             await sock.sendMessage(from, {
                 react: { text: '❌', key: message.key }
             });
+
+            await sock.sendMessage(from, {
+                text: '❌ Failed to create sticker\n\n' +
+                      '⚠️ Error: ' + error.message + '\n\n' +
+                      '💡 Make sure you replied to:\n' +
+                      '• Image (JPG, PNG)\n' +
+                      '• GIF\n' +
+                      '• Video (under 10 seconds)'
+            }, { quoted: message });
         }
     }
 };
