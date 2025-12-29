@@ -70,7 +70,7 @@ class CommandHandler {
     normalizePhoneNumber(jid) {
         if (!jid) return '';
         let cleaned = jid.split('@')[0];
-        cleaned = cleaned.replace(/:\d+$/, '');
+        cleaned = cleaned.split(':')[0];
         cleaned = cleaned.replace(/[^0-9]/g, '');
         return cleaned;
     }
@@ -81,10 +81,16 @@ class CommandHandler {
         const senderNumber = this.normalizePhoneNumber(sender);
         
         if (config.ownerNumbers && Array.isArray(config.ownerNumbers)) {
-            return config.ownerNumbers.some(ownerJid => {
+            const isOwnerResult = config.ownerNumbers.some(ownerJid => {
                 const ownerNumber = this.normalizePhoneNumber(ownerJid);
                 return senderNumber === ownerNumber;
             });
+            
+            if (isOwnerResult) {
+                logger.debug(`Owner verified: ${senderNumber}`);
+            }
+            
+            return isOwnerResult;
         }
         
         return false;
@@ -135,175 +141,183 @@ class CommandHandler {
     }
 
     async checkPermissions(command, sock, message, isGroup, isGroupAdmin, isBotAdmin) {
-    const from = message.key.remoteJid;
-    const sender = message.key.participant || from;
-
-    const isOwnerUser = this.isOwner(sender);
-    const isSudoUser = this.isSudo(sender);
-
-    if (command.ownerOnly && !isOwnerUser && !isSudoUser) {
-        await sock.sendMessage(from, {
-            text: '❌ Access Denied\n\nThis command is only available to the bot owner.'
-        }, { quoted: message });
-        return false;
-    }
-
-    if (command.sudoOnly && !isSudoUser) {
-        await sock.sendMessage(from, {
-            text: '❌ Access Denied\n\nThis command is only available to sudo users.'
-        }, { quoted: message });
-        return false;
-    }
-
-    if (command.groupOnly && !isGroup) {
-        await sock.sendMessage(from, {
-            text: '❌ Group Only\n\nThis command can only be used in groups.'
-        }, { quoted: message });
-        return false;
-    }
-
-    if (command.privateOnly && isGroup) {
-        await sock.sendMessage(from, {
-            text: '❌ Private Only\n\nThis command can only be used in private chat.'
-        }, { quoted: message });
-        return false;
-    }
-
-    if (isGroup && command.adminOnly && !isGroupAdmin && !isOwnerUser && !isSudoUser) {
-        return true;
-    }
-
-    if (isGroup && command.botAdminRequired && !isBotAdmin) {
-        await sock.sendMessage(from, {
-            text: '❌ Bot Admin Required\n\nI need admin privileges to execute this command.'
-        }, { quoted: message });
-        return false;
-    }
-
-    return true;
- }
-
-    async handleCommand(sock, message, commandName, args) {
-    const startTime = Date.now();
-    const from = message.key.remoteJid;
-    const sender = message.key.participant || from;
-    const isGroup = from.endsWith('@g.us');
-
-    try {
-        const command = this.getCommand(commandName);
-        
-        if (!command) {
-            logger.warn(`Command not found: ${commandName}`);
-            return false;
-        }
+        const from = message.key.remoteJid;
+        const sender = message.key.participant || from;
 
         const isOwnerUser = this.isOwner(sender);
         const isSudoUser = this.isSudo(sender);
 
-        const cooldownCheck = await this.checkCooldown(commandName, sender);
-        if (cooldownCheck.onCooldown) {
+        if (command.ownerOnly && !isOwnerUser && !isSudoUser) {
             await sock.sendMessage(from, {
-                text: `⏰ Cooldown\n\nPlease wait ${cooldownCheck.timeLeft} seconds before using this command again.`
+                text: '❌ Access Denied\n\nThis command is only available to the bot owner.'
             }, { quoted: message });
             return false;
         }
 
-        let isGroupAdmin = false;
-        let isBotAdmin = false;
-
-        if (isGroup) {
-            try {
-                const groupMetadata = await sock.groupMetadata(from);
-                
-                const senderNumber = this.normalizePhoneNumber(sender);
-                const participant = groupMetadata.participants.find(p => {
-                    const participantNumber = this.normalizePhoneNumber(p.id);
-                    return participantNumber === senderNumber;
-                });
-                
-                isGroupAdmin = participant?.admin === 'admin' || participant?.admin === 'superadmin' || isOwnerUser || isSudoUser;
-
-                const botJid = sock.user?.id;
-                const botNumber = this.normalizePhoneNumber(botJid);
-                const botParticipant = groupMetadata.participants.find(p => {
-                    const participantNumber = this.normalizePhoneNumber(p.id);
-                    return participantNumber === botNumber;
-                });
-                
-                isBotAdmin = botParticipant?.admin === 'admin' || botParticipant?.admin === 'superadmin';
-            } catch (error) {
-                logger.error('Error fetching group metadata:', error);
-                isGroupAdmin = isOwnerUser || isSudoUser;
-                isBotAdmin = false;
-            }
-        }
-
-        const hasPermission = await this.checkPermissions(
-            command, sock, message, isGroup, isGroupAdmin, isBotAdmin
-        );
-
-        if (!hasPermission) {
-            recordCommandUsage(commandName, Date.now() - startTime, false);
-            return false;
-        }
-
-        if (command.args && args.length < (command.minArgs || 1)) {
+        if (command.sudoOnly && !isSudoUser) {
             await sock.sendMessage(from, {
-                text: `❌ Invalid Usage\n\nUsage: ${config.prefix}${command.usage || command.name}\nExample: ${config.prefix}${command.example || command.name}`
+                text: '❌ Access Denied\n\nThis command is only available to sudo users.'
             }, { quoted: message });
             return false;
         }
 
-        logger.info(`Executing command: ${commandName} for ${sender.split('@')[0]}`);
-
-        if (!command.execute || typeof command.execute !== 'function') {
-            logger.error(`Command ${commandName} has no execute function`);
+        if (command.groupOnly && !isGroup) {
             await sock.sendMessage(from, {
-                text: `❌ Error\n\nCommand ${commandName} is not properly configured.`
+                text: '❌ Group Only\n\nThis command can only be used in groups.'
             }, { quoted: message });
             return false;
         }
 
-        await command.execute({
-            sock,
-            message,
-            args,
-            command,
-            from,
-            sender,
-            isGroup,
-            isGroupAdmin,
-            isBotAdmin,
-            prefix: config.prefix,
-            pushName: message.pushName,
-            quoted: message.message?.extendedTextMessage?.contextInfo?.quotedMessage,
-            isOwner: isOwnerUser,
-            isSudo: isSudoUser
-        });
-        
-        const executionTime = Date.now() - startTime;
-        recordCommandUsage(commandName, executionTime, true);
-        
-        logger.info(`Command ${commandName} executed successfully in ${executionTime}ms`);
+        if (command.privateOnly && isGroup) {
+            await sock.sendMessage(from, {
+                text: '❌ Private Only\n\nThis command can only be used in private chat.'
+            }, { quoted: message });
+            return false;
+        }
+
+        if (isGroup && command.adminOnly && !isGroupAdmin && !isOwnerUser && !isSudoUser) {
+            await sock.sendMessage(from, {
+                text: '❌ Admin Only\n\nThis command requires group admin privileges.'
+            }, { quoted: message });
+            return false;
+        }
+
+        if (isGroup && command.botAdminRequired && !isBotAdmin) {
+            await sock.sendMessage(from, {
+                text: '❌ Bot Admin Required\n\nI need admin privileges to execute this command.'
+            }, { quoted: message });
+            return false;
+        }
+
         return true;
+    }
 
-    } catch (error) {
-        const executionTime = Date.now() - startTime;
-        recordCommandUsage(commandName, executionTime, false);
-        
-        logger.error(`Command execution error [${commandName}]:`, error);
+    async handleCommand(sock, message, commandName, args) {
+        const startTime = Date.now();
+        const from = message.key.remoteJid;
+        const sender = message.key.participant || from;
+        const isGroup = from.endsWith('@g.us');
 
         try {
-            await sock.sendMessage(from, {
-                text: `❌ Command Error\n\nCommand: ${commandName}\nError: ${error.message}\n\nPlease try again or contact support if the issue persists.`
-            }, { quoted: message });
-        } catch (sendError) {
-            logger.error('Failed to send error message:', sendError);
-        }
+            const command = this.getCommand(commandName);
+            
+            if (!command) {
+                logger.warn(`Command not found: ${commandName}`);
+                return false;
+            }
 
-        return false;
+            const isOwnerUser = this.isOwner(sender);
+            const isSudoUser = this.isSudo(sender);
+
+            logger.debug(`Command: ${commandName} | Sender: ${sender} | IsOwner: ${isOwnerUser} | IsSudo: ${isSudoUser}`);
+
+            const cooldownCheck = await this.checkCooldown(commandName, sender);
+            if (cooldownCheck.onCooldown) {
+                await sock.sendMessage(from, {
+                    text: `⏰ Cooldown\n\nPlease wait ${cooldownCheck.timeLeft} seconds before using this command again.`
+                }, { quoted: message });
+                return false;
+            }
+
+            let isGroupAdmin = false;
+            let isBotAdmin = false;
+
+            if (isGroup) {
+                try {
+                    const groupMetadata = await sock.groupMetadata(from);
+                    
+                    const senderNumber = this.normalizePhoneNumber(sender);
+                    const participant = groupMetadata.participants.find(p => {
+                        const participantNumber = this.normalizePhoneNumber(p.id);
+                        return participantNumber === senderNumber;
+                    });
+                    
+                    isGroupAdmin = participant?.admin === 'admin' || participant?.admin === 'superadmin' || isOwnerUser || isSudoUser;
+
+                    const botJid = sock.user?.id;
+                    const botNumber = this.normalizePhoneNumber(botJid);
+                    const botParticipant = groupMetadata.participants.find(p => {
+                        const participantNumber = this.normalizePhoneNumber(p.id);
+                        return participantNumber === botNumber;
+                    });
+                    
+                    isBotAdmin = botParticipant?.admin === 'admin' || botParticipant?.admin === 'superadmin';
+
+                    logger.debug(`Group: ${from} | IsGroupAdmin: ${isGroupAdmin} | IsBotAdmin: ${isBotAdmin}`);
+                } catch (error) {
+                    logger.error('Error fetching group metadata:', error);
+                    isGroupAdmin = isOwnerUser || isSudoUser;
+                    isBotAdmin = false;
+                }
+            }
+
+            const hasPermission = await this.checkPermissions(
+                command, sock, message, isGroup, isGroupAdmin, isBotAdmin
+            );
+
+            if (!hasPermission) {
+                recordCommandUsage(commandName, Date.now() - startTime, false);
+                return false;
+            }
+
+            if (command.args && args.length < (command.minArgs || 1)) {
+                await sock.sendMessage(from, {
+                    text: `❌ Invalid Usage\n\nUsage: ${config.prefix}${command.usage || command.name}\nExample: ${config.prefix}${command.example || command.name}`
+                }, { quoted: message });
+                return false;
+            }
+
+            logger.info(`Executing command: ${commandName} for ${sender.split('@')[0]}`);
+
+            if (!command.execute || typeof command.execute !== 'function') {
+                logger.error(`Command ${commandName} has no execute function`);
+                await sock.sendMessage(from, {
+                    text: `❌ Error\n\nCommand ${commandName} is not properly configured.`
+                }, { quoted: message });
+                return false;
+            }
+
+            await command.execute({
+                sock,
+                message,
+                args,
+                command,
+                from,
+                sender,
+                isGroup,
+                isGroupAdmin,
+                isBotAdmin,
+                prefix: config.prefix,
+                pushName: message.pushName,
+                quoted: message.message?.extendedTextMessage?.contextInfo?.quotedMessage,
+                isOwner: isOwnerUser,
+                isSudo: isSudoUser
+            });
+            
+            const executionTime = Date.now() - startTime;
+            recordCommandUsage(commandName, executionTime, true);
+            
+            logger.info(`Command ${commandName} executed successfully in ${executionTime}ms`);
+            return true;
+
+        } catch (error) {
+            const executionTime = Date.now() - startTime;
+            recordCommandUsage(commandName, executionTime, false);
+            
+            logger.error(`Command execution error [${commandName}]:`, error);
+
+            try {
+                await sock.sendMessage(from, {
+                    text: `❌ Command Error\n\nCommand: ${commandName}\nError: ${error.message}\n\nPlease try again or contact support if the issue persists.`
+                }, { quoted: message });
+            } catch (sendError) {
+                logger.error('Failed to send error message:', sendError);
+            }
+
+            return false;
+        }
     }
-}
+
     getTopCommands(limit = 5) {
         try {
             const stats = getSystemStats();
