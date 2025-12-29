@@ -95,7 +95,7 @@ export default {
 
             const sticker = new Sticker(mediaBuffer, {
                 pack: "Created with",
-                author: "WhatsApp Bot",
+                author: "Ilom",
                 type: StickerTypes.FULL,
                 quality: 50
             });
