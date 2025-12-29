@@ -135,56 +135,53 @@ class CommandHandler {
     }
 
     async checkPermissions(command, sock, message, isGroup, isGroupAdmin, isBotAdmin) {
-        const from = message.key.remoteJid;
-        const sender = message.key.participant || from;
+    const from = message.key.remoteJid;
+    const sender = message.key.participant || from;
 
-        const isOwnerUser = this.isOwner(sender);
-        const isSudoUser = this.isSudo(sender);
+    const isOwnerUser = this.isOwner(sender);
+    const isSudoUser = this.isSudo(sender);
 
-        if (command.ownerOnly && !isOwnerUser && !isSudoUser) {
-            await sock.sendMessage(from, {
-                text: '❌ Access Denied\n\nThis command is only available to the bot owner.'
-            }, { quoted: message });
-            return false;
-        }
+    if (command.ownerOnly && !isOwnerUser && !isSudoUser) {
+        await sock.sendMessage(from, {
+            text: '❌ Access Denied\n\nThis command is only available to the bot owner.'
+        }, { quoted: message });
+        return false;
+    }
 
-        if (command.sudoOnly && !isSudoUser) {
-            await sock.sendMessage(from, {
-                text: '❌ Access Denied\n\nThis command is only available to sudo users.'
-            }, { quoted: message });
-            return false;
-        }
+    if (command.sudoOnly && !isSudoUser) {
+        await sock.sendMessage(from, {
+            text: '❌ Access Denied\n\nThis command is only available to sudo users.'
+        }, { quoted: message });
+        return false;
+    }
 
-        if (command.groupOnly && !isGroup) {
-            await sock.sendMessage(from, {
-                text: '❌ Group Only\n\nThis command can only be used in groups.'
-            }, { quoted: message });
-            return false;
-        }
+    if (command.groupOnly && !isGroup) {
+        await sock.sendMessage(from, {
+            text: '❌ Group Only\n\nThis command can only be used in groups.'
+        }, { quoted: message });
+        return false;
+    }
 
-        if (command.privateOnly && isGroup) {
-            await sock.sendMessage(from, {
-                text: '❌ Private Only\n\nThis command can only be used in private chat.'
-            }, { quoted: message });
-            return false;
-        }
+    if (command.privateOnly && isGroup) {
+        await sock.sendMessage(from, {
+            text: '❌ Private Only\n\nThis command can only be used in private chat.'
+        }, { quoted: message });
+        return false;
+    }
 
-        if (isGroup && command.adminOnly && !isGroupAdmin && !isOwnerUser && !isSudoUser) {
-            await sock.sendMessage(from, {
-                text: '❌ Admin Only\n\nThis command requires group admin privileges.'
-            }, { quoted: message });
-            return false;
-        }
-
-        if (isGroup && command.botAdminRequired && !isBotAdmin) {
-            await sock.sendMessage(from, {
-                text: '❌ Bot Admin Required\n\nI need admin privileges to execute this command.'
-            }, { quoted: message });
-            return false;
-        }
-
+    if (isGroup && command.adminOnly && !isGroupAdmin && !isOwnerUser && !isSudoUser) {
         return true;
     }
+
+    if (isGroup && command.botAdminRequired && !isBotAdmin) {
+        await sock.sendMessage(from, {
+            text: '❌ Bot Admin Required\n\nI need admin privileges to execute this command.'
+        }, { quoted: message });
+        return false;
+    }
+
+    return true;
+ }
 
     async handleCommand(sock, message, commandName, args) {
         const startTime = Date.now();
