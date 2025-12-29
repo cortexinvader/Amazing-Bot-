@@ -16,17 +16,13 @@ export default {
     args: false,
     minArgs: 0,
     maxArgs: 0,
-    typing: true,
-    premium: false,
-    hidden: false,
-    ownerOnly: false,
-    supportsReply: false,
-    supportsChat: false,
-    supportsReact: false,
-    supportsButtons: false,
 
-    async execute({ sock, message, args, command, user, group, from, sender, isGroup, isGroupAdmin, isBotAdmin, prefix }) {
+    async execute({ sock, message, from, sender, isGroup }) {
         try {
+            await sock.sendMessage(from, {
+                react: { text: '📊', key: message.key }
+            });
+
             const uptime = process.uptime();
             const days = Math.floor(uptime / 86400);
             const hours = Math.floor((uptime % 86400) / 3600);
@@ -36,124 +32,201 @@ export default {
             const memoryUsage = process.memoryUsage();
             const usedMemory = (memoryUsage.heapUsed / 1024 / 1024).toFixed(2);
             const totalMemory = (memoryUsage.heapTotal / 1024 / 1024).toFixed(2);
+            const memoryPercent = ((usedMemory / totalMemory) * 100).toFixed(1);
             
             const commandCount = commandHandler.getCommandCount();
-            const topCommands = commandHandler.getTopCommands(5) || [];
+            const commandStats = commandHandler.getCommandStats();
             const categories = commandHandler.getAllCategories();
             
+            const topCommands = Object.entries(commandStats.commandUsage || {})
+                .sort((a, b) => b[1].count - a[1].count)
+                .slice(0, 5)
+                .map(([name, data]) => ({
+                    name,
+                    count: data.count,
+                    avgTime: data.totalTime ? (data.totalTime / data.count).toFixed(0) : 0
+                }));
+            
             const now = moment();
-            const currentDate = now.format('DD/MM/YYYY');
+            const currentDate = now.format('DD MMM YYYY');
             const currentTime = now.format('hh:mm:ss A');
             const currentDay = now.format('dddd');
             
-            const canvas = createCanvas(1200, 900);
+            const canvas = createCanvas(1400, 1100);
             const ctx = canvas.getContext('2d');
 
-            const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-            gradient.addColorStop(0, '#667eea');
-            gradient.addColorStop(0.5, '#764ba2');
-            gradient.addColorStop(1, '#f093fb');
-            ctx.fillStyle = gradient;
+            const bgGradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+            bgGradient.addColorStop(0, '#0f0c29');
+            bgGradient.addColorStop(0.5, '#302b63');
+            bgGradient.addColorStop(1, '#24243e');
+            ctx.fillStyle = bgGradient;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            for (let i = 0; i < 50; i++) {
+            for (let i = 0; i < 150; i++) {
                 const x = Math.random() * canvas.width;
                 const y = Math.random() * canvas.height;
-                const size = Math.random() * 3 + 1;
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+                const size = Math.random() * 2.5;
+                const opacity = Math.random() * 0.8;
+                ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
                 ctx.beginPath();
                 ctx.arc(x, y, size, 0, Math.PI * 2);
                 ctx.fill();
             }
 
-            ctx.font = 'bold 70px Arial';
-            ctx.fillStyle = '#ffffff';
-            ctx.textAlign = 'center';
-            ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
-            ctx.shadowBlur = 10;
-            ctx.fillText('📊 BOT STATISTICS', canvas.width / 2, 100);
-
-            ctx.shadowBlur = 0;
-
-            const boxY = 150;
-            const boxWidth = 1000;
-            const boxHeight = 680;
-            const boxX = (canvas.width - boxWidth) / 2;
-
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
-            this.roundRect(ctx, boxX, boxY, boxWidth, boxHeight, 20);
-            ctx.fill();
-
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
-            this.roundRect(ctx, boxX + 20, boxY + 20, boxWidth - 40, 140, 15);
-            ctx.fill();
-
-            ctx.font = 'bold 38px Arial';
-            ctx.fillStyle = '#ffd700';
-            ctx.textAlign = 'left';
-            ctx.fillText('⚡ System Stats', boxX + 40, boxY + 65);
-
-            ctx.font = '28px Arial';
-            ctx.fillStyle = '#ffffff';
-            ctx.fillText('Uptime: ' + days + 'd ' + hours + 'h ' + minutes + 'm ' + seconds + 's', boxX + 40, boxY + 110);
-            ctx.fillText('Memory: ' + usedMemory + 'MB / ' + totalMemory + 'MB', boxX + 40, boxY + 145);
-
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
-            this.roundRect(ctx, boxX + 20, boxY + 180, boxWidth - 40, 140, 15);
-            ctx.fill();
-
-            ctx.font = 'bold 38px Arial';
-            ctx.fillStyle = '#00ff88';
-            ctx.fillText('🎯 Command Stats', boxX + 40, boxY + 225);
-
-            ctx.font = '28px Arial';
-            ctx.fillStyle = '#ffffff';
-            ctx.fillText('Total Commands: ' + commandCount, boxX + 40, boxY + 270);
-            ctx.fillText('Categories: ' + categories.length, boxX + 40, boxY + 305);
-
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
-            this.roundRect(ctx, boxX + 20, boxY + 340, boxWidth - 40, 200, 15);
-            ctx.fill();
-
-            ctx.font = 'bold 38px Arial';
-            ctx.fillStyle = '#ff6b9d';
-            ctx.fillText('🔥 Top Commands', boxX + 40, boxY + 385);
-
-            ctx.font = '24px Arial';
-            ctx.fillStyle = '#ffffff';
-            if (topCommands.length > 0) {
-                topCommands.forEach((cmd, i) => {
-                    ctx.fillText((i + 1) + '. ' + cmd.name + ' (' + (cmd.used || 0) + ' uses)', boxX + 40, boxY + 425 + (i * 30));
-                });
-            } else {
-                ctx.fillText('No command usage data yet', boxX + 40, boxY + 425);
+            for (let i = 0; i < 8; i++) {
+                const x = Math.random() * canvas.width;
+                const y = Math.random() * canvas.height;
+                const radius = Math.random() * 150 + 100;
+                const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
+                gradient.addColorStop(0, 'rgba(138, 43, 226, 0.15)');
+                gradient.addColorStop(1, 'rgba(138, 43, 226, 0)');
+                ctx.fillStyle = gradient;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
             }
 
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
-            this.roundRect(ctx, boxX + 20, boxY + 560, boxWidth - 40, 100, 15);
-            ctx.fill();
-
-            ctx.font = 'bold 38px Arial';
-            ctx.fillStyle = '#a78bfa';
-            ctx.fillText('📡 Server Info', boxX + 40, boxY + 605);
-
-            ctx.font = '28px Arial';
+            ctx.shadowColor = 'rgba(138, 43, 226, 0.5)';
+            ctx.shadowBlur = 30;
+            ctx.font = 'bold 80px Arial';
             ctx.fillStyle = '#ffffff';
-            ctx.fillText('Platform: ' + os.platform() + ' | Node: ' + process.version, boxX + 40, boxY + 645);
-
-            ctx.font = '24px Arial';
-            ctx.fillStyle = '#e0e0e0';
             ctx.textAlign = 'center';
-            ctx.fillText(currentDay + ' | ' + currentDate + ' | ' + currentTime, canvas.width / 2, canvas.height - 50);
+            ctx.fillText('📊 BOT STATISTICS', canvas.width / 2, 110);
+            ctx.shadowBlur = 0;
+
+            ctx.font = '32px Arial';
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+            ctx.fillText(currentDay + ' • ' + currentDate + ' • ' + currentTime, canvas.width / 2, 160);
+
+            const cardSpacing = 30;
+            const cardWidth = 650;
+            const cardHeight = 240;
+            let currentY = 220;
+
+            this.drawCard(ctx, 75, currentY, cardWidth, cardHeight, {
+                title: '⚡ SYSTEM STATUS',
+                icon: '🖥️',
+                data: [
+                    { label: 'Uptime', value: `${days}d ${hours}h ${minutes}m ${seconds}s`, color: '#00d4ff' },
+                    { label: 'Memory', value: `${usedMemory} MB / ${totalMemory} MB`, color: '#7928ca' },
+                    { label: 'Usage', value: `${memoryPercent}%`, color: '#ff0080' },
+                    { label: 'Platform', value: os.platform().toUpperCase(), color: '#00ff87' }
+                ]
+            });
+
+            this.drawCard(ctx, 75 + cardWidth + cardSpacing, currentY, cardWidth, cardHeight, {
+                title: '🎯 COMMANDS',
+                icon: '⚙️',
+                data: [
+                    { label: 'Total', value: commandCount.toString(), color: '#00d4ff' },
+                    { label: 'Categories', value: categories.length.toString(), color: '#7928ca' },
+                    { label: 'Executed', value: (commandStats.totalExecutions || 0).toString(), color: '#ff0080' },
+                    { label: 'Success Rate', value: commandStats.totalExecutions ? 
+                        `${((commandStats.successfulExecutions / commandStats.totalExecutions) * 100).toFixed(1)}%` : '0%', 
+                        color: '#00ff87' }
+                ]
+            });
+
+            currentY += cardHeight + cardSpacing;
+
+            const topCommandsCard = {
+                x: 75,
+                y: currentY,
+                width: canvas.width - 150,
+                height: 380
+            };
+
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+            ctx.strokeStyle = 'rgba(138, 43, 226, 0.4)';
+            ctx.lineWidth = 2;
+            this.roundRect(ctx, topCommandsCard.x, topCommandsCard.y, topCommandsCard.width, topCommandsCard.height, 25);
+            ctx.fill();
+            ctx.stroke();
+
+            const iconGradient = ctx.createLinearGradient(
+                topCommandsCard.x + 50, 
+                topCommandsCard.y + 50, 
+                topCommandsCard.x + 100, 
+                topCommandsCard.y + 100
+            );
+            iconGradient.addColorStop(0, '#7928ca');
+            iconGradient.addColorStop(1, '#ff0080');
+            ctx.fillStyle = iconGradient;
+            ctx.font = '60px Arial';
+            ctx.textAlign = 'left';
+            ctx.fillText('🔥', topCommandsCard.x + 40, topCommandsCard.y + 75);
+
+            ctx.font = 'bold 48px Arial';
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText('TOP COMMANDS', topCommandsCard.x + 120, topCommandsCard.y + 70);
+
+            if (topCommands.length > 0) {
+                const barStartY = topCommandsCard.y + 130;
+                const barHeight = 40;
+                const barSpacing = 15;
+                const maxCount = topCommands[0].count;
+
+                topCommands.forEach((cmd, i) => {
+                    const y = barStartY + (i * (barHeight + barSpacing));
+                    const barMaxWidth = topCommandsCard.width - 500;
+                    const barWidth = (cmd.count / maxCount) * barMaxWidth;
+
+                    ctx.font = 'bold 28px Arial';
+                    ctx.fillStyle = '#ffffff';
+                    ctx.textAlign = 'left';
+                    ctx.fillText(`${i + 1}. ${cmd.name}`, topCommandsCard.x + 40, y + 28);
+
+                    const barX = topCommandsCard.x + 350;
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+                    this.roundRect(ctx, barX, y, barMaxWidth, barHeight, 20);
+                    ctx.fill();
+
+                    const barGradient = ctx.createLinearGradient(barX, y, barX + barWidth, y);
+                    const colors = [
+                        ['#667eea', '#764ba2'],
+                        ['#f093fb', '#f5576c'],
+                        ['#4facfe', '#00f2fe'],
+                        ['#43e97b', '#38f9d7'],
+                        ['#fa709a', '#fee140']
+                    ];
+                    barGradient.addColorStop(0, colors[i][0]);
+                    barGradient.addColorStop(1, colors[i][1]);
+                    ctx.fillStyle = barGradient;
+                    this.roundRect(ctx, barX, y, barWidth, barHeight, 20);
+                    ctx.fill();
+
+                    ctx.font = 'bold 26px Arial';
+                    ctx.fillStyle = '#ffffff';
+                    ctx.textAlign = 'right';
+                    ctx.fillText(`${cmd.count} uses`, topCommandsCard.x + topCommandsCard.width - 40, y + 28);
+                });
+            } else {
+                ctx.font = '32px Arial';
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+                ctx.textAlign = 'center';
+                ctx.fillText('No command usage data yet', canvas.width / 2, topCommandsCard.y + 200);
+            }
+
+            currentY += topCommandsCard.height + cardSpacing;
+
+            ctx.font = 'bold 24px Arial';
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+            ctx.textAlign = 'center';
+            ctx.fillText('Powered by ' + (config.botName || 'WhatsApp Bot'), canvas.width / 2, currentY + 30);
 
             const buffer = canvas.toBuffer('image/png');
 
             await sock.sendMessage(from, {
-                image: buffer
+                image: buffer,
+                caption: `📊 Bot Statistics\n\n` +
+                         `⏱️ Uptime: ${days}d ${hours}h ${minutes}m ${seconds}s\n` +
+                         `💾 Memory: ${usedMemory}MB / ${totalMemory}MB (${memoryPercent}%)\n` +
+                         `📦 Commands: ${commandCount} (${categories.length} categories)\n` +
+                         `✅ Executions: ${commandStats.totalExecutions || 0}\n\n` +
+                         `Generated: ${currentTime}`
             }, { quoted: message });
+
+            await sock.sendMessage(from, {
+                react: { text: '✅', key: message.key }
+            });
 
         } catch (error) {
             console.error('Stats command error:', error);
@@ -169,7 +242,7 @@ export default {
             const totalMemory = (memoryUsage.heapTotal / 1024 / 1024).toFixed(2);
             
             const commandCount = commandHandler.getCommandCount();
-            const topCommands = commandHandler.getTopCommands(5) || [];
+            const commandStats = commandHandler.getCommandStats();
             const categories = commandHandler.getAllCategories();
             
             const now = moment();
@@ -177,38 +250,64 @@ export default {
             const currentTime = now.format('hh:mm:ss A');
             const currentDay = now.format('dddd');
 
-            let statsText = '╭──⦿【 📊 BOT STATISTICS 】\n';
-            statsText += '│ 🕐 𝗧𝗶𝗺𝗲: ' + currentTime + '\n';
-            statsText += '│ 📅 𝗗𝗮𝘁𝗲: ' + currentDate + '\n';
-            statsText += '│ 📆 𝗗𝗮𝘆: ' + currentDay + '\n';
-            statsText += '╰────────⦿\n\n';
-            statsText += '╭──⦿【 ⚡ SYSTEM STATS 】\n';
-            statsText += '│ ⏰ 𝗨𝗽𝘁𝗶𝗺𝗲: ' + days + 'd ' + hours + 'h ' + minutes + 'm ' + seconds + 's\n';
-            statsText += '│ 🧠 𝗠𝗲𝗺𝗼𝗿𝘆: ' + usedMemory + 'MB / ' + totalMemory + 'MB\n';
-            statsText += '│ 🖥️ 𝗣𝗹𝗮𝘁𝗳𝗼𝗿𝗺: ' + os.platform() + '\n';
-            statsText += '│ 📦 𝗡𝗼𝗱𝗲: ' + process.version + '\n';
-            statsText += '│ 🌐 𝗠𝗼𝗱𝗲: ' + (isGroup ? 'Group' : 'Private') + '\n';
-            statsText += '╰────────⦿\n\n';
-            statsText += '╭──⦿【 🎯 COMMAND STATS 】\n';
-            statsText += '│ 📂 𝗧𝗼𝘁𝗮𝗹: ' + commandCount + ' Commands\n';
-            statsText += '│ 📁 𝗖𝗮𝘁𝗲𝗴𝗼𝗿𝗶𝗲𝘀: ' + categories.length + '\n';
-            statsText += '│ 🔋 𝗦𝘁𝗮𝘁𝘂𝘀: Active ✅\n';
-            statsText += '╰────────⦿\n\n';
-            statsText += '╭──⦿【 🔥 TOP COMMANDS 】\n';
-            if (topCommands.length > 0) {
-                topCommands.forEach((cmd, i) => {
-                    statsText += '│ ' + (i + 1) + '. ✧' + cmd.name + ' (' + (cmd.used || 0) + ' uses)\n';
-                });
-            } else {
-                statsText += '│ No usage data yet\n';
-            }
-            statsText += '╰────────⦿\n\n';
-            statsText += '╭─────────────⦿\n│💫 | [ ' + config.botName + ' 🍀 ]\n╰────────────⦿';
+            let statsText = '📊 BOT STATISTICS\n\n';
+            statsText += '⏰ Time: ' + currentTime + '\n';
+            statsText += '📅 Date: ' + currentDate + '\n';
+            statsText += '📆 Day: ' + currentDay + '\n\n';
+            statsText += '⚡ SYSTEM STATS\n';
+            statsText += '⏱️ Uptime: ' + days + 'd ' + hours + 'h ' + minutes + 'm ' + seconds + 's\n';
+            statsText += '💾 Memory: ' + usedMemory + 'MB / ' + totalMemory + 'MB\n';
+            statsText += '🖥️ Platform: ' + os.platform() + '\n';
+            statsText += '📦 Node: ' + process.version + '\n\n';
+            statsText += '🎯 COMMAND STATS\n';
+            statsText += '📂 Total: ' + commandCount + ' Commands\n';
+            statsText += '📁 Categories: ' + categories.length + '\n';
+            statsText += '✅ Executions: ' + (commandStats.totalExecutions || 0) + '\n';
+            statsText += '🔋 Status: Active ✅\n\n';
+            statsText += 'Powered by ' + (config.botName || 'WhatsApp Bot');
 
             await sock.sendMessage(from, {
                 text: statsText
             }, { quoted: message });
         }
+    },
+
+    drawCard(ctx, x, y, width, height, config) {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+        ctx.strokeStyle = 'rgba(138, 43, 226, 0.4)';
+        ctx.lineWidth = 2;
+        this.roundRect(ctx, x, y, width, height, 25);
+        ctx.fill();
+        ctx.stroke();
+
+        const iconGradient = ctx.createLinearGradient(x + 40, y + 40, x + 90, y + 90);
+        iconGradient.addColorStop(0, '#7928ca');
+        iconGradient.addColorStop(1, '#ff0080');
+        ctx.fillStyle = iconGradient;
+        ctx.font = '50px Arial';
+        ctx.textAlign = 'left';
+        ctx.fillText(config.icon, x + 35, y + 70);
+
+        ctx.font = 'bold 36px Arial';
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(config.title, x + 110, y + 65);
+
+        const dataStartY = y + 115;
+        const dataSpacing = 28;
+
+        config.data.forEach((item, i) => {
+            const dataY = dataStartY + (i * dataSpacing);
+            
+            ctx.font = '24px Arial';
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+            ctx.fillText(item.label + ':', x + 40, dataY);
+
+            ctx.font = 'bold 24px Arial';
+            ctx.fillStyle = item.color;
+            ctx.textAlign = 'right';
+            ctx.fillText(item.value, x + width - 40, dataY);
+            ctx.textAlign = 'left';
+        });
     },
 
     roundRect(ctx, x, y, width, height, radius) {
