@@ -1,34 +1,46 @@
-import axios from 'axios';
-import fs from 'fs-extra';
-import path from 'path';
+import axios from "axios";
+import fs from "fs-extra";
+import path, { dirname } from "path";
+import { fileURLToPath } from "url";
 
-const autoDownloadStates = new Map();
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+const groupSettings = new Map();
 const downloadQueue = new Map();
 const userDownloadLimits = new Map();
 
 const supportedPlatforms = {
     youtube: /^((?:https?:)?\/\/)?((?:www|m)\.)?((?:youtube\.com|youtu\.be))(\/(?:[\w\-]+\?v=|embed\/|v\/)?)([\w\-]+)(\S+)?$/,
-    facebook: /^(https?:\/\/)?(www\.)?(facebook|fb)\.(com|watch)\/.*$/,
+    facebook: /^(https?:\/\/)?((?:www|m|web)\.)?(facebook|fb)\.(com|watch)\/.*$/,
     instagram: /^(https?:\/\/)?(www\.)?(instagram\.com|instagr\.am)\/(?:p|reel)\/([A-Za-z0-9\-_]+)/,
     tiktok: /^(https?:\/\/)?(www\.)?(tiktok\.com)\/.*\/video\/(\d+)/,
     twitter: /^(https?:\/\/)?(www\.)?(twitter\.com|x\.com)\/\w+\/status\/\d+/
 };
 
 const HOURLY_LIMIT = 25;
-const GROUP_SETTINGS_FILE = 'cache/group_download_settings.json';
+const SETTINGS_FILE = path.join(__dirname, '../../cache/autolink_settings.json');
 
-function loadGroupSettings() {
+function loadSettings() {
     try {
-        if (fs.existsSync(GROUP_SETTINGS_FILE)) {
-            return JSON.parse(fs.readFileSync(GROUP_SETTINGS_FILE, 'utf8'));
+        if (fs.existsSync(SETTINGS_FILE)) {
+            const data = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'));
+            Object.entries(data).forEach(([key, value]) => {
+                groupSettings.set(key, value);
+            });
         }
-    } catch (error) {}
-    return {};
+    } catch (error) {
+        console.error('Error loading autolink settings:', error);
+    }
 }
 
-function saveGroupSettings(settings) {
-    fs.ensureDirSync(path.dirname(GROUP_SETTINGS_FILE));
-    fs.writeFileSync(GROUP_SETTINGS_FILE, JSON.stringify(settings, null, 2));
+function saveSettings() {
+    try {
+        const data = Object.fromEntries(groupSettings);
+        fs.ensureDirSync(path.dirname(SETTINGS_FILE));
+        fs.writeFileSync(SETTINGS_FILE, JSON.stringify(data, null, 2));
+    } catch (error) {
+        console.error('Error saving autolink settings:', error);
+    }
 }
 
 function checkRateLimit(userId) {
@@ -50,7 +62,7 @@ function checkRateLimit(userId) {
 function extractValidUrls(text) {
     const urls = [];
     for (const [platform, regex] of Object.entries(supportedPlatforms)) {
-        const matches = [...text.matchAll(new RegExp(regex, 'g'))];
+        const matches = text.matchAll(new RegExp(regex, 'g'));
         for (const match of matches) {
             urls.push({ url: match[0], platform });
         }
@@ -69,7 +81,7 @@ async function getVideoData(url) {
         });
 
         if (!response.data.status || !response.data.data) {
-            throw new Error('Invalid api response');
+            throw new Error('Invalid API response');
         }
 
         const data = response.data.data;
@@ -90,10 +102,10 @@ async function getVideoData(url) {
     }
 }
 
-async function downloadVideo(videoData, from, messageKey) {
+async function downloadVideo(videoData, chatId) {
     try {
-        const timestamp = Date.now();
-        const videoPath = path.join(process.cwd(), `temp_video_${from.replace(/[@.]/g, '_')}_${timestamp}.mp4`);
+        const videoPath = path.join(__dirname, `../../cache/temp_video_${chatId}_${Date.now()}.mp4`);
+        fs.ensureDirSync(path.dirname(videoPath));
 
         const videoResponse = await axios({
             url: videoData.downloadUrl,
@@ -122,119 +134,155 @@ async function downloadVideo(videoData, from, messageKey) {
     }
 }
 
+loadSettings();
+
 export default {
     name: 'autolink',
-    aliases: ['autodl'],
+    aliases: ['autodl', 'autodownload'],
     category: 'media',
-    description: 'Toggle auto-download for video links in chat',
+    description: 'Auto-download videos from social media links',
     usage: 'autolink <on|off|status>',
-    example: 'autolink on\nautolink status',
-    cooldown: 5,
+    example: 'autolink on',
+    cooldown: 3,
     permissions: ['user'],
-    args: true,
+    args: false,
     minArgs: 0,
     maxArgs: 1,
-    typing: true,
-    premium: false,
-    hidden: false,
-    ownerOnly: false,
-    supportsReply: false,
-    supportsChat: true, // Enable to process every message for auto-download
-    supportsReact: true,
-    supportsButtons: false,
+    groupOnly: true,
 
-    async execute({ sock, message, args, from, sender, prefix }) {
-        const settings = loadGroupSettings();
-        const fullText = args.join(' ').trim();
-        const commandArg = args[0]?.toLowerCase();
-
-        // If supportsChat is true and this is not a direct command invocation, process as auto-download
-        if (supportsChat && !fullText.startsWith('autolink')) {
-            return this.processAutoDownload({ sock, message, from, sender, text: fullText });
-        }
-
-        // Handle command: autolink on/off/status
-        if (!['on', 'off', 'status'].includes(commandArg)) {
+    async execute({ sock, message, args, from, sender, prefix, isGroupAdmin }) {
+        if (!args || args.length === 0) {
             return await sock.sendMessage(from, {
-                text: `📱 Autolink Commands:\n• ${prefix}autolink on - Enable auto download\n• ${prefix}autolink off - Disable auto download\n• ${prefix}autolink status - Check current status\n\n🎥 Supported platforms: ${Object.keys(supportedPlatforms).join(', ')}`
+                text: '📱 Autolink Commands:\n\n' +
+                      '• ' + prefix + 'autolink on - Enable auto download\n' +
+                      '• ' + prefix + 'autolink off - Disable auto download\n' +
+                      '• ' + prefix + 'autolink status - Check current status\n\n' +
+                      '🎥 Supported platforms: ' + Object.keys(supportedPlatforms).join(', ')
             }, { quoted: message });
         }
 
-        if (commandArg === 'status') {
-            const status = settings[from] ? 'enabled' : 'disabled';
+        const command = args[0].toLowerCase();
+
+        if (command === 'status') {
+            const isEnabled = groupSettings.get(from) || false;
+            const status = isEnabled ? 'enabled' : 'disabled';
             const limits = userDownloadLimits.get(sender) || { count: 0 };
-            const resetTime = new Date(Date.now() + 3600000).toLocaleTimeString();
+            const remainingTime = limits.timestamp ? new Date(limits.timestamp + 3600000).toLocaleTimeString() : 'N/A';
             
             return await sock.sendMessage(from, {
-                text: `📊 Auto Download Status:\n➤ Current state: ${status}\n➤ Your downloads: ${limits.count}/${HOURLY_LIMIT} (resets at ${resetTime})\n➤ Quality: High (when available)\n➤ Supported: ${Object.keys(supportedPlatforms).join(', ')}\n\n💡 Just send any supported video link to auto-download!`
+                text: '📊 Auto Download Status:\n\n' +
+                      '➤ Current state: ' + status + '\n' +
+                      '➤ Your downloads: ' + limits.count + '/' + HOURLY_LIMIT + '\n' +
+                      '➤ Resets at: ' + remainingTime + '\n' +
+                      '➤ Quality: High (when available)\n' +
+                      '➤ Supported: ' + Object.keys(supportedPlatforms).join(', ') + '\n\n' +
+                      '💡 Just send any supported video link to auto-download!'
             }, { quoted: message });
         }
 
-        settings[from] = commandArg === 'on';
-        saveGroupSettings(settings);
+        if (!['on', 'off'].includes(command)) {
+            return await sock.sendMessage(from, {
+                text: '⚠️ Invalid command!\n\nUse: ' + prefix + 'autolink <on|off|status>'
+            }, { quoted: message });
+        }
 
-        const statusEmoji = commandArg === 'on' ? '✅' : '❌';
-        const statusText = commandArg === 'on' ? 'enabled' : 'disabled';
+        if (!isGroupAdmin) {
+            return await sock.sendMessage(from, {
+                text: '❌ Admin Only\n\nOnly group admins can enable/disable autolink.'
+            }, { quoted: message });
+        }
+
+        groupSettings.set(from, command === 'on');
+        saveSettings();
+
+        const statusEmoji = command === 'on' ? '✅' : '❌';
+        const statusText = command === 'on' ? 'enabled' : 'disabled';
         
-        const replyText = `${statusEmoji} Auto download ${statusText} for this chat!\n\n` +
-            (commandArg === 'on' ? 
-                `🎯 Send any video link from: ${Object.keys(supportedPlatforms).join(', ')}\n⚡ Downloads will be in high quality automatically!` :
-                `💤 Auto download is now disabled.`
-            );
-
-        await sock.sendMessage(from, { text: replyText }, { quoted: message });
-        await sock.sendMessage(from, { react: { text: '✅', key: message.key } });
-    },
-
-    async processAutoDownload({ sock, message, from, sender, text }) {
-        const settings = loadGroupSettings();
-        if (!settings[from]) return;
-
-        const urls = extractValidUrls(text);
-
-        if (urls.length === 0) return;
-
-        if (!checkRateLimit(sender)) {
-            const resetTime = new Date(Date.now() + 3600000).toLocaleTimeString();
-            await sock.sendMessage(from, {
-                text: `⚠️ Rate limit reached!\n➤ Limit: ${HOURLY_LIMIT} downloads per hour\n➤ Resets at: ${resetTime}\n\n💡 This prevents api abuse and ensures service stability.`
-            }, { quoted: message });
-            return;
-        }
-
-        for (const { url, platform } of urls) {
-            const chatQueue = downloadQueue.get(from) || new Set();
-            if (chatQueue.has(url)) continue;
-            chatQueue.add(url);
-            downloadQueue.set(from, chatQueue);
-
-            try {
-                await sock.sendMessage(from, { react: { text: '⏳', key: message.key } });
-
-                const videoData = await getVideoData(url);
-                const videoPath = await downloadVideo(videoData, from, message.key.id);
-
-                const messageBody = 
-                    `🎥 Auto-Downloaded Video\n➤ Platform: ${platform.charAt(0).toUpperCase() + platform.slice(1)}\n➤ Title: ${videoData.title}\n➤ Quality: ${videoData.quality}\n➤ Original: ${url}`;
-
-                await sock.sendMessage(from, { 
-                    video: { url: videoPath }, 
-                    caption: messageBody 
-                }, { quoted: message });
-
-                fs.unlinkSync(videoPath);
-                chatQueue.delete(url);
-                await sock.sendMessage(from, { react: { text: '✅', key: message.key } });
-
-            } catch (error) {
-                console.error(`Download error for ${url}:`, error.message);
-                chatQueue.delete(url);
-                await sock.sendMessage(from, { react: { text: '❌', key: message.key } });
-                
-                await sock.sendMessage(from, {
-                    text: `❌ Download failed for ${platform}\n➤ Error: ${error.message}\n➤ URL: ${url}\n\n💡 This might be due to: private content, expired link, or api issues.`
-                }, { quoted: message });
-            }
-        }
+        await sock.sendMessage(from, {
+            text: statusEmoji + ' Auto download ' + statusText + ' for this group!\n\n' +
+                  (command === 'on' ? 
+                      '🎯 Send any video link from: ' + Object.keys(supportedPlatforms).join(', ') + '\n' +
+                      '⚡ Videos will be downloaded in high quality automatically!' :
+                      '💤 Auto download is now disabled.')
+        }, { quoted: message });
     }
 };
+
+export async function handleAutoDownload(sock, message, from, sender, text) {
+    const isEnabled = groupSettings.get(from);
+    if (!isEnabled || !from.endsWith('@g.us')) return false;
+
+    const urls = extractValidUrls(text);
+    if (urls.length === 0) return false;
+
+    if (!checkRateLimit(sender)) {
+        const limits = userDownloadLimits.get(sender);
+        const resetTime = new Date(limits.timestamp + 3600000).toLocaleTimeString();
+        await sock.sendMessage(from, {
+            text: '⚠️ Rate limit reached!\n\n' +
+                  '➤ Limit: ' + HOURLY_LIMIT + ' downloads per hour\n' +
+                  '➤ Resets at: ' + resetTime + '\n\n' +
+                  '💡 This prevents API abuse and ensures service stability.'
+        }, { quoted: message });
+        return true;
+    }
+
+    for (const { url, platform } of urls) {
+        const threadQueue = downloadQueue.get(from) || new Set();
+
+        if (threadQueue.has(url)) continue;
+        threadQueue.add(url);
+        downloadQueue.set(from, threadQueue);
+
+        try {
+            await sock.sendMessage(from, {
+                react: { text: '⏳', key: message.key }
+            });
+
+            const videoData = await getVideoData(url);
+            const videoPath = await downloadVideo(videoData, from);
+
+            const caption = 
+                '🎥 Auto-Downloaded Video\n\n' +
+                '➤ Platform: ' + platform.charAt(0).toUpperCase() + platform.slice(1) + '\n' +
+                '➤ Title: ' + videoData.title + '\n' +
+                '➤ Quality: ' + videoData.quality + '\n\n' +
+                '🔗 Original: ' + url;
+
+            await sock.sendMessage(from, {
+                video: { url: videoPath },
+                caption: caption,
+                mimetype: 'video/mp4'
+            }, { quoted: message });
+
+            try {
+                fs.unlinkSync(videoPath);
+                threadQueue.delete(url);
+                await sock.sendMessage(from, {
+                    react: { text: '✅', key: message.key }
+                });
+            } catch (cleanupError) {
+                console.error('Cleanup error:', cleanupError);
+                await sock.sendMessage(from, {
+                    react: { text: '❌', key: message.key }
+                });
+            }
+        } catch (error) {
+            console.error('Download error for ' + url + ':', error.message);
+            
+            threadQueue.delete(url);
+            await sock.sendMessage(from, {
+                react: { text: '❌', key: message.key }
+            });
+            
+            await sock.sendMessage(from, {
+                text: '❌ Download failed for ' + platform + '\n\n' +
+                      '➤ Error: ' + error.message + '\n' +
+                      '➤ URL: ' + url + '\n\n' +
+                      '💡 This might be due to: private content, expired link, or API issues.'
+            }, { quoted: message });
+        }
+    }
+
+    return true;
+}
