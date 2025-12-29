@@ -225,9 +225,7 @@ export default {
         const percentage = stats.total > 0 ? Math.round((stats.correct / stats.total) * 100) : 0;
         const streak = userStreaks.get(sender);
 
-        let caption = '┏━━━━━━━━━━━━━━━━━━━━━━━━┓\n';
-        caption += '┃  📚 ' + subjectName + '\n';
-        caption += '┗━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n';
+        let caption = '📚 ' + subjectName + '\n\n';
         caption += '📊 Stats: ' + stats.correct + '/' + stats.total + ' (' + percentage + '%)\n';
         if (streak > 0) {
             caption += '🔥 Streak: ' + streak + '\n';
@@ -353,9 +351,7 @@ export default {
                     const percentage = Math.round((stats.correct / stats.total) * 100);
                     const streak = userStreaks.get(sender);
 
-                    let resultText = '┏━━━━━━━━━━━━━━━━━━━━━━━━┓\n';
-                    resultText += '┃  ' + (isCorrect ? '✅ CORRECT!' : '❌ WRONG!') + '\n';
-                    resultText += '┗━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n';
+                    let resultText = isCorrect ? '✅ CORRECT!\n\n' : '❌ WRONG!\n\n';
                     resultText += '📖 Subject: ' + subjectName + '\n';
                     resultText += '💡 Your Answer: ' + answer + '\n';
                     resultText += '✅ Correct: ' + correctAnswer.toUpperCase() + '\n';
@@ -366,9 +362,7 @@ export default {
                     }
 
                     if (aiExplanation) {
-                        resultText += '\n\n┏━━━━━━━━━━━━━━━━━━━━━━━━┓\n';
-                        resultText += '┃  🤖 AI Tutor Explains\n';
-                        resultText += '┗━━━━━━━━━━━━━━━━━━━━━━━━┛\n';
+                        resultText += '\n\n🤖 AI Tutor Explains:\n';
                         resultText += aiExplanation;
                     } else if (questionData.solution) {
                         const shortSolution = questionData.solution.substring(0, 200);
@@ -415,15 +409,11 @@ export default {
         }
 
         const overallPercentage = Math.round((userScore.correct / userScore.total) * 100);
-        let statsText = '┏━━━━━━━━━━━━━━━━━━━━━━━━┓\n';
-        statsText += '┃  📊 Your UTME Stats\n';
-        statsText += '┗━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n';
+        let statsText = '📊 Your UTME Stats\n\n';
         statsText += '🎯 Overall: ' + userScore.correct + '/' + userScore.total + ' (' + overallPercentage + '%)\n';
         statsText += '🔥 Current Streak: ' + streak + '\n';
         statsText += '⭐ Best Streak: ' + (userScore.bestStreak || 0) + '\n\n';
-        statsText += '┏━━━━━━━━━━━━━━━━━━━━━━━━┓\n';
-        statsText += '┃  📚 By Subject\n';
-        statsText += '┗━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n';
+        statsText += '📚 By Subject:\n\n';
 
         const sortedSubjects = Object.entries(userScore.subjects)
             .sort((a, b) => b[1].correct - a[1].correct)
@@ -445,9 +435,7 @@ export default {
         const userScore = userScores.get(sender);
         const hasStats = userScore && userScore.total > 0;
 
-        let subjectsText = '┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n';
-        subjectsText += '┃  📚 UTME SUBJECTS BY DEPARTMENT\n';
-        subjectsText += '┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n';
+        let subjectsText = '📚 UTME SUBJECTS BY DEPARTMENT\n\n';
         
         for (const [category, depts] of Object.entries(this.departments)) {
             subjectsText += category + '\n';
@@ -455,16 +443,14 @@ export default {
                 subjectsText += '  📌 ' + dept + '\n';
                 subjects.forEach(sub => {
                     if (this.subjects[sub]) {
-                        subjectsText += '    ✧ ' + prefix + 'utme ' + sub + '\n';
+                        subjectsText += '    • ' + prefix + 'utme ' + sub + '\n';
                     }
                 });
             }
             subjectsText += '\n';
         }
 
-        subjectsText += '┏━━━━━━━━━━━━━━━━━━━━━━━━┓\n';
-        subjectsText += '┃  💡 Commands\n';
-        subjectsText += '┗━━━━━━━━━━━━━━━━━━━━━━━━┛\n';
+        subjectsText += '💡 Commands:\n';
         subjectsText += '📝 Start: ' + prefix + 'utme mathematics\n';
         if (hasStats) {
             subjectsText += '📊 Stats: ' + prefix + 'utme score\n';
@@ -487,146 +473,6 @@ export default {
         gradient.addColorStop(1, '#0f3460');
         ctx.fillStyle = gradient;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-        for (let i = 0; i < 100; i++) {
-            const x = Math.random() * canvas.width;
-            const y = Math.random() * canvas.height;
-            const size = Math.random() * 3;
-            const opacity = Math.random() * 0.7;
-            ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
-            ctx.beginPath();
-            ctx.arc(x, y, size, 0, Math.PI * 2);
-            ctx.fill();
-        }
-
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.03)';
-        this.roundRect(ctx, 50, 50, canvas.width - 100, canvas.height - 100, 30);
-        ctx.fill();
-
-        ctx.strokeStyle = isCorrect ? 'rgba(83, 211, 156, 0.4)' : 'rgba(255, 107, 157, 0.4)';
-        ctx.lineWidth = 4;
-        ctx.stroke();
-
-        ctx.fillStyle = 'rgba(26, 26, 46, 0.95)';
-        this.roundRect(ctx, 70, 70, canvas.width - 140, 200, 20);
-        ctx.fill();
-
-        ctx.font = 'bold 72px Arial';
-        ctx.fillStyle = isCorrect ? '#53d38c' : '#ff6b9d';
-        ctx.textAlign = 'center';
-        ctx.fillText(isCorrect ? '✅ CORRECT!' : '❌ WRONG!', canvas.width / 2, 145);
-
-        ctx.font = 'bold 38px Arial';
-        ctx.fillStyle = '#ffd700';
-        ctx.fillText(subjectName, canvas.width / 2, 210);
-
-        const userScore = userScores.get(sender);
-        if (userScore) {
-            const streak = userStreaks.get(sender);
-            ctx.font = '28px Arial';
-            ctx.fillStyle = '#b8b8b8';
-            let statsText = 'Score: ' + userScore.correct + '/' + userScore.total;
-            if (streak > 0) {
-                statsText += ' | 🔥 Streak: ' + streak;
-            }
-            ctx.fillText(statsText, canvas.width / 2, 250);
-        }
-
-        ctx.fillStyle = 'rgba(26, 26, 46, 0.95)';
-        this.roundRect(ctx, 90, 300, canvas.width - 180, 180, 20);
-        ctx.fill();
-
-        ctx.strokeStyle = 'rgba(83, 211, 156, 0.2)';
-        ctx.lineWidth = 2;
-        ctx.stroke();
-
-        ctx.font = 'bold 32px Arial';
-        ctx.fillStyle = '#4fa3d8';
-        ctx.textAlign = 'left';
-        ctx.fillText('YOUR ANSWER:', 120, 345);
-        
-        ctx.font = '28px Arial';
-        ctx.fillStyle = isCorrect ? '#53d38c' : '#ff6b9d';
-        ctx.fillText(userAnswer, 350, 345);
-
-        ctx.font = 'bold 32px Arial';
-        ctx.fillStyle = '#53d38c';
-        ctx.fillText('CORRECT ANSWER:', 120, 400);
-        
-        ctx.font = '28px Arial';
-        ctx.fillStyle = '#53d38c';
-        ctx.fillText(correctAnswer.toUpperCase(), 420, 400);
-
-        ctx.font = '24px Arial';
-        ctx.fillStyle = '#e0e0e0';
-        const correctOption = questionData.option[correctAnswer.toLowerCase()];
-        const wrappedCorrect = this.wrapText(ctx, correctOption, canvas.width - 240);
-        const displayCorrect = wrappedCorrect[0].substring(0, 100) + (wrappedCorrect[0].length > 100 ? '...' : '');
-        ctx.fillText(displayCorrect, 120, 445);
-
-        ctx.fillStyle = 'rgba(26, 26, 46, 0.95)';
-        this.roundRect(ctx, 90, 510, canvas.width - 180, 280, 20);
-        ctx.fill();
-
-        ctx.strokeStyle = 'rgba(79, 163, 216, 0.3)';
-        ctx.lineWidth = 2;
-        ctx.stroke();
-
-        ctx.font = 'bold 36px Arial';
-        ctx.fillStyle = '#4fa3d8';
-        ctx.fillText('🤖 AI TUTOR EXPLANATION', 120, 565);
-
-        ctx.font = '24px Arial';
-        ctx.fillStyle = '#ffffff';
-        ctx.fillText('Generating personalized explanation...', 120, 620);
-        ctx.fillText('Check the caption below for AI insights!', 120, 660);
-
-        ctx.font = '22px Arial';
-        ctx.fillStyle = '#b8b8b8';
-        ctx.textAlign = 'center';
-        ctx.fillText('Reply NEXT for another question', canvas.width / 2, canvas.height - 50);
-
-        return canvas.toBuffer('image/png');
-    },
-
-    wrapText(ctx, text, maxWidth) {
-        const words = text.split(' ');
-        const lines = [];
-        let currentLine = '';
-
-        for (const word of words) {
-            const testLine = currentLine + (currentLine ? ' ' : '') + word;
-            const metrics = ctx.measureText(testLine);
-
-            if (metrics.width > maxWidth && currentLine) {
-                lines.push(currentLine);
-                currentLine = word;
-            } else {
-                currentLine = testLine;
-            }
-        }
-
-        if (currentLine) {
-            lines.push(currentLine);
-        }
-
-        return lines;
-    },
-
-    roundRect(ctx, x, y, width, height, radius) {
-        ctx.beginPath();
-        ctx.moveTo(x + radius, y);
-        ctx.lineTo(x + width - radius, y);
-        ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
-        ctx.lineTo(x + width, y + height - radius);
-        ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
-        ctx.lineTo(x + radius, y + height);
-        ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
-        ctx.lineTo(x, y + radius);
-        ctx.quadraticCurveTo(x, y, x + radius, y);
-        ctx.closePath();
-    }
-};
 
         ctx.fillStyle = 'rgba(255, 255, 255, 0.03)';
         this.roundRect(ctx, 50, 50, canvas.width - 100, canvas.height - 100, 30);
@@ -786,13 +632,131 @@ export default {
         ctx.fillStyle = gradient;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        for (let i = 0; i < 100; i++) {
-            const x = Math.random() * canvas.width;
-            const y = Math.random() * canvas.height;
-            const size = Math.random() * 3;
-            const opacity = Math.random() * 0.7;
-            ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
-            ctx.beginPath();
-            ctx.arc(x, y, size, 0, Math.PI * 2);
-            ctx.fill();
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.03)';
+        this.roundRect(ctx, 50, 50, canvas.width - 100, canvas.height - 100, 30);
+        ctx.fill();
+
+        ctx.strokeStyle = isCorrect ? 'rgba(83, 211, 156, 0.4)' : 'rgba(255, 107, 157, 0.4)';
+        ctx.lineWidth = 4;
+        ctx.stroke();
+
+        ctx.fillStyle = 'rgba(26, 26, 46, 0.95)';
+        this.roundRect(ctx, 70, 70, canvas.width - 140, 200, 20);
+        ctx.fill();
+
+        ctx.font = 'bold 72px Arial';
+        ctx.fillStyle = isCorrect ? '#53d38c' : '#ff6b9d';
+        ctx.textAlign = 'center';
+        ctx.fillText(isCorrect ? '✅ CORRECT!' : '❌ WRONG!', canvas.width / 2, 145);
+
+        ctx.font = 'bold 38px Arial';
+        ctx.fillStyle = '#ffd700';
+        ctx.fillText(subjectName, canvas.width / 2, 210);
+
+        const userScore = userScores.get(sender);
+        if (userScore) {
+            const streak = userStreaks.get(sender);
+            ctx.font = '28px Arial';
+            ctx.fillStyle = '#b8b8b8';
+            let statsText = 'Score: ' + userScore.correct + '/' + userScore.total;
+            if (streak > 0) {
+                statsText += ' | 🔥 Streak: ' + streak;
+            }
+            ctx.fillText(statsText, canvas.width / 2, 250);
         }
+
+        ctx.fillStyle = 'rgba(26, 26, 46, 0.95)';
+        this.roundRect(ctx, 90, 300, canvas.width - 180, 180, 20);
+        ctx.fill();
+
+        ctx.strokeStyle = 'rgba(83, 211, 156, 0.2)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        ctx.font = 'bold 32px Arial';
+        ctx.fillStyle = '#4fa3d8';
+        ctx.textAlign = 'left';
+        ctx.fillText('YOUR ANSWER:', 120, 345);
+        
+        ctx.font = '28px Arial';
+        ctx.fillStyle = isCorrect ? '#53d38c' : '#ff6b9d';
+        ctx.fillText(userAnswer, 350, 345);
+
+        ctx.font = 'bold 32px Arial';
+        ctx.fillStyle = '#53d38c';
+        ctx.fillText('CORRECT ANSWER:', 120, 400);
+        
+        ctx.font = '28px Arial';
+        ctx.fillStyle = '#53d38c';
+        ctx.fillText(correctAnswer.toUpperCase(), 420, 400);
+
+        ctx.font = '24px Arial';
+        ctx.fillStyle = '#e0e0e0';
+        const correctOption = questionData.option[correctAnswer.toLowerCase()];
+        const wrappedCorrect = this.wrapText(ctx, correctOption, canvas.width - 240);
+        const displayCorrect = wrappedCorrect[0].substring(0, 100) + (wrappedCorrect[0].length > 100 ? '...' : '');
+        ctx.fillText(displayCorrect, 120, 445);
+
+        ctx.fillStyle = 'rgba(26, 26, 46, 0.95)';
+        this.roundRect(ctx, 90, 510, canvas.width - 180, 280, 20);
+        ctx.fill();
+
+        ctx.strokeStyle = 'rgba(79, 163, 216, 0.3)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        ctx.font = 'bold 36px Arial';
+        ctx.fillStyle = '#4fa3d8';
+        ctx.fillText('🤖 AI TUTOR EXPLANATION', 120, 565);
+
+        ctx.font = '24px Arial';
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText('Generating personalized explanation...', 120, 620);
+        ctx.fillText('Check the caption below for AI insights!', 120, 660);
+
+        ctx.font = '22px Arial';
+        ctx.fillStyle = '#b8b8b8';
+        ctx.textAlign = 'center';
+        ctx.fillText('Reply NEXT for another question', canvas.width / 2, canvas.height - 50);
+
+        return canvas.toBuffer('image/png');
+    },
+
+    wrapText(ctx, text, maxWidth) {
+        const words = text.split(' ');
+        const lines = [];
+        let currentLine = '';
+
+        for (const word of words) {
+            const testLine = currentLine + (currentLine ? ' ' : '') + word;
+            const metrics = ctx.measureText(testLine);
+
+            if (metrics.width > maxWidth && currentLine) {
+                lines.push(currentLine);
+                currentLine = word;
+            } else {
+                currentLine = testLine;
+            }
+        }
+
+        if (currentLine) {
+            lines.push(currentLine);
+        }
+
+        return lines;
+    },
+
+    roundRect(ctx, x, y, width, height, radius) {
+        ctx.beginPath();
+        ctx.moveTo(x + radius, y);
+        ctx.lineTo(x + width - radius, y);
+        ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+        ctx.lineTo(x + width, y + height - radius);
+        ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+        ctx.lineTo(x + radius, y + height);
+        ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+        ctx.lineTo(x, y + radius);
+        ctx.quadraticCurveTo(x, y, x + radius, y);
+        ctx.closePath();
+    }
+};
