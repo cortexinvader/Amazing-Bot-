@@ -1,87 +1,54 @@
-import formatResponse from '../../utils/formatUtils.js';
-
 export default {
     name: 'kick',
-    aliases: ['remove'],
+    aliases: ['remove', 'ban'],
     category: 'admin',
     description: 'Remove a member from the group',
-    usage: 'kick @user OR reply to message',
+    usage: 'kick @user',
+    example: 'kick @user',
     cooldown: 3,
     permissions: ['admin'],
+    args: true,
+    minArgs: 1,
     groupOnly: true,
     adminOnly: true,
     botAdminRequired: true,
 
-    async execute({ sock, message, args, from, isGroup, isGroupAdmin, isBotAdmin }) {
-        if (!isGroup) {
-            return sock.sendMessage(from, {
-                text: formatResponse.error('GROUP ONLY',
-                    'This command can only be used in groups')
-            }, { quoted: message });
-        }
-
-        if (!isGroupAdmin) {
-            return sock.sendMessage(from, {
-                text: formatResponse.error('ADMIN ONLY',
-                    'You need to be a group admin to use this command')
-            }, { quoted: message });
-        }
-
-        if (!isBotAdmin) {
-            return sock.sendMessage(from, {
-                text: formatResponse.error('BOT NOT ADMIN',
-                    'I need admin privileges to kick members',
-                    'Make me an admin first')
-            }, { quoted: message });
-        }
-
+    async execute({ sock, message, from, sender, isGroupAdmin }) {
         try {
-            const quotedUser = message.message?.extendedTextMessage?.contextInfo?.participant;
-            const mentionedUsers = message.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+            const mentioned = message.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+            const replied = message.message?.extendedTextMessage?.contextInfo?.participant;
             
-            let usersToKick = [];
-            if (quotedUser) {
-                usersToKick = [quotedUser];
-            } else if (mentionedUsers.length > 0) {
-                usersToKick = mentionedUsers;
-            } else {
-                return sock.sendMessage(from, {
-                    text: formatResponse.error('NO TARGET',
-                        'Reply to a message or mention user(s) to kick',
-                        'Usage: kick @user OR reply to message and type: kick')
+            let targetUser = replied || mentioned[0];
+            
+            if (!targetUser) {
+                return await sock.sendMessage(from, {
+                    text: '❌ Please mention or reply to a user to kick'
                 }, { quoted: message });
             }
-            
-            await sock.sendMessage(from, {
-                text: `╭──⦿【 ⚠️ KICKING MEMBERS 】
-│
-│ 🔄 Processing ${usersToKick.length} member(s)...
-│
-╰────────────⦿`
-            }, { quoted: message });
 
-            await sock.groupParticipantsUpdate(from, usersToKick, 'remove');
+            const groupMetadata = await sock.groupMetadata(from);
+            const participant = groupMetadata.participants.find(p => {
+                const pId = p.id.split('@')[0];
+                const targetId = targetUser.split('@')[0];
+                return pId === targetId;
+            });
 
-            const kickedList = usersToKick.map(u => `✧ @${u.split('@')[0]}`).join('\n│ ');
-            
+            if (participant?.admin) {
+                return await sock.sendMessage(from, {
+                    text: '❌ Cannot kick an admin'
+                }, { quoted: message });
+            }
+
+            await sock.groupParticipantsUpdate(from, [targetUser], 'remove');
+
             await sock.sendMessage(from, {
-                text: `╭──⦿【 ✅ MEMBERS KICKED 】
-│
-│ 👥 𝗞𝗶𝗰𝗸𝗲𝗱 𝗠𝗲𝗺𝗯𝗲𝗿𝘀:
-│ ${kickedList}
-│
-│ 📊 𝗧𝗼𝘁𝗮𝗹: ${usersToKick.length}
-│ 📅 𝗗𝗮𝘁𝗲: ${new Date().toLocaleDateString()}
-│
-╰────────────⦿`,
-                mentions: usersToKick
+                text: `✅ User removed from group`,
+                mentions: [targetUser]
             }, { quoted: message });
 
         } catch (error) {
             await sock.sendMessage(from, {
-                text: formatResponse.error('KICK FAILED', 
-                    'Failed to kick user(s)',
-                    'They might be admin or I lack permissions')
+                text: `❌ Failed to kick user\n\n${error.message}`
             }, { quoted: message });
         }
     }
