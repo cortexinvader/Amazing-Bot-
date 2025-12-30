@@ -1,71 +1,27 @@
-import { updateUser } from '../../models/User.js';
-
-export default {
+export const unmute = {
     name: 'unmute',
-    aliases: ['unsilence', 'unmuteuser'],
+    aliases: ['open', 'unlockgroup'],
     category: 'admin',
-    description: 'Remove mute from a user',
-    usage: 'unmute @user OR reply to message',
-    example: 'unmute @user',
-    cooldown: 5,
+    description: 'Unmute group (all members can send messages)',
+    usage: 'unmute',
+    example: 'unmute',
+    cooldown: 3,
     permissions: ['admin'],
     groupOnly: true,
     adminOnly: true,
+    botAdminRequired: true,
 
-    async execute({ sock, message, args, from, sender, isGroup, isGroupAdmin }) {
-        if (!isGroup) {
-            return await sock.sendMessage(from, {
-                text: '╭──⦿【 ❌ ERROR 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: Group only command\n│\n│ 💡 This command works in groups\n╰────────⦿'
-            }, { quoted: message });
-        }
-
-        if (!isGroupAdmin) {
-            return await sock.sendMessage(from, {
-                text: '╭──⦿【 ❌ ERROR 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: Admin only\n│\n│ 💡 You need admin privileges\n╰────────⦿'
-            }, { quoted: message });
-        }
-
+    async execute({ sock, message, from }) {
         try {
-            const quotedUser = message.message?.extendedTextMessage?.contextInfo?.participant;
-            const mentionedUsers = message.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
-            
-            let targetJid;
-            if (quotedUser) {
-                targetJid = quotedUser;
-            } else if (mentionedUsers.length > 0) {
-                targetJid = mentionedUsers[0];
-            } else {
-                return await sock.sendMessage(from, {
-                    text: '╭──⦿【 ❌ ERROR 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: No target\n│\n│ 💡 Reply or mention user\n╰────────⦿'
-                }, { quoted: message });
-            }
+            await sock.groupSettingUpdate(from, 'not_announcement');
 
-            await updateUser(targetJid, {
-                $set: {
-                    isMuted: false,
-                    muteReason: null,
-                    muteUntil: null,
-                    mutedBy: null
-                }
-            });
-
-            const targetNumber = targetJid.split('@')[0];
             await sock.sendMessage(from, {
-                text: `╭──⦿【 🔊 USER UNMUTED 】
-│
-│ 👤 𝗨𝘀𝗲𝗿: @${targetNumber}
-│ 👮 𝗨𝗻𝗺𝘂𝘁𝗲𝗱 𝗯𝘆: @${sender.split('@')[0]}
-│ 📅 𝗗𝗮𝘁𝗲: ${new Date().toLocaleDateString()}
-│
-│ ✅ Can use bot commands again
-│
-╰────────────⦿`,
-                mentions: [targetJid, sender]
+                text: `🔓 Group unmuted\n\nAll members can send messages now`
             }, { quoted: message });
 
         } catch (error) {
             await sock.sendMessage(from, {
-                text: '╭──⦿【 ❌ ERROR 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: Unmute failed\n│\n│ 💡 Try again later\n╰────────⦿'
+                text: `❌ Failed to unmute group\n\n${error.message}`
             }, { quoted: message });
         }
     }
