@@ -1,4 +1,4 @@
-export const unmute = {
+export default {
     name: 'unmute',
     aliases: ['open', 'unlockgroup'],
     category: 'admin',
@@ -11,12 +11,20 @@ export const unmute = {
     adminOnly: true,
     botAdminRequired: true,
 
-    async execute({ sock, message, from }) {
+    async execute({ sock, message, from, sender }) {
         try {
+            const groupMetadata = await sock.groupMetadata(from);
+            
+            if (!groupMetadata.announce) {
+                return await sock.sendMessage(from, {
+                    text: '❌ Group is already open'
+                }, { quoted: message });
+            }
+
             await sock.groupSettingUpdate(from, 'not_announcement');
 
             await sock.sendMessage(from, {
-                text: `🔓 Group unmuted\n\nAll members can send messages now`
+                text: '🔓 Group unmuted\n\nAll members can send messages now'
             }, { quoted: message });
 
         } catch (error) {
