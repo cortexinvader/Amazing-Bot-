@@ -1,4 +1,4 @@
-import { updateUser, getUser } from '../../models/User.js';
+const userWarnings = new Map();
 
 export default {
     name: 'warn',
@@ -12,19 +12,7 @@ export default {
     groupOnly: true,
     adminOnly: true,
 
-    async execute({ sock, message, args, from, sender, isGroup, isGroupAdmin }) {
-        if (!isGroup) {
-            return await sock.sendMessage(from, {
-                text: '╭──⦿【 ❌ ERROR 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: Group only command\n│\n│ 💡 This command works in groups\n╰────────⦿'
-            }, { quoted: message });
-        }
-
-        if (!isGroupAdmin) {
-            return await sock.sendMessage(from, {
-                text: '╭──⦿【 ❌ ERROR 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: Admin only\n│\n│ 💡 You need admin privileges\n╰────────⦿'
-            }, { quoted: message });
-        }
-
+    async execute({ sock, message, args, from, sender }) {
         try {
             const quotedUser = message.message?.extendedTextMessage?.contextInfo?.participant;
             const mentionedUsers = message.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
@@ -40,24 +28,18 @@ export default {
                 reason = args.slice(1).join(' ') || reason;
             } else {
                 return await sock.sendMessage(from, {
-                    text: '╭──⦿【 ❌ ERROR 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: No target\n│\n│ 💡 Reply or mention user\n╰────────⦿'
+                    text: '❌ Mention or reply to a user to warn'
                 }, { quoted: message });
             }
 
             if (targetJid === sender) {
                 return await sock.sendMessage(from, {
-                    text: '╭──⦿【 ❌ ERROR 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: Cannot warn yourself\n│\n│ 💡 Invalid action\n╰────────⦿'
+                    text: '❌ You cannot warn yourself'
                 }, { quoted: message });
             }
 
-            const targetUser = await getUser(targetJid);
-            if (!targetUser) {
-                await updateUser(targetJid, {
-                    jid: targetJid,
-                    phone: targetJid.split('@')[0]
-                });
-            }
-
+            const warnings = userWarnings.get(targetJid) || [];
+            
             const newWarning = {
                 reason: reason,
                 warnedBy: sender,
@@ -65,40 +47,16 @@ export default {
                 expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000)
             };
 
-            await updateUser(targetJid, {
-                $push: { warnings: newWarning }
-            });
+            warnings.push(newWarning);
+            userWarnings.set(targetJid, warnings);
 
-            const updatedUser = await getUser(targetJid);
-            const warningCount = updatedUser?.warnings?.length || 1;
+            const warningCount = warnings.length;
 
-            let responseText = `╭──⦿【 ⚠️ USER WARNED 】
-│
-│ 👤 𝗨𝘀𝗲𝗿: @${targetJid.split('@')[0]}
-│ 📝 𝗥𝗲𝗮𝘀𝗼𝗻: ${reason}
-│ 👮 𝗪𝗮𝗿𝗻𝗲𝗱 𝗯𝘆: @${sender.split('@')[0]}
-│ 🔢 𝗪𝗮𝗿𝗻𝗶𝗻𝗴: ${warningCount}/3
-│ ⏰ 𝗘𝘅𝗽𝗶𝗿𝗲𝘀: 24 hours
-│`;
+            let responseText = `⚠️ User Warned\n\nUser: @${targetJid.split('@')[0]}\nReason: ${reason}\nWarned by: @${sender.split('@')[0]}\nWarning: ${warningCount}/3\nExpires: 24 hours`;
 
             if (warningCount >= 3) {
-                await updateUser(targetJid, {
-                    $set: {
-                        isBanned: true,
-                        banReason: 'Too many warnings (3/3)',
-                        bannedBy: 'System',
-                        bannedAt: new Date()
-                    }
-                });
-                responseText += `
-│
-│ 🚫 𝗔𝗨𝗧𝗢-𝗕𝗔𝗡: User banned
-│ for 3 warnings
-│`;
+                responseText += `\n\n🚫 AUTO-BAN: User has received 3 warnings`;
             }
-
-            responseText += `
-╰────────────⦿`;
 
             await sock.sendMessage(from, {
                 text: responseText,
@@ -107,8 +65,10 @@ export default {
 
         } catch (error) {
             await sock.sendMessage(from, {
-                text: '╭──⦿【 ❌ ERROR 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: Warn failed\n│\n│ 💡 Try again later\n╰────────⦿'
+                text: `❌ Failed to warn user\n\n${error.message}`
             }, { quoted: message });
         }
     }
 };
+
+export { userWarnings };
