@@ -1,150 +1,117 @@
-import fs from 'fs';
-import path from 'path';
-import fileTypeModule from 'file-type';
-const { fileTypeFromBuffer } = fileTypeModule;
-import config from '../../config.js';
+import { downloadContentFromMessage } from "@whiskeysockets/baileys";
 
-const TEMP_DIR = path.join(process.cwd(), 'temp');
-if (!fs.existsSync(TEMP_DIR)) {
-    fs.mkdirSync(TEMP_DIR, { recursive: true });
-}
-
-function cleanTempFile(filePath) {
-    if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
+async function downloadMedia(msg) {
+    const messageType = Object.keys(msg)[0];
+    const stream = await downloadContentFromMessage(msg[messageType], messageType.replace('Message', ''));
+    let buffer = Buffer.from([]);
+    for await (const chunk of stream) {
+        buffer = Buffer.concat([buffer, chunk]);
     }
+    return buffer;
 }
 
 export default {
     name: 'vv',
-    aliases: ['viewonce', 'vo'],
+    aliases: ['ex', 'viewonce', 'reveal'],
     category: 'media',
-    description: 'View view-once media normally (reply to it)',
-    usage: 'vv [reply to view once image/video]',
-    example: 'Reply to view once with vv',
-    cooldown: 3,
+    description: 'Extract and resend view-once images, videos, or audio',
+    usage: 'extract <reply to view-once media>',
+    example: 'extract (reply to view-once)',
+    cooldown: 5,
     permissions: ['user'],
     args: false,
     minArgs: 0,
     maxArgs: 0,
-    typing: true,
-    premium: false,
-    hidden: false,
-    ownerOnly: false,
-    supportsReply: true,
-    supportsChat: true,
-    supportsReact: true,
-    supportsButtons: false,
 
-    async execute({ sock, message, from, prefix }) {
+    async execute({ sock, message, from, sender, prefix }) {
+        const quoted = message.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+
+        if (!quoted) {
+            return await sock.sendMessage(from, {
+                text: '❌ Please reply to a view-once media message\n\n' +
+                      '💡 Usage: ' + prefix + 'extract (reply to view-once)\n\n' +
+                      '✅ Supports: Images, Videos, Audio'
+            }, { quoted: message });
+        }
+
         try {
-            const quoted = message.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-            if (!quoted) {
-                await sock.sendMessage(from, {
-                    text: `❌ *Error*\nReply to a view once image/video to view it!\n\n💡 Example: Reply with \`${prefix}vv\``
-                }, { quoted: message });
-                return;
-            }
-
-            let mediaMessage = null;
-            let isImage = false;
-            let isVideo = false;
-
-            // Handle view once
-            if (quoted.viewOnceMessageMessage) {
-                const innerMsg = quoted.viewOnceMessageMessage.message;
-                if (innerMsg.imageMessage) {
-                    mediaMessage = innerMsg.imageMessage;
-                    isImage = true;
-                } else if (innerMsg.videoMessage) {
-                    mediaMessage = innerMsg.videoMessage;
-                    isVideo = true;
-                }
-            } else {
-                // Fallback for regular media
-                if (quoted.imageMessage) {
-                    mediaMessage = quoted.imageMessage;
-                    isImage = true;
-                } else if (quoted.videoMessage) {
-                    mediaMessage = quoted.videoMessage;
-                    isVideo = true;
-                }
-            }
-
-            if (!mediaMessage) {
-                await sock.sendMessage(from, {
-                    text: `❌ *Error*\nReply to an image or video (view once preferred).`
-                }, { quoted: message });
-                return;
-            }
-
-            // React
             await sock.sendMessage(from, {
-                react: { text: '👁️', key: message.key }
+                react: { text: '⏳', key: message.key }
             });
 
-            // Download to temp
-            const tempFile = path.join(TEMP_DIR, `${Date.now()}.tmp`);
-            const stream = await sock.downloadAndSaveMediaMessage(mediaMessage, tempFile);
-            await new Promise((resolve, reject) => {
-                stream.on('end', resolve);
-                stream.on('error', reject);
-            });
+            let type, mediaBuffer;
 
-            const mediaBuffer = fs.readFileSync(tempFile);
-            const fileType = await fileTypeFromBuffer(mediaBuffer);
-
-            if (!fileType) {
-                cleanTempFile(tempFile);
-                await sock.sendMessage(from, {
-                    text: `❌ *Error*\nInvalid media file.`
-                }, { quoted: message });
-                return;
-            }
-
-            let sendOptions = {};
-            const caption = mediaMessage.caption || '';
-
-            if (isImage || fileType.mime.startsWith('image/')) {
-                sendOptions = {
-                    image: mediaBuffer,
-                    mimetype: fileType.mime,
-                    caption: caption,
-                    viewOnce: false
-                };
-            } else if (isVideo || fileType.mime.startsWith('video/')) {
-                sendOptions = {
-                    video: mediaBuffer,
-                    mimetype: fileType.mime,
-                    caption: caption,
-                    viewOnce: false
-                };
+            if (quoted.imageMessage && quoted.imageMessage.viewOnce) {
+                mediaBuffer = await downloadMedia(quoted);
+                type = 'image';
+            } else if (quoted.videoMessage && quoted.videoMessage.viewOnce) {
+                mediaBuffer = await downloadMedia(quoted);
+                type = 'video';
+            } else if (quoted.audioMessage && quoted.audioMessage.viewOnce) {
+                mediaBuffer = await downloadMedia(quoted);
+                type = 'audio';
+            } else if (quoted.imageMessage) {
+                mediaBuffer = await downloadMedia(quoted);
+                type = 'image';
+            } else if (quoted.videoMessage) {
+                mediaBuffer = await downloadMedia(quoted);
+                type = 'video';
+            } else if (quoted.audioMessage) {
+                mediaBuffer = await downloadMedia(quoted);
+                type = 'audio';
             } else {
-                cleanTempFile(tempFile);
                 await sock.sendMessage(from, {
-                    text: `❌ *Error*\nUnsupported type. Only images/videos.`
+                    react: { text: '❌', key: message.key }
+                });
+                return await sock.sendMessage(from, {
+                    text: '❌ Unsupported media type\n\n' +
+                          '✅ Supported: View-once images, videos, audio'
                 }, { quoted: message });
-                return;
             }
 
-            // Send normally immediately
-            await sock.sendMessage(from, sendOptions, { quoted: message });
+            if (!mediaBuffer || mediaBuffer.length === 0) {
+                throw new Error('Failed to download media');
+            }
 
-            // Success react
+            if (type === 'image') {
+                await sock.sendMessage(from, {
+                    image: mediaBuffer,
+                    caption: '🔓 View-Once Image Extracted\n\nExtracted by: @' + sender.split('@')[0],
+                    mentions: [sender]
+                }, { quoted: message });
+            } else if (type === 'video') {
+                await sock.sendMessage(from, {
+                    video: mediaBuffer,
+                    caption: '🔓 View-Once Video Extracted\n\nExtracted by: @' + sender.split('@')[0],
+                    mentions: [sender]
+                }, { quoted: message });
+            } else if (type === 'audio') {
+                await sock.sendMessage(from, {
+                    audio: mediaBuffer,
+                    mimetype: 'audio/mp4',
+                    ptt: quoted.audioMessage?.ptt || false
+                }, { quoted: message });
+            }
+
             await sock.sendMessage(from, {
                 react: { text: '✅', key: message.key }
             });
 
-            cleanTempFile(tempFile);
-
         } catch (error) {
-            console.error('VV command error:', error);
-            await sock.sendMessage(from, {
-                text: `❌ *Error*\nFailed to open media: ${error.message}`
-            }, { quoted: message });
+            console.error('Extract media error:', error);
+            
             await sock.sendMessage(from, {
                 react: { text: '❌', key: message.key }
             });
+
+            await sock.sendMessage(from, {
+                text: '❌ Failed to extract media\n\n' +
+                      '⚠️ Error: ' + error.message + '\n\n' +
+                      '💡 Make sure you replied to:\n' +
+                      '• View-once image\n' +
+                      '• View-once video\n' +
+                      '• View-once audio'
+            }, { quoted: message });
         }
     }
 };
