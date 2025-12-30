@@ -2,30 +2,14 @@ export default {
     name: 'groupinfo',
     aliases: ['groupdetails', 'ginfo', 'group'],
     category: 'admin',
-    description: 'Get detailed information about the group with group picture',
+    description: 'Get detailed information about the group',
     usage: 'groupinfo',
     example: 'groupinfo',
     cooldown: 5,
     permissions: ['user'],
-    args: false,
-    minArgs: 0,
-    maxArgs: 0,
-    typing: true,
-    premium: false,
-    hidden: false,
-    ownerOnly: false,
-    supportsReply: false,
-    supportsChat: false,
-    supportsReact: false,
-    supportsButtons: false,
+    groupOnly: true,
 
-    async execute({ sock, message, args, command, user, group, from, sender, isGroup, isGroupAdmin, isBotAdmin, prefix }) {
-        if (!isGroup) {
-            return await sock.sendMessage(from, {
-                text: '╭──⦿【 ❌ ERROR 】\n│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: Group only command\n│\n│ 💡 This command works in groups\n╰────────⦿'
-            }, { quoted: message });
-        }
-
+    async execute({ sock, message, from }) {
         try {
             const groupMetadata = await sock.groupMetadata(from);
             const { subject, desc, participants, creation, owner, id } = groupMetadata;
@@ -50,55 +34,21 @@ export default {
             const ownerNumber = owner ? owner.split('@')[0] : 'Unknown';
             const groupId = id.split('@')[0];
 
-            let groupInfo = `╭──⦿【 📋 GROUP INFO 】
-│
-│ 📝 𝗡𝗮𝗺𝗲: ${subject}
-│ 🆔 𝗚𝗿𝗼𝘂𝗽 𝗜𝗗: ${groupId}
-│ 👤 𝗢𝘄𝗻𝗲𝗿: @${ownerNumber}
-│ 📅 𝗖𝗿𝗲𝗮𝘁𝗲𝗱: ${creationDate}
-│ ⏰ 𝗧𝗶𝗺𝗲: ${creationTime}
-│
-╰────────⦿
-
-╭──⦿【 📊 STATISTICS 】
-│
-│ 👥 𝗧𝗼𝘁𝗮𝗹 𝗠𝗲𝗺𝗯𝗲𝗿𝘀: ${totalMembers}
-│ 👑 𝗦𝘂𝗽𝗲𝗿 𝗔𝗱𝗺𝗶𝗻𝘀: ${superAdmins.length}
-│ 👮 𝗔𝗱𝗺𝗶𝗻𝘀: ${regularAdmins.length}
-│ 👤 𝗠𝗲𝗺𝗯𝗲𝗿𝘀: ${regularMembers}
-│
-╰────────⦿
-`;
+            let groupInfo = `📋 GROUP INFO\n\nName: ${subject}\nGroup ID: ${groupId}\nOwner: @${ownerNumber}\nCreated: ${creationDate}\nTime: ${creationTime}\n\n📊 STATISTICS\n\nTotal Members: ${totalMembers}\nSuper Admins: ${superAdmins.length}\nAdmins: ${regularAdmins.length}\nMembers: ${regularMembers}\n`;
 
             if (desc && desc.trim()) {
                 const description = desc.length > 200 ? desc.substring(0, 200) + '...' : desc;
-                groupInfo += `
-╭──⦿【 📄 DESCRIPTION 】
-│
-│ ${description.replace(/\n/g, '\n│ ')}
-│
-╰────────⦿
-`;
+                groupInfo += `\n📄 DESCRIPTION\n\n${description}\n`;
             }
 
             if (admins.length > 0) {
-                groupInfo += `
-╭──⦿【 👑 ADMINS LIST 】
-│
-`;
+                groupInfo += `\n👑 ADMINS LIST\n\n`;
                 admins.forEach((admin, index) => {
                     const number = admin.id.split('@')[0];
                     const role = admin.admin === 'superadmin' ? '👑 Super Admin' : '👮 Admin';
-                    groupInfo += `│ ${index + 1}. ${role}\n│    @${number}\n│\n`;
+                    groupInfo += `${index + 1}. ${role}\n   @${number}\n`;
                 });
-                groupInfo += `╰────────⦿
-`;
             }
-
-            groupInfo += `
-╭─────────────⦿
-│💫 | [ Ilom Bot 🍀 ]
-╰────────────⦿`;
 
             let groupPicture;
             try {
@@ -116,14 +66,8 @@ export default {
             }, { quoted: message });
 
         } catch (error) {
-            console.error('Group info command error:', error);
             await sock.sendMessage(from, {
-                text: `╭──⦿【 ❌ ERROR 】
-│ 𝗠𝗲𝘀𝘀𝗮𝗴𝗲: Failed to fetch info
-│
-│ ⚠️ 𝗗𝗲𝘁𝗮𝗶𝗹𝘀: ${error.message}
-│ 💡 Try again later
-╰────────⦿`
+                text: `❌ Failed to fetch group info\n\n${error.message}`
             }, { quoted: message });
         }
     }
