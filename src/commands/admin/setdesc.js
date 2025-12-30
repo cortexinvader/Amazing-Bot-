@@ -1,4 +1,4 @@
-export const setdesc = {
+export default {
     name: 'setdesc',
     aliases: ['changedesc', 'groupdesc'],
     category: 'admin',
@@ -26,7 +26,7 @@ export const setdesc = {
             await sock.groupUpdateDescription(from, newDesc);
 
             await sock.sendMessage(from, {
-                text: `✅ Group description updated`
+                text: '✅ Group description updated'
             }, { quoted: message });
 
         } catch (error) {
