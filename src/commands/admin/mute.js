@@ -1,4 +1,4 @@
-export const mute = {
+export default {
     name: 'mute',
     aliases: ['close', 'lockgroup'],
     category: 'admin',
@@ -11,12 +11,20 @@ export const mute = {
     adminOnly: true,
     botAdminRequired: true,
 
-    async execute({ sock, message, from }) {
+    async execute({ sock, message, from, sender }) {
         try {
+            const groupMetadata = await sock.groupMetadata(from);
+            
+            if (groupMetadata.announce) {
+                return await sock.sendMessage(from, {
+                    text: '❌ Group is already muted'
+                }, { quoted: message });
+            }
+
             await sock.groupSettingUpdate(from, 'announcement');
 
             await sock.sendMessage(from, {
-                text: `🔒 Group muted\n\nOnly admins can send messages now`
+                text: '🔒 Group muted\n\nOnly admins can send messages now'
             }, { quoted: message });
 
         } catch (error) {
