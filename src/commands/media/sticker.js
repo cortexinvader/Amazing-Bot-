@@ -1,5 +1,15 @@
 import { Sticker, StickerTypes } from "wa-sticker-formatter";
-import { downloadMediaMessage } from "@whiskeysockets/baileys";
+import { downloadContentFromMessage } from "@whiskeysockets/baileys";
+
+async function downloadMedia(msg) {
+    const messageType = Object.keys(msg)[0];
+    const stream = await downloadContentFromMessage(msg[messageType], messageType.replace('Message', ''));
+    let buffer = Buffer.from([]);
+    for await (const chunk of stream) {
+        buffer = Buffer.concat([buffer, chunk]);
+    }
+    return buffer;
+}
 
 export default {
     name: 'sticker',
@@ -30,26 +40,9 @@ export default {
             });
 
             let mediaBuffer;
-            let mediaType;
 
             if (quoted.imageMessage) {
-                const quotedMsg = {
-                    key: message.message.extendedTextMessage.contextInfo.stanzaId 
-                        ? { id: message.message.extendedTextMessage.contextInfo.stanzaId }
-                        : message.key,
-                    message: { imageMessage: quoted.imageMessage }
-                };
-                
-                mediaBuffer = await downloadMediaMessage(
-                    quotedMsg,
-                    "buffer",
-                    {},
-                    { 
-                        logger: { info: () => {}, error: () => {}, warn: () => {}, debug: () => {} },
-                        reuploadRequest: sock.updateMediaMessage
-                    }
-                );
-                mediaType = 'image';
+                mediaBuffer = await downloadMedia(quoted);
             } else if (quoted.videoMessage) {
                 const videoSeconds = quoted.videoMessage.seconds || 0;
                 
@@ -63,42 +56,10 @@ export default {
                               '📹 Current length: ' + videoSeconds + 's'
                     }, { quoted: message });
                 }
-
-                const quotedMsg = {
-                    key: message.message.extendedTextMessage.contextInfo.stanzaId 
-                        ? { id: message.message.extendedTextMessage.contextInfo.stanzaId }
-                        : message.key,
-                    message: { videoMessage: quoted.videoMessage }
-                };
                 
-                mediaBuffer = await downloadMediaMessage(
-                    quotedMsg,
-                    "buffer",
-                    {},
-                    { 
-                        logger: { info: () => {}, error: () => {}, warn: () => {}, debug: () => {} },
-                        reuploadRequest: sock.updateMediaMessage
-                    }
-                );
-                mediaType = 'video';
+                mediaBuffer = await downloadMedia(quoted);
             } else if (quoted.stickerMessage) {
-                const quotedMsg = {
-                    key: message.message.extendedTextMessage.contextInfo.stanzaId 
-                        ? { id: message.message.extendedTextMessage.contextInfo.stanzaId }
-                        : message.key,
-                    message: { stickerMessage: quoted.stickerMessage }
-                };
-                
-                mediaBuffer = await downloadMediaMessage(
-                    quotedMsg,
-                    "buffer",
-                    {},
-                    { 
-                        logger: { info: () => {}, error: () => {}, warn: () => {}, debug: () => {} },
-                        reuploadRequest: sock.updateMediaMessage
-                    }
-                );
-                mediaType = 'sticker';
+                mediaBuffer = await downloadMedia(quoted);
             } else {
                 await sock.sendMessage(from, {
                     react: { text: '❌', key: message.key }
@@ -115,8 +76,8 @@ export default {
             }
 
             const sticker = new Sticker(mediaBuffer, {
-                pack: "Created with",
-                author: "Ilom",
+                pack: "ilom Stickers",
+                author: "ilom",
                 type: StickerTypes.FULL,
                 quality: 50
             });
