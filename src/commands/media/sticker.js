@@ -33,12 +33,19 @@ export default {
             let mediaType;
 
             if (quoted.imageMessage) {
+                const quotedMsg = {
+                    key: message.message.extendedTextMessage.contextInfo.stanzaId 
+                        ? { id: message.message.extendedTextMessage.contextInfo.stanzaId }
+                        : message.key,
+                    message: { imageMessage: quoted.imageMessage }
+                };
+                
                 mediaBuffer = await downloadMediaMessage(
-                    { message: { imageMessage: quoted.imageMessage } },
+                    quotedMsg,
                     "buffer",
                     {},
                     { 
-                        logger: console,
+                        logger: { info: () => {}, error: () => {}, warn: () => {}, debug: () => {} },
                         reuploadRequest: sock.updateMediaMessage
                     }
                 );
@@ -57,23 +64,37 @@ export default {
                     }, { quoted: message });
                 }
 
+                const quotedMsg = {
+                    key: message.message.extendedTextMessage.contextInfo.stanzaId 
+                        ? { id: message.message.extendedTextMessage.contextInfo.stanzaId }
+                        : message.key,
+                    message: { videoMessage: quoted.videoMessage }
+                };
+                
                 mediaBuffer = await downloadMediaMessage(
-                    { message: { videoMessage: quoted.videoMessage } },
+                    quotedMsg,
                     "buffer",
                     {},
                     { 
-                        logger: console,
+                        logger: { info: () => {}, error: () => {}, warn: () => {}, debug: () => {} },
                         reuploadRequest: sock.updateMediaMessage
                     }
                 );
                 mediaType = 'video';
             } else if (quoted.stickerMessage) {
+                const quotedMsg = {
+                    key: message.message.extendedTextMessage.contextInfo.stanzaId 
+                        ? { id: message.message.extendedTextMessage.contextInfo.stanzaId }
+                        : message.key,
+                    message: { stickerMessage: quoted.stickerMessage }
+                };
+                
                 mediaBuffer = await downloadMediaMessage(
-                    { message: { stickerMessage: quoted.stickerMessage } },
+                    quotedMsg,
                     "buffer",
                     {},
                     { 
-                        logger: console,
+                        logger: { info: () => {}, error: () => {}, warn: () => {}, debug: () => {} },
                         reuploadRequest: sock.updateMediaMessage
                     }
                 );
